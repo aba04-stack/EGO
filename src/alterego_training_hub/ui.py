@@ -578,12 +578,16 @@ class TrainingHubApp(tk.Tk):
         self._start_async("Загрузка актуального каталога GPU", lambda: client.gpu_catalog(cloud), self._show_gpu_catalog)
 
     @staticmethod
-    def _price_text(prices):
-        if not isinstance(prices, dict):
-            return "цена не получена"
+    def _price_text(gpu):
+        prices = gpu.get("price")
         values = []
-        for cloud_name in ("secure", "community"):
-            value = prices.get(cloud_name)
+        for cloud_name, top_level in (
+            ("secure", "securePrice"),
+            ("community", "communityPrice"),
+        ):
+            value = prices.get(cloud_name) if isinstance(prices, dict) else None
+            if value is None:
+                value = gpu.get(top_level)
             if isinstance(value, (int, float)) and not isinstance(value, bool):
                 values.append(f"{cloud_name}: ${float(value):.3f}/ч")
         return " · ".join(values) or "цена не получена"
@@ -596,16 +600,16 @@ class TrainingHubApp(tk.Tk):
             iid = f"gpu-{index}"
             self._gpu_rows[iid] = gpu
             memory = gpu.get("memory", gpu.get("memoryInGb", "—"))
-            availability = gpu.get("availability", "—")
+            availability = gpu.get("availability", gpu.get("maxGpuCount", "—"))
             if isinstance(availability, dict):
                 availability = availability.get("available", availability.get("status", "—"))
             if isinstance(availability, (dict, list)):
                 availability = json.dumps(availability, ensure_ascii=False)
             self.gpu_tree.insert("", "end", iid=iid, values=(
-                gpu.get("name", "Unknown GPU"),
+                gpu.get("name", gpu.get("displayName", "Unknown GPU")),
                 gpu.get("id", ""),
                 memory,
-                self._price_text(gpu.get("price")),
+                self._price_text(gpu),
                 str(availability),
             ))
         self.gpu_notes_var.set(f"Получено GPU из текущего каталога: {len(items)}. Выбери GPU для расчёта цены.")

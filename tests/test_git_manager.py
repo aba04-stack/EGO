@@ -54,6 +54,23 @@ def test_connect_local_and_status(tmp_path):
     assert status.changes == ()
 
 
+
+def test_git_error_redacts_credentials_from_remote_urls(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    def fake_run(*args, **kwargs):
+        return SimpleNamespace(
+            returncode=128,
+            stdout="fatal: https://user:secret-token@github.com/owner/repo.git denied",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(GitRepositoryError) as exc:
+        GitRepositoryManager()._git(["fetch"], cwd=tmp_path)
+    assert "secret-token" not in str(exc.value)
+    assert "[REDACTED]" in str(exc.value)
+
+
 def test_checkout_refuses_to_discard_dirty_work(tmp_path):
     repo = tmp_path / "model"
     _make_repo(repo)

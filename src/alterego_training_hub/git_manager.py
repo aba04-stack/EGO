@@ -86,6 +86,9 @@ class GitRepositoryManager:
         if result.returncode != 0:
             # Never echo URLs or credentials supplied by the user.
             message = result.stdout[-2500:].strip()
+            # Credential-bearing URLs can exist in pre-existing local Git configs.
+            message = re.sub(r"https?://[^/\\s]+@", "https://[REDACTED]@", message)
+            message = re.sub(r"\\b(?:github_pat_|gh[pousr]_)[A-Za-z0-9_]{10,}", "[REDACTED]", message)
             raise GitRepositoryError(message or f"git {' '.join(args[:2])} failed.")
         return result.stdout.strip()
 

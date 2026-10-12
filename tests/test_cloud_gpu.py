@@ -38,6 +38,17 @@ def test_gpu_price_limit_and_plan(monkeypatch):
         )
 
 
+
+def test_supports_runpod_rest_v2_flat_price_fields():
+    provider = client()
+    assert provider.gpu_hourly_price(
+        {"securePrice": 0.42, "communityPrice": 0.21}, "SECURE"
+    ) == 0.42
+    assert provider.gpu_hourly_price(
+        {"securePrice": 0.42, "communityPrice": 0.21}, "COMMUNITY"
+    ) == 0.21
+
+
 def test_refuses_gpu_missing_from_live_catalog(monkeypatch):
     provider = client()
     monkeypatch.setattr(provider, "gpu_catalog", lambda **kwargs: [])

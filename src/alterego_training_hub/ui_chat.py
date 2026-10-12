@@ -1,4 +1,4 @@
-"""Chat page: conversational panel where the mentor works with the workspace."""
+"""Right-side chat panel: mentor assistant or autonomous agent with tools."""
 from __future__ import annotations
 
 import time
@@ -13,8 +13,10 @@ from .ui_common import C, F_BASE, F_MONO, F_SMALL, set_text
 
 
 class ChatPage(tk.Frame):
+    """Docked chat panel (right side of the IDE layout)."""
+
     def __init__(self, parent, app):
-        super().__init__(parent, bg=C["bg"])
+        super().__init__(parent, bg=C["panel"])
         self.app = app
         self.store = ChatStore()
         self.session = ChatSession()
@@ -24,171 +26,149 @@ class ChatPage(tk.Frame):
 
     # ------------------------------------------------------------------ UI
     def _build(self):
-        header = tk.Frame(self, bg=C["bg"])
-        header.pack(fill="x", padx=22, pady=(18, 10))
-        tk.Label(header, text="Чат с наставником", bg=C["bg"], fg=C["text"],
-                 font=("Segoe UI", 15, "bold")).pack(anchor="w")
-        tk.Label(
-            header,
-            text="Диалог, инструменты и правки кода в выбранной рабочей папке. "
-                 "Наставник читает файлы, ищет ошибки и предлагает изменения — "
-                 "каждое изменение требует вашего подтверждения.",
-            bg=C["bg"], fg=C["muted"], font=F_BASE, wraplength=860, justify="left",
-        ).pack(anchor="w", pady=(4, 0))
+        top = tk.Frame(self, bg=C["panel"])
+        top.pack(fill="x", padx=10, pady=(10, 6))
+        tk.Label(top, text="Наставник", bg=C["panel"], fg=C["text"],
+                 font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        row = tk.Frame(top, bg=C["panel"])
+        row.pack(fill="x", pady=(6, 0))
+        self.sessions_combo = ttk.Combobox(row, state="readonly", width=22)
+        self.sessions_combo.pack(side="left")
+        self.sessions_combo.bind("<<ComboboxSelected>>", lambda _e: self._select_session())
+        ttk.Button(row, text="+", width=3,
+                   command=self.new_session).pack(side="left", padx=(4, 0))
+        ttk.Button(row, text="✕", width=3, style="Danger.TButton",
+                   command=self.delete_session).pack(side="left", padx=(3, 0))
 
-        body = tk.Frame(self, bg=C["bg"])
-        body.pack(fill="both", expand=True, padx=22, pady=(0, 14))
+        mode_row = tk.Frame(top, bg=C["panel"])
+        mode_row.pack(fill="x", pady=(6, 0))
+        tk.Label(mode_row, text="Режим", bg=C["panel"], fg=C["muted"],
+                 font=F_SMALL).pack(side="left", padx=(0, 6))
+        self.autonomy_var = tk.StringVar(value=self.app.settings.chat_autonomy)
+        self.mode_btn = tk.Label(
+            mode_row, text="", bg=C["accent"], fg="#ffffff", font=F_SMALL,
+            padx=10, pady=4, cursor="hand2",
+        )
+        self.mode_btn.pack(side="left")
+        self.mode_btn.bind("<Button-1>", lambda _e: self.toggle_mode())
+        self._render_mode()
+        self.status_var = tk.StringVar(value="")
+        tk.Label(top, textvariable=self.status_var, bg=C["panel"], fg=C["muted"],
+                 font=F_SMALL, wraplength=340, justify="left").pack(anchor="w",
+                                                                    pady=(6, 0))
 
-        # Sessions column
-        side = tk.Frame(body, bg=C["panel"], width=230)
-        side.pack(side="left", fill="y", padx=(0, 12))
-        side.pack_propagate(False)
-        tk.Label(side, text="ДИАЛОГИ", bg=C["panel"], fg=C["muted"], font=F_SMALL,
-                 anchor="w").pack(fill="x", padx=12, pady=(12, 6))
-        self.sessions_list = tk.Listbox(side, bg=C["panel"], fg=C["text"],
-                                        highlightthickness=0, bd=0,
-                                        selectbackground=C["accent"],
-                                        selectforeground="#ffffff",
-                                        font=F_BASE, activestyle="none")
-        self.sessions_list.pack(fill="both", expand=True, padx=8)
-        self.sessions_list.bind("<<ListboxSelect>>", lambda _e: self._select_session())
-        btns = tk.Frame(side, bg=C["panel"])
-        btns.pack(fill="x", padx=8, pady=10)
-        ttk.Button(btns, text="Новый", command=self.new_session).pack(side="left",
-                                                                     fill="x", expand=True)
-        ttk.Button(btns, text="Удалить", style="Danger.TButton",
-                   command=self.delete_session).pack(side="left", fill="x", expand=True,
-                                                     padx=(6, 0))
-
-        # Chat column
-        center = tk.Frame(body, bg=C["border"])
-        center.pack(side="left", fill="both", expand=True)
-        chat_inner = tk.Frame(center, bg=C["panel"])
-        chat_inner.pack(fill="both", expand=True, padx=1, pady=1)
-
-        self.messages = tk.Text(chat_inner, wrap="word", state="disabled", bd=0,
+        self.messages = tk.Text(self, wrap="word", state="disabled", bd=0,
                                 bg=C["panel"], fg=C["text"], font=F_BASE,
-                                padx=16, pady=14, spacing3=6)
+                                padx=10, pady=8, spacing3=5)
         self.messages.pack(fill="both", expand=True)
-        self.messages.tag_configure("user", background=C["user_bubble"], lmargin1=60,
-                                    lmargin2=60, rmargin=10, spacing1=2, spacing3=8)
+        self.messages.tag_configure("user", background=C["user_bubble"], lmargin1=40,
+                                    lmargin2=40, rmargin=6, spacing3=6)
         self.messages.tag_configure("assistant", background=C["assistant_bubble"],
-                                    lmargin1=10, lmargin2=60, rmargin=60,
-                                    relief="solid", borderwidth=0, spacing3=8)
+                                    lmargin1=6, lmargin2=40, rmargin=20, spacing3=6)
         self.messages.tag_configure("tool", background=C["tool_bubble"], font=F_MONO,
-                                    lmargin1=20, lmargin2=20, rmargin=20, spacing3=6)
-        self.messages.tag_configure("meta", font=("Segoe UI", 8, "bold"), foreground=C["muted"])
+                                    lmargin1=12, lmargin2=12, rmargin=12)
+        self.messages.tag_configure("meta", font=("Segoe UI", 8, "bold"),
+                                    foreground=C["muted"])
         self.messages.tag_configure("h", font=("Segoe UI", 10, "bold"))
         self.messages.tag_configure("sys", foreground=C["muted"], font=F_SMALL)
+        self.messages.tag_configure("act", foreground=C["accent"])
+        self.messages.tag_configure("err", foreground=C["danger"])
 
-        input_bar = tk.Frame(chat_inner, bg=C["panel"])
-        input_bar.pack(fill="x", padx=12, pady=(4, 12))
-
-        quick = tk.Frame(chat_inner, bg=C["panel"])
-        quick.pack(fill="x", padx=12)
-        tk.Label(quick, text="Быстрые команды:", bg=C["panel"], fg=C["muted"],
-                 font=F_SMALL).pack(side="left", padx=(0, 6))
+        quick = tk.Frame(self, bg=C["panel"])
+        quick.pack(fill="x", padx=8, pady=(4, 0))
         for label, builder in [
-            ("Оценка модели", lambda: self.app.assessment_prompt()),
-            ("Прогресс обучения", lambda: (
-                "Проанализируй прогресс обучения: что улучшается, что вызывает "
-                "опасность, что изменить?\n\n" + self.app.assessment_context())),
-            ("Разбор ошибок в логе", lambda: (
-                "Найди ошибки в логе обучения и предложи исправления кода.\n\n```\n"
+            ("Оценка", lambda: self.app.assessment_prompt()),
+            ("Прогресс", lambda: (
+                "Проанализируй прогресс обучения и предложи улучшения.\n\n"
+                + self.app.assessment_context())),
+            ("Ошибки", lambda: (
+                "Найди ошибки в логе обучения и предложи исправления.\n\n```\n"
                 + self.app.training.tail(8000) + "\n```")),
         ]:
-            ttk.Button(quick, text=label,
+            ttk.Button(quick, text=label, width=8,
                        command=lambda b=builder: self.send_preset(b())
-            ).pack(side="left", padx=(0, 6))
-        tk.Label(chat_inner, text="", bg=C["panel"], height=0).pack()
+            ).pack(side="left", padx=(0, 4))
 
+        input_bar = tk.Frame(self, bg=C["panel"])
+        input_bar.pack(fill="x", padx=8, pady=(6, 10))
         self.input = tk.Text(input_bar, height=3, wrap="word", font=F_BASE, bd=1,
                              relief="solid", highlightthickness=0)
         self.input.pack(side="left", fill="both", expand=True)
         self.input.bind("<Control-Return>", lambda _e: (self.send(), "break")[1])
-        right = tk.Frame(input_bar, bg=C["panel"])
-        right.pack(side="left", fill="y", padx=(10, 0))
-        self.send_btn = ttk.Button(right, text="Отправить", style="Accent.TButton",
-                                   command=self.send)
-        self.send_btn.pack(fill="x")
-        ttk.Button(right, text="Очистить", command=lambda: self.input.delete("1.0", "end")
-                   ).pack(fill="x", pady=(6, 0))
-        tk.Label(right, text="Ctrl+Enter", bg=C["panel"], fg=C["muted"], font=F_SMALL
-                 ).pack(side="bottom")
+        self.send_btn = ttk.Button(input_bar, text="➤", width=4,
+                                   style="Accent.TButton", command=self.send)
+        self.send_btn.pack(side="left", fill="y", padx=(6, 0))
 
-        # Activity column
-        side2 = tk.Frame(body, bg=C["panel"], width=280)
-        side2.pack(side="left", fill="y", padx=(12, 0))
-        side2.pack_propagate(False)
-        tk.Label(side2, text="АКТИВНОСТЬ ИНСТРУМЕНТОВ", bg=C["panel"], fg=C["muted"],
-                 font=F_SMALL, anchor="w").pack(fill="x", padx=12, pady=(12, 6))
-        self.activity = tk.Text(side2, wrap="word", state="disabled", bd=0,
-                                bg=C["panel_alt"] if "panel_alt" in C else C["panel"],
-                                fg=C["muted"], font=F_MONO, padx=10, pady=8)
-        self.activity.pack(fill="both", expand=True, padx=8, pady=(0, 8))
-        self.activity.tag_configure("ok", foreground=C["success"])
-        self.activity.tag_configure("err", foreground=C["danger"])
-        self.activity.tag_configure("act", foreground=C["accent"])
-        self.hint_var = tk.StringVar(value="")
-        tk.Label(side2, textvariable=self.hint_var, bg=C["panel"], fg=C["muted"],
-                 font=F_SMALL, wraplength=250, justify="left").pack(fill="x", padx=12,
-                                                                    pady=(0, 10))
         self._update_hint()
         self.refresh_sessions()
         self._render_messages()
 
+    def _render_mode(self):
+        if self.autonomy_var.get() == "agent":
+            self.mode_btn.configure(text="● Режим агента — действует свободно",
+                                    bg=C["success"])
+        else:
+            self.mode_btn.configure(text="○ Ассистент — подтверждает действия",
+                                    bg=C["accent"])
+
+    def toggle_mode(self):
+        new = "assist" if self.autonomy_var.get() == "agent" else "agent"
+        self.autonomy_var.set(new)
+        self.app.settings.chat_autonomy = new
+        self.app.save_settings()
+        self._render_mode()
+
     # -------------------------------------------------------------- sessions
     def _update_hint(self):
         root = self.app.workspace_root()
+        mode = "агент" if self.autonomy_var.get() == "agent" else "ассистент"
         if root:
-            self.hint_var.set(f"Инструменты активны. Папка: {root}")
+            self.status_var.set(f"{mode} · папка: {root.name}")
         else:
-            self.hint_var.set("Рабочая папка не выбрана — инструменты отключены. "
-                              "Выберите её на странице «Рабочая папка».")
+            self.status_var.set(f"{mode} · рабочая папка не выбрана — инструменты файлов отключены")
 
     def on_show(self):
         self._update_hint()
 
     def refresh_sessions(self):
         self._sessions_cache = self.store.list_sessions()
-        self.sessions_list.delete(0, "end")
-        for session in self._sessions_cache:
-            self.sessions_list.insert("end", session.title)
+        labels = [session.title for session in self._sessions_cache] or ["Новый диалог"]
+        self.sessions_combo.configure(values=labels)
+        if not self.sessions_combo.get():
+            self.sessions_combo.set(labels[0])
 
     def _select_session(self):
-        selection = self.sessions_list.curselection()
-        if not selection:
-            return
-        session = self._sessions_cache[selection[0]]
-        if session.id == self.session.id:
-            return
-        if self._busy:
-            messagebox.showinfo("Чат", "Дождитесь завершения текущего ответа.", parent=self)
-            return
-        self.session = session
-        self._render_messages()
+        title = self.sessions_combo.get()
+        for session in self._sessions_cache:
+            if session.title == title and session.id != self.session.id:
+                if self._busy:
+                    messagebox.showinfo("Чат", "Дождитесь завершения ответа.",
+                                        parent=self)
+                    return
+                self.session = session
+                self._render_messages()
+                return
 
     def new_session(self):
         if self._busy:
-            messagebox.showinfo("Чат", "Дождитесь завершения текущего ответа.", parent=self)
+            messagebox.showinfo("Чат", "Дождитесь завершения ответа.", parent=self)
             return
         self.session = ChatSession()
         self.refresh_sessions()
+        self.sessions_combo.set("Новый диалог")
         self._render_messages()
-        self.set_activity("")
 
     def delete_session(self):
-        selection = self.sessions_list.curselection()
-        if not selection:
+        if self._busy:
             return
-        session = self._sessions_cache[selection[0]]
-        if not messagebox.askyesno("Удалить диалог",
-                                   f"Удалить «{session.title}»?", parent=self):
-            return
-        self.store.delete(session.id)
-        if session.id == self.session.id:
-            self.session = ChatSession()
+        if self.session.id and self.session.messages:
+            if not messagebox.askyesno("Удалить диалог",
+                                       f"Удалить «{self.session.title}»?", parent=self):
+                return
+            self.store.delete(self.session.id)
+        self.session = ChatSession()
         self.refresh_sessions()
+        self.sessions_combo.set("Новый диалог")
         self._render_messages()
 
     # --------------------------------------------------------------- render
@@ -198,11 +178,10 @@ class ChatPage(tk.Frame):
         if not self.session.messages:
             self.messages.insert(
                 "end",
-                "Начните диалог: попросите наставника разобрать код, найти ошибку "
-                "или объяснить метрики обучения.\n\nПримеры:\n"
-                "• «Прочитай скрипт обучения и найди, почему растёт loss»\n"
-                "• «Запусти тесты и почини падающий тест»\n"
-                "• «Проанализируй лог и предложи исправления»\n",
+                "Диалог пуст. Попросите наставника разобрать код, найти ошибку "
+                "или запустите режим агента и дайте цель.\n\n"
+                "Пример цели для агента:\n"
+                "«Запусти тесты, найди падающий, почини и проверь снова.»\n",
                 "sys",
             )
         for message in self.session.messages:
@@ -214,14 +193,12 @@ class ChatPage(tk.Frame):
                                         message.created_at)
                 for call in message.tool_calls:
                     fn = call.get("function", {})
-                    args = fn.get("arguments", "")
-                    self.messages.insert(
-                        "end",
-                        f"⚙ {fn.get('name', '?')} {args[:220]}\n",
-                        "tool",
-                    )
+                    self.messages.insert("end",
+                                         f"⚙ {fn.get('name', '?')} "
+                                         f"{str(fn.get('arguments', ''))[:160]}\n",
+                                         "tool")
             elif message.role == "tool":
-                preview = message.content.replace("\n", " ")[:220]
+                preview = message.content.replace("\n", " ")[:160]
                 self.messages.insert("end", f"→ {message.name}: {preview}\n", "tool")
         self.messages.configure(state="disabled")
         self.messages.see("end")
@@ -233,18 +210,16 @@ class ChatPage(tk.Frame):
             heading = line.lstrip().startswith(("#", "**")) and tag == "assistant"
             self.messages.insert("end", line + "\n", (tag, "h") if heading else tag)
 
-    def set_activity(self, text: str):
-        set_text(self.activity, text)
-
     def log_activity(self, text: str, tag: str | None = None):
-        self.activity.configure(state="normal")
-        self.activity.insert("end", text.rstrip() + "\n", tag or ())
-        self.activity.configure(state="disabled")
-        self.activity.see("end")
+        self.messages.configure(state="normal")
+        self.messages.insert("end", text.rstrip() + "\n", tag or ())
+        self.messages.configure(state="disabled")
+        self.messages.see("end")
 
     def on_agent_event(self, kind: str, payload: dict):
         if kind == "tool_start":
-            self.log_activity(f"→ {payload.get('description', payload.get('name', ''))}", "act")
+            self.log_activity(f"→ {payload.get('description', payload.get('name', ''))}",
+                              "act")
         elif kind == "tool_result":
             mark = "ok" if payload.get("ok") else "err"
             self.log_activity(f"  [{mark}] {payload.get('summary', '')}", mark)
@@ -256,7 +231,7 @@ class ChatPage(tk.Frame):
         elif kind == "assistant":
             count = payload.get("tool_calls", 0)
             if count:
-                self.log_activity(f"наставник запрашивает инструментов: {count}")
+                self.log_activity(f"инструментов к вызову: {count}")
             elif payload.get("text"):
                 self.log_activity("наставник формирует ответ")
 
@@ -270,7 +245,7 @@ class ChatPage(tk.Frame):
 
     def send_preset(self, text: str):
         if self._busy:
-            messagebox.showinfo("Чат", "Дождитесь завершения текущего ответа.", parent=self)
+            messagebox.showinfo("Чат", "Дождитесь завершения ответа.", parent=self)
             return
         try:
             mentor = self.app.mentor_client()
@@ -280,25 +255,31 @@ class ChatPage(tk.Frame):
             return
 
         root = self.app.workspace_root()
-        workspace = WorkspaceTools(root) if root else None
-        if root is None:
-            self.log_activity("внимание: папка не выбрана, инструменты отключены", "err")
+        workspace = None
+        if root is not None:
+            try:
+                workspace = WorkspaceTools(root, backup_dir=self.app.backup_dir())
+            except Exception as exc:
+                self.log_activity(f"ошибка рабочей папки: {exc}", "err")
 
         self.session.add("user", text)
         self.store.save(self.session)
         self.refresh_sessions()
         self._render_messages()
-        self.set_activity("")
 
         history = self.session.history_for_api()
         transcript: list[dict] = []
         settings = self.app.settings
-        extra_tools, extra_schemas = self.app.agent_extra_tools()
+        extra_tools, extra_schemas, extra_mutations = self.app.agent_extra_tools()
+        autonomy = self.autonomy_var.get()
         agent = MentorAgent(
             mentor, workspace,
             enable_tools=workspace is not None or bool(extra_tools),
             extra_tools=extra_tools,
             extra_schemas=extra_schemas,
+            extra_mutations=extra_mutations,
+            autonomy=autonomy,
+            max_steps=14 if autonomy == "agent" else 8,
         )
 
         self._busy = True
@@ -317,7 +298,6 @@ class ChatPage(tk.Frame):
             self.refresh_sessions()
 
         def failed(_error: str):
-            # Keep whatever tool activity happened, but unlock the input.
             self._busy = False
             self.send_btn.configure(state="normal")
             for item in transcript:
@@ -326,23 +306,23 @@ class ChatPage(tk.Frame):
             self._render_messages()
 
         def work():
-            return agent.run_turn(
-                history,
-                confirm=lambda name, args, desc: self.app.confirm_from_worker(
-                    "Наставник хочет выполнить действие",
-                    f"{desc}\n\nПодтвердить выполнение?",
-                ),
+            common = dict(
+                confirm=None if autonomy == "agent" else (
+                    lambda name, args, desc: self.app.confirm_from_worker(
+                        "Действие наставника", f"{desc}\n\nПодтвердить выполнение?")),
                 on_event=lambda kind, payload: self.app.post_event(
                     "chat_event", {"kind": kind, "payload": payload}),
                 max_tokens=int(settings.mentor_max_tokens),
                 temperature=float(settings.mentor_temperature),
                 transcript=transcript,
             )
+            if autonomy == "agent":
+                return agent.run_goal(text, **common)
+            return agent.run_turn(history, **common)
 
         self.app.start_async("Ответ наставника", work, done, failed)
 
     def _maybe_save_report(self, text: str):
-        """Persist a structured assessment to the model dashboard when present."""
         from .report import parse_report
 
         report = parse_report(text)

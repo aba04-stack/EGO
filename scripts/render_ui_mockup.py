@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Render high-fidelity UI mockups from the app's real design tokens.
 
-Real screenshots need a desktop session; this script draws the actual layout,
+Real screenshots need a desktop session; this script draws the actual IDE
+layout (sidebar + center pages + bottom terminal + docked right chat panel),
 palette (``theme.C``) and sample content so the design can be reviewed and
 attached to documentation. Output: docs/ui-chat.png, docs/ui-dashboard.png.
 """
@@ -17,11 +18,14 @@ sys.path.insert(0, str(ROOT / "src"))
 from alterego_training_hub.theme import C  # noqa: E402
 
 S = 1.5
-VW, VH = 1320, 840
+VW, VH = 1480, 860
 W, H = int(VW * S), int(VH * S)
-SIDE = 230          # sidebar width — page content lives to the right of it
-PX0 = SIDE + 24     # page margin left
-PX1 = VW - 24       # page margin right
+SIDE = 200           # left sidebar (navigation)
+CHAT_W = 390         # docked chat panel on the right
+CX0 = SIDE + 20      # center page margin left
+CX1 = VW - CHAT_W - 20  # center page margin right
+TERM_H = 186         # terminal height above the status bar
+CH0 = 10             # chat panel margin left (inside the panel)
 
 FONT_DIR = Path("/usr/share/fonts/truetype/dejavu")
 _REG = str(FONT_DIR / "DejaVuSans.ttf")
@@ -68,35 +72,135 @@ class Canvas:
 
 
 NAV_GROUPS = [
-    ("РАЗРАБОТКА", ["Чат с наставником", "Редактор кода", "Рабочая папка"]),
+    ("РАЗРАБОТКА", ["Редактор кода", "Рабочая папка"]),
     ("БИБЛИОТЕКА", ["Модели", "Датасеты", "Модель и прогресс"]),
     ("ЭКСПЕРИМЕНТЫ", ["Playground", "Обучение", "Внешние GPU"]),
-    ("СИСТЕМА", ["Настройки"]),
+    ("СИСТЕМА", ["Коннекторы", "Настройки"]),
 ]
 
 
 def draw_shell(c: Canvas, active: str, status: str, badge: str):
     c.rect(0, 0, VW, VH, C["bg"])
+    # Sidebar
     c.rect(0, 0, SIDE, VH, C["sidebar"])
-    c.text(24, 30, "AlterEgo", 17, bold=True, fill="#ffffff")
-    c.text(24, 58, "Training Hub", 12, fill=C["sidebar_fg"])
-    y = 96
+    c.text(18, 26, "AlterEgo", 16, bold=True, fill="#ffffff")
+    c.text(18, 52, "LLM Studio", 11, fill=C["sidebar_fg"])
+    y = 88
     for group_title, items in NAV_GROUPS:
-        c.text(18, y, group_title, 7.8, bold=True, fill="#5b6b85")
-        y += 20
+        c.text(16, y, group_title, 7.6, bold=True, fill="#5b6b85")
+        y += 18
         for label in items:
             is_active = label == active
             if is_active:
-                c.rect(0, y, SIDE, 38, C["sidebar_active"])
-                c.rect(0, y, 4, 38, C["accent"])
-            c.text(30, y + 11, label, 10, bold=is_active,
+                c.rect(0, y, SIDE, 34, C["sidebar_active"])
+                c.rect(0, y, 4, 34, C["accent"])
+            c.text(28, y + 9, label, 9.6, bold=is_active,
                    fill=C["sidebar_fg_active"] if is_active else C["sidebar_fg"])
-            y += 38
+            y += 34
         y += 6
-    c.text(24, VH - 36, "v0.4 · локальный контур", 8.5, fill="#5b6b85")
+    c.text(18, VH - 40, "v0.5 · локальный контур", 8.2, fill="#5b6b85")
+
+    # Right chat panel background
+    cxp = VW - CHAT_W
+    c.rect(cxp, 0, CHAT_W, VH - 26, C["panel"])
+    c.rect(cxp - 1, 0, 1, VH - 26, C["border"])
+
+    # Terminal block in the center column
+    term_y = VH - 26 - TERM_H
+    c.rect(SIDE, term_y, cxp - SIDE, TERM_H, C["panel"])
+    c.rect(SIDE, term_y, cxp - SIDE, 1, C["border"])
+
+    # Status bar
     c.rect(0, VH - 26, VW, 26, "#e8edf5")
     c.text(12, VH - 19, status, 8.5, fill=C["muted"])
     c.text(VW - 14, VH - 19, badge, 8.5, fill=C["muted"], anchor="ra")
+
+
+def draw_terminal(c: Canvas):
+    cxp = VW - CHAT_W
+    y0 = VH - 26 - TERM_H
+    c.text(SIDE + 12, y0 + 10, "ТЕРМИНАЛ", 8, bold=True, fill=C["muted"])
+    c.rect(SIDE + 90, y0 + 8, 240, 20, C["panel_alt"], outline=C["border"], radius=4)
+    c.text(SIDE + 98, y0 + 13, "python -m pytest -q", 8.2, mono=True, fill=C["muted"])
+    c.rect(SIDE + 338, y0 + 8, 84, 20, C["accent"], radius=4)
+    c.text(SIDE + 350, y0 + 13, "▶ Выполнить", 8, bold=True, fill="#ffffff")
+    c.rect(SIDE + 430, y0 + 8, 64, 20, C["panel_alt"], outline=C["border"], radius=4)
+    c.text(SIDE + 442, y0 + 13, "Очистить", 8, fill=C["text"])
+
+    c.rect(SIDE + 1, y0 + 34, cxp - SIDE - 2, TERM_H - 35, C["code_bg"])
+    lines = [
+        ("$ python -m pytest -q", C["code_fg"]),
+        ("....F..........", C["code_fg"]),
+        ("FAILED tests/test_loss.py::test_val_loss_finite", C["danger"]),
+        ("1 failed, 93 passed in 4.2s", C["code_fg"]),
+        ("[код 1 · 14:41]", C["muted"]),
+    ]
+    for idx, (line, color) in enumerate(lines):
+        c.text(SIDE + 14, y0 + 44 + idx * 17, line, 8.6, mono=True, fill=color)
+
+
+def draw_chat_panel(c: Canvas, *, agent_mode: bool = True):
+    cxp = VW - CHAT_W
+    x = cxp + CH0
+    w = CHAT_W - 2 * CH0
+
+    c.text(x, 18, "Наставник", 12, bold=True)
+    c.rect(x, 40, 210, 22, C["panel_alt"], outline=C["border"], radius=4)
+    c.text(x + 8, 46, "Почему растёт loss?", 8.8, fill=C["text"])
+    c.rect(x + 216, 40, 22, 22, C["panel_alt"], outline=C["border"], radius=4)
+    c.text(x + 223, 45, "+", 10, fill=C["text"])
+    c.rect(x + 242, 40, 22, 22, C["panel_alt"], outline=C["danger"], radius=4)
+    c.text(x + 249, 45, "✕", 9, fill=C["danger"])
+
+    c.text(x, 74, "Режим", 8, fill=C["muted"])
+    if agent_mode:
+        c.rect(x + 42, 68, 196, 22, C["success"], radius=4)
+        c.text(x + 52, 73, "» Режим агента — действует свободно", 8, bold=True,
+               fill="#ffffff")
+    else:
+        c.rect(x + 42, 68, 196, 22, C["accent"], radius=4)
+        c.text(x + 52, 73, "· Ассистент — подтверждает действия", 8, bold=True,
+               fill="#ffffff")
+    c.text(x, 98, "агент · папка: alterego-train", 8, fill=C["muted"])
+
+    # Conversation bubbles
+    c.text(x, 122, "Вы · 14:02", 7.6, bold=True, fill=C["muted"])
+    c.rect(x + 46, 134, w - 46, 34, C["user_bubble"], radius=8)
+    c.text(x + 56, 142, "Запусти тесты, найди падающий, почини", 8.8)
+    c.text(x + 56, 156, "и проверь, что всё зелёное.", 8.8)
+
+    c.text(x, 182, "Наставник · 14:02", 7.6, bold=True, fill=C["muted"])
+    for idx, (line, color) in enumerate([
+        ("→ run_command: python -m pytest -q", C["accent"]),
+        ("  [err] 1 failed, 93 passed", C["danger"]),
+        ("→ read_file: tests/test_loss.py", C["accent"]),
+        ("  [ok] {\"ok\": true, …}", C["success"]),
+        ("→ apply_patch: tests/test_loss.py", C["accent"]),
+        ("  [ok] {\"ok\": true, …}", C["success"]),
+        ("→ run_command: python -m pytest -q", C["accent"]),
+        ("  [ok] 94 passed in 4.0s", C["success"]),
+    ]):
+        c.rect(x, 194 + idx * 17, w, 16, C["tool_bubble"] if idx % 2 == 0 else C["panel"],
+               radius=3)
+        c.text(x + 8, 198 + idx * 17, line, 7.6, mono=True, fill=color)
+
+    c.rect(x, 340, w, 92, C["panel"], outline=C["border"], radius=8)
+    c.text(x + 12, 350, "Готово: тест починен (assert допускал NaN),", 9)
+    c.text(x + 12, 366, "перезапуск — 94 passed. Проверка приложена.", 9)
+    c.text(x + 12, 388, "Итог: найдена причина падения, внесена минимальная", 8.6,
+           fill=C["muted"])
+    c.text(x + 12, 402, "правка, всё проверено повторным прогоном.", 8.6,
+           fill=C["muted"])
+
+    # Quick buttons + input
+    for idx, label in enumerate(["Оценка", "Прогресс", "Ошибки"]):
+        bx = x + idx * 62
+        c.rect(bx, 444, 58, 22, C["panel_alt"], outline=C["border"], radius=4)
+        c.text(bx + 8, 450, label, 7.8, fill=C["text"])
+    c.rect(x, 478, w - 44, 40, C["panel"], outline=C["border"], radius=4)
+    c.text(x + 10, 492, "Спасибо! А как добавить early stopping?", 8.6, fill=C["muted"])
+    c.rect(x + w - 40, 478, 40, 40, C["accent"], radius=6)
+    c.text(x + w - 30, 490, "➤", 11, bold=True, fill="#ffffff")
 
 
 def card(c: Canvas, x, y, w, h, title=None):
@@ -108,144 +212,127 @@ def card(c: Canvas, x, y, w, h, title=None):
 
 
 def render_chat() -> Path:
+    """IDE view: code editor in the center, terminal below, agent chat at right."""
     c = Canvas()
-    draw_shell(c, "Чат с наставником", "Готово: ответ наставника", "папка: alterego-train")
-    c.text(PX0, 36, "Чат с наставником", 16, bold=True)
-    c.text(PX0, 64, "Диалог, инструменты и правки кода в выбранной рабочей папке. "
-                    "Каждое изменение требует вашего подтверждения.", 9.5, fill=C["muted"])
+    draw_shell(c, "Редактор кода", "Готово: ответ наставника", "папка: alterego-train")
+    c.text(CX0, 32, "Редактор кода", 15, bold=True)
+    c.text(CX0, 58, "Сборка проекта, шаблоны обучения и правка файлов в рабочей "
+                    "папке.", 9, fill=C["muted"])
 
-    # Sessions column (page area)
-    c.rect(PX0, 100, 190, 540, C["border"], radius=6)
-    c.rect(PX0 + 1, 101, 188, 538, C["panel"], radius=6)
-    c.text(PX0 + 14, 112, "ДИАЛОГИ", 8.5, bold=True, fill=C["muted"])
-    for idx, (name, active) in enumerate([
-        ("Почему растёт loss?", True), ("Настройка пайплайна", False),
-        ("Экспорт чекпойнтов", False), ("Новый диалог", False),
-    ]):
-        y = 136 + idx * 34
-        if active:
-            c.rect(PX0 + 8, y - 4, 174, 30, C["accent"], radius=4)
-            c.text(PX0 + 18, y + 3, name, 9.5, bold=True, fill="#ffffff")
-        else:
-            c.text(PX0 + 18, y + 3, name, 9.5, fill=C["text"])
-    c.rect(PX0 + 8, 588, 82, 28, C["panel_alt"], outline=C["border"], radius=4)
-    c.text(PX0 + 24, 596, "Новый", 9, fill=C["text"])
-    c.rect(PX0 + 98, 588, 82, 28, C["panel_alt"], outline=C["danger"], radius=4)
-    c.text(PX0 + 112, 596, "Удалить", 9, fill=C["danger"])
+    # Scaffolding bar
+    c.text(CX0, 86, "Новый проект", 9, bold=True)
+    c.rect(CX0 + 90, 80, 120, 22, C["panel"], outline=C["border"], radius=4)
+    c.text(CX0 + 98, 86, "demo", 8.8, fill=C["muted"])
+    for idx, (label, primary) in enumerate([("Новый проект", False),
+                                            ("Шаблон обучения", False),
+                                            ("Базовый fine-tune", True)]):
+        bx = CX0 + 224 + idx * 116
+        c.rect(bx, 80, 108, 22, C["accent"] if primary else C["panel_alt"],
+               outline=None if primary else C["border"], radius=4)
+        c.text(bx + 10, 86, label, 8, bold=primary,
+               fill="#ffffff" if primary else C["text"])
 
-    # Chat column
-    cx, cw = 456, 534
-    c.rect(cx, 100, cw, 540, C["border"], radius=6)
-    c.rect(cx + 1, 101, cw - 2, 538, C["panel"], radius=6)
-
-    c.text(cx + 14, 114, "Вы · 14:02", 8, bold=True, fill=C["muted"])
-    c.rect(cx + 90, 128, 420, 52, C["user_bubble"], radius=8)
-    c.text(cx + 104, 142, "Почему на 5-й эпохе val_loss начал расти?", 10)
-    c.text(cx + 104, 158, "Посмотри лог и код обучения, предложи исправление.", 10)
-
-    c.text(cx + 14, 198, "Наставник · 14:02", 8, bold=True, fill=C["muted"])
-    c.rect(cx + 14, 212, 460, 92, C["panel"], outline=C["border"], radius=8)
-    c.text(cx + 28, 224, "## Рассуждение", 10, bold=True)
-    c.text(cx + 28, 242, "Train loss падает, а val_loss растёт — классическая", 9.8)
-    c.text(cx + 28, 258, "картина переобучения. Сначала прочитаю скрипт.", 9.8)
-    c.text(cx + 28, 278, "→ read_file: train.py", 9.2, mono=True, fill="#92400e")
-
-    c.rect(cx + 14, 316, 460, 34, C["tool_bubble"], radius=6)
-    c.text(cx + 28, 326, '→ read_file: {"ok": true, "path": "train.py"}',
-           8.8, mono=True, fill="#78350f")
-
-    c.text(cx + 14, 368, "Наставник · 14:03", 8, bold=True, fill=C["muted"])
-    c.rect(cx + 14, 382, 460, 158, C["panel"], outline=C["border"], radius=8)
-    c.text(cx + 28, 394, "## Что хорошо", 10, bold=True, fill=C["success"])
-    c.text(cx + 28, 412, "• loss на обучении стабильно снижается", 9.8)
-    c.text(cx + 28, 428, "• lr-расписание корректно затухает", 9.8)
-    c.text(cx + 28, 448, "## Что плохо", 10, bold=True, fill=C["danger"])
-    c.text(cx + 28, 466, "• нет dropout/weight decay — переобучение", 9.8)
-    c.text(cx + 28, 486, "## Рекомендации", 10, bold=True, fill=C["accent"])
-    c.text(cx + 28, 504, "• включить early stopping и аугментации", 9.8)
-
-    c.text(cx + 14, 556, "Быстрые команды:", 8.5, fill=C["muted"])
-    for idx, label in enumerate(["Оценка модели", "Прогресс обучения", "Разбор ошибок"]):
-        x = cx + 108 + idx * 118
-        c.rect(x, 548, 110, 24, C["panel_alt"], outline=C["border"], radius=4)
-        c.text(x + 10, 555, label, 8.2, fill=C["text"])
-    c.rect(cx + 14, 586, 360, 44, C["panel"], outline=C["border"], radius=4)
-    c.text(cx + 26, 600, "Спасибо! А как лучше организовать валидацию?", 9.5,
-           fill=C["muted"])
-    c.rect(cx + 386, 586, 88, 44, C["accent"], radius=6)
-    c.text(cx + 402, 600, "Отправить", 9.5, bold=True, fill="#ffffff")
-
-    # Activity column
-    ax = 1002
-    c.rect(ax, 100, PX1 - ax, 540, C["border"], radius=6)
-    c.rect(ax + 1, 101, PX1 - ax - 2, 538, C["panel"], radius=6)
-    c.text(ax + 14, 112, "АКТИВНОСТЬ ИНСТРУМЕНТОВ", 8.2, bold=True, fill=C["muted"])
-    rows = [
-        ("→ read_file: train.py", C["accent"]),
-        ("  [ok] {\"ok\": true, …}", C["success"]),
-        ("→ search_files: val_loss", C["accent"]),
-        ("  [ok] {\"matches\": 14, …}", C["success"]),
-        ("→ run_command: pytest -q", C["accent"]),
-        ("  [err] 1 failed, 12 passed", C["danger"]),
-        ("наставник формирует ответ", C["muted"]),
+    # File tree
+    tw = 180
+    c.rect(CX0, 112, tw, 380, C["border"], radius=6)
+    c.rect(CX0 + 1, 113, tw - 2, 378, C["panel"], radius=6)
+    c.text(CX0 + 12, 122, "ФАЙЛЫ ПРОЕКТА", 7.8, bold=True, fill=C["muted"])
+    tree = [
+        ("> alterego-train", C["muted"], True),
+        ("  v src", C["muted"], True),
+        ("    train.py", C["accent"], False),
+        ("    data.py", C["text"], False),
+        ("    model.py", C["text"], False),
+        ("  v tests", C["muted"], True),
+        ("    test_loss.py", C["text"], False),
+        ("  config.yaml", C["text"], False),
+        ("  README.md", C["text"], False),
     ]
-    for idx, (line, color) in enumerate(rows):
-        c.text(ax + 14, 138 + idx * 18, line, 8.4, mono=True, fill=color)
-    c.text(ax + 14, 300, "Инструменты активны.", 8.4, fill=C["muted"])
-    c.text(ax + 14, 316, "Папка: ~/alterego-train", 8.4, fill=C["muted"])
+    for idx, (label, color, dim) in enumerate(tree):
+        y = 142 + idx * 18
+        if label.strip() == "train.py":
+            c.rect(CX0 + 6, y - 3, tw - 12, 18, C["sidebar_active"], radius=3)
+        c.text(CX0 + 12, y, label, 8.4, mono=True, fill=color, bold=not dim)
+
+    # Editor
+    ex = CX0 + tw + 12
+    ew = CX1 - ex
+    c.rect(ex, 112, ew, 380, C["border"], radius=6)
+    c.rect(ex + 1, 113, ew - 2, 378, C["code_bg"], radius=6)
+    c.rect(ex + 1, 113, ew - 2, 26, C["panel"], radius=6)
+    c.text(ex + 12, 120, "src/train.py", 8.6, mono=True, fill=C["text"])
+    code = [
+        "def train(model, loader, *, epochs=10, lr=3e-4):",
+        "    opt = torch.optim.AdamW(model.parameters(), lr=lr)",
+        "    for epoch in range(epochs):",
+        "        for batch in loader:",
+        "            loss = model(batch)",
+        "            loss.backward()",
+        "            opt.step()",
+        "            opt.zero_grad()",
+        "        val = evaluate(model, loader.val)",
+        "        log(epoch=epoch + 1, val_loss=val)",
+        "    return model",
+    ]
+    for idx, line in enumerate(code):
+        y = 150 + idx * 17
+        c.text(ex + 12, y, f"{idx + 1:>3}", 7.6, mono=True, fill=C["muted"])
+        c.text(ex + 36, y, line, 8.6, mono=True, fill=C["code_fg"])
+
+    draw_terminal(c)
+    draw_chat_panel(c, agent_mode=True)
     return c.save("ui-chat.png")
 
 
 def render_dashboard() -> Path:
+    """Model & progress page in the center, terminal below, chat at right."""
     c = Canvas()
     draw_shell(c, "Модель и прогресс", "Готово: оценка наставника", "папка: alterego-train")
-    c.text(PX0, 36, "Модель и прогресс", 16, bold=True)
-    c.text(PX0, 64, "Сводка по выбранной модели: прогресс обучения, оценка "
-                    "наставника и журнал действий.", 9.5, fill=C["muted"])
+    c.text(CX0, 32, "Модель и прогресс", 15, bold=True)
+    c.text(CX0, 58, "Сводка по выбранной модели: прогресс обучения, оценка "
+                    "наставника и журнал действий.", 9, fill=C["muted"])
 
     # Toolbar
-    c.text(PX0, 96, "Модель", 10, bold=True)
-    c.rect(PX0 + 56, 88, 260, 28, C["panel"], outline=C["border"], radius=4)
-    c.text(PX0 + 68, 96, "gpt-mini-v2  ·  local", 9.5, fill=C["text"])
-    c.rect(PX0 + 328, 88, 92, 28, C["panel_alt"], outline=C["border"], radius=4)
-    c.text(PX0 + 344, 96, "Обновить", 9.2, fill=C["text"])
-    c.rect(PX0 + 432, 88, 160, 28, C["accent"], radius=4)
-    c.text(PX0 + 448, 96, "Оценка наставника", 9.2, bold=True, fill="#ffffff")
-    c.rect(PX0 + 604, 88, 116, 28, C["panel_alt"], outline=C["border"], radius=4)
-    c.text(PX0 + 622, 96, "Открыть чат", 9.2, fill=C["text"])
+    c.text(CX0, 88, "Модель", 9.5, bold=True)
+    c.rect(CX0 + 52, 80, 220, 24, C["panel"], outline=C["border"], radius=4)
+    c.text(CX0 + 62, 87, "gpt-mini-v2  ·  local", 8.8, fill=C["text"])
+    c.rect(CX0 + 282, 80, 80, 24, C["panel_alt"], outline=C["border"], radius=4)
+    c.text(CX0 + 296, 87, "Обновить", 8.4, fill=C["text"])
+    c.rect(CX0 + 372, 80, 136, 24, C["accent"], radius=4)
+    c.text(CX0 + 386, 87, "Оценка наставника", 8.4, bold=True, fill="#ffffff")
 
     # Model card
-    top = card(c, PX0, 132, 450, 220, "Карточка модели")
+    top = card(c, CX0, 116, 390, 210, "Карточка модели")
     rows = [
         ("Название", "gpt-mini-v2"), ("Тип", "local"),
         ("Путь / URI", "checkpoints/gpt-mini-v2.safetensors"),
         ("API model id", "gpt-mini-v2"),
         ("URL инференса", "https://api.example.test/v1"),
         ("Обновлено", "13.10.2026 14:40"),
-        ("Метрики", "val_loss: 1.02, acc: 0.47"),
+        ("Метрики", "val_loss: 1.22, acc: 0.47"),
         ("Заметки", "маленькая LM для экспериментов"),
     ]
     for idx, (label, value) in enumerate(rows):
-        y = top + 8 + idx * 20
-        c.text(PX0 + 14, y, f"{label}:", 9.2, bold=True, fill=C["muted"])
-        c.text(PX0 + 122, y, value, 9.2, fill=C["text"])
+        y = top + 6 + idx * 19
+        c.text(CX0 + 14, y, f"{label}:", 8.6, bold=True, fill=C["muted"])
+        c.text(CX0 + 106, y, value, 8.6, fill=C["text"])
 
     # Progress card
-    gx = PX0 + 462
-    gw = PX1 - gx
-    top = card(c, gx, 132, gw, 220, "Прогресс обучения")
-    c.text(gx + 14, top + 6, "Состояние: выполняется", 9.5, bold=True)
-    c.text(gx + 14, top + 24, "python scripts/train.py --config base.yaml", 8.6,
+    gx = CX0 + 402
+    gw = CX1 - gx
+    top = card(c, gx, 116, gw, 210, "Прогресс обучения")
+    c.text(gx + 14, top + 4, "Состояние: выполняется", 9, bold=True)
+    c.text(gx + 14, top + 20, "python scripts/train.py --config base.yaml", 7.8,
            mono=True, fill=C["muted"])
-    c.text(gx + 14, top + 42, "эпоха 5/10 · val_loss: 1.02 · acc: 0.47 · "
-                              "тренд: val_loss ухудшается", 8.8)
-    c.rect(gx + gw - 160, top + 6, 146, 12, C["border"], radius=6)
-    c.rect(gx + gw - 160, top + 6, 73, 12, C["accent"], radius=6)
-    c.text(gx + gw - 87, top + 22, "эпоха 5 / 10", 8, fill=C["muted"], anchor="ma")
-    c.text(gx + 14, top + 62, "⚠ «val_loss» вырос с 1.00 до 1.20 — возможна расходимость.",
-           8.6, fill=C["warning"])
-    ch_x, ch_y = gx + 14, top + 82
-    ch_w, ch_h = gw - 28, 112
+    c.text(gx + 14, top + 38, "эпоха 5/10 · val_loss: 1.22 · acc: 0.47 · "
+                              "тренд: val_loss ухудшается", 8)
+    c.rect(gx + gw - 150, top + 4, 136, 11, C["border"], radius=5)
+    c.rect(gx + gw - 150, top + 4, 68, 11, C["accent"], radius=5)
+    c.text(gx + gw - 82, top + 18, "эпоха 5 / 10", 7.6, fill=C["muted"], anchor="ma")
+    c.text(gx + 14, top + 56, "! «val_loss» вырос с 1.00 до 1.22 — возможна расходимость.",
+           7.8, fill=C["warning"])
+    ch_x, ch_y = gx + 14, top + 74
+    ch_w, ch_h = gw - 28, 108
     c.rect(ch_x, ch_y, ch_w, ch_h, C["panel_alt"], outline=C["border"], radius=4)
     loss = [2.5, 1.9, 1.5, 1.25, 1.1, 1.02, 1.06, 1.12, 1.18, 1.22]
     acc = [0.10, 0.18, 0.26, 0.32, 0.38, 0.42, 0.44, 0.45, 0.46, 0.47]
@@ -262,53 +349,46 @@ def render_dashboard() -> Path:
 
     curve(loss, C["accent"], 0.0, 2.6)
     curve(acc, C["success"], 0.0, 1.0)
-    c.text(ch_x + ch_w - 8, ch_y + 8, "val_loss: 1.22", 8.2, fill=C["accent"], anchor="ra")
-    c.text(ch_x + ch_w - 8, ch_y + 22, "acc: 0.47", 8.2, fill=C["success"], anchor="ra")
+    c.text(ch_x + ch_w - 8, ch_y + 8, "val_loss: 1.22", 7.8, fill=C["accent"], anchor="ra")
+    c.text(ch_x + ch_w - 8, ch_y + 22, "acc: 0.47", 7.8, fill=C["success"], anchor="ra")
 
     # Assessment card
-    top = card(c, PX0, 364, PX1 - PX0, 268, "Оценка наставника")
-    c.text(PX0 + 14, top + 2, "Оценка: 7.5/10", 13, bold=True, fill=C["accent"])
-    c.text(PX1 - 14, top + 6, "обновлено 13.10 14:05", 8.5, fill=C["muted"], anchor="ra")
+    top = card(c, CX0, 338, CX1 - CX0, 148, "Оценка наставника")
+    c.text(CX0 + 14, top + 2, "Оценка: 7.5/10", 12, bold=True, fill=C["accent"])
+    c.text(CX1 - 14, top + 6, "обновлено 13.10 14:05", 8, fill=C["muted"], anchor="ra")
     columns = [
         ("Что хорошо", C["success"],
-         ["• loss на обучении падает", "• пайплайн воспроизводим",
-          "• lr-расписание корректно"]),
+         ["• loss на обучении падает", "• пайплайн воспроизводим"]),
         ("Что плохо", C["danger"],
-         ["• val_loss растёт с 5-й эпохи", "• нет early stopping",
-          "• датасет мал для архитектуры"]),
+         ["• val_loss растёт с 5-й эпохи", "• нет early stopping"]),
         ("Риски", C["warning"],
          ["• переобучение к 8-й эпохе", "• нестабильность при смене seed"]),
         ("Рекомендации", C["accent"],
-         ["• включить weight decay 0.01", "• добавить аугментации",
-          "• проверить на 3 запусках"]),
+         ["• включить weight decay 0.01", "• проверить на 3 запусках"]),
     ]
-    col_w = (PX1 - PX0 - 28 - 3 * 8) // 4
+    col_w = (CX1 - CX0 - 28 - 3 * 8) // 4
     for idx, (title, color, items) in enumerate(columns):
-        x = PX0 + 14 + idx * (col_w + 8)
-        c.text(x, top + 30, title, 9.5, bold=True, fill=color)
-        c.rect(x, top + 48, col_w, 86, C["panel"], outline=C["border"], radius=4)
+        x = CX0 + 14 + idx * (col_w + 8)
+        c.text(x, top + 28, title, 9, bold=True, fill=color)
+        c.rect(x, top + 44, col_w, 56, C["panel"], outline=C["border"], radius=4)
         for j, item in enumerate(items):
-            c.text(x + 10, top + 58 + j * 17, item, 8.4, fill=C["text"])
-    c.text(PX0 + 14, top + 146, "Рассуждение", 9.5, bold=True)
-    c.rect(PX0 + 14, top + 164, PX1 - PX0 - 28, 52, C["panel"], outline=C["border"],
-           radius=4)
-    c.text(PX0 + 26, top + 174, "Train loss и val_loss расходятся после 5-й эпохи — модель", 9)
-    c.text(PX0 + 26, top + 190, "запоминает обучающую выборку. Качество приемлемое, но нужна", 9)
-    c.text(PX0 + 26, top + 206, "регуляризация и честная валидация.", 9)
+            c.text(x + 8, top + 52 + j * 16, item, 7.8, fill=C["text"])
 
     # Activity card
-    top = card(c, PX0, 644, PX1 - PX0, 130, "Действия — журнал активности")
+    top = card(c, CX0, 498, CX1 - CX0, 84, "Действия — журнал активности")
     feed = [
         ("13.10 14:05", "★", "Сохранена оценка наставника (7.5/10)"),
         ("13.10 14:03", "»", "read_file: train.py — ok"),
-        ("13.10 14:02", "»", "search_files: val_loss — ok"),
         ("13.10 13:40", "▶", "Обучение запущено: python scripts/train.py --config base.yaml"),
     ]
     for idx, (stamp, icon, text) in enumerate(feed):
-        y = top + 8 + idx * 18
-        c.text(PX0 + 14, y, stamp, 8.5, mono=True, fill=C["muted"])
-        c.text(PX0 + 94, y, icon, 8.5, fill=C["accent"])
-        c.text(PX0 + 118, y, text, 8.8, fill=C["text"])
+        y = top + 6 + idx * 17
+        c.text(CX0 + 14, y, stamp, 8, mono=True, fill=C["muted"])
+        c.text(CX0 + 88, y, icon, 8, fill=C["accent"])
+        c.text(CX0 + 110, y, text, 8.4, fill=C["text"])
+
+    draw_terminal(c)
+    draw_chat_panel(c, agent_mode=False)
     return c.save("ui-dashboard.png")
 
 

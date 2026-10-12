@@ -1,21 +1,22 @@
 # AlterEgo Training Hub — LLM Studio
 
-A desktop development environment for LLM research: chat mentor with code tools, code editor, model/dataset library, training with live metrics, model playground, and RunPod GPU management — all in one Windows-first app.
+A desktop development environment for LLM research with an IDE layout: code editor and terminal in the center, a docked mentor-agent chat on the right, model/dataset library, training with live metrics, model playground, service connectors (GitHub / Hugging Face / Gmail), and RunPod GPU management — all in one Windows-first app.
 
 ## Interface
 
-| Chat with mentor | Model dashboard |
+| Editor + terminal + agent chat | Model dashboard |
 | --- | --- |
-| ![Chat](docs/ui-chat.png) | ![Dashboard](docs/ui-dashboard.png) |
+| ![IDE with agent chat](docs/ui-chat.png) | ![Dashboard](docs/ui-dashboard.png) |
 
 Mockups are rendered from the app's real design tokens by `scripts/render_ui_mockup.py`.
 
 ## Studio features
 
 **Разработка**
-- **Чат с наставником** — conversational panel with persistent dialogs; the mentor reads/searches/edits code and runs commands inside the chosen workspace (sandboxed, every mutation confirmed). Quick commands: model assessment, training progress, log error triage.
 - **Редактор кода** — file tree of the workspace, built-in editor (Ctrl+S), "обсудить с наставником" for any file, and **project scaffolding from templates**: a ready-to-run `train.py` + `config.json` + `eval.py` (stdlib-only) whose metrics are parsed by the dashboard out of the box.
 - **Рабочая папка** — pick one folder on your PC; all tools and training are confined to it. Git connect/clone/fetch/pull-ff/branch flows included.
+- **Терминал** — a bottom panel to run any command in the workspace and watch the output, with one-click re-run from history.
+- **Наставник-агент** (right panel) — a chat mentor that works as an **autonomous agent**: it can inspect and edit code, run commands, query training state, use connectors and even start/stop training to reach your goal. Two modes: *Ассистент* (every mutating action asks for confirmation) and *Режим агента* (acts freely toward the goal; everything is still backed up and logged).
 
 **Библиотека**
 - **Модели** — registry of local checkpoints (`*.safetensors`, `*.gguf`, …) and cloud artefacts (`s3://`, `hf://`, `runpod://`, `https://`), folder scanning, portable JSON manifests. The library folder can be a cloud-synced directory (OneDrive, Yandex.Disk, …).
@@ -28,16 +29,17 @@ Mockups are rendered from the app's real design tokens by `scripts/render_ui_moc
 - **Внешние GPU** — live RunPod catalog, GPU-rate budget gate (not a total-bill cap), confirmed pod lifecycle.
 
 **Система**
+- **Коннекторы** — GitHub repository search, Hugging Face model search and model cards, Gmail notifications (SMTP with App Password). Tokens live only in the OS credential store; the same actions are exposed to the mentor-agent as tools.
 - API keys only in the OS credential store (`keyring`); settings files contain no secrets.
 - Automatic timestamped backups before mentor file edits; JSONL audit trail outside the repository.
 - Package as a Windows executable using PyInstaller.
 
 ## Features
 
-**Chat mentor with tools**
-- Conversational panel with persistent dialogs (saved per user, no secrets inside).
-- The mentor can inspect the selected workspace: list/read/search files, edit files, and run commands — every mutating action requires explicit confirmation.
-- The mentor can also query training state (current metrics, log tail, run history) even without a workspace.
+**Mentor agent with tools**
+- Docked chat panel on the right with persistent dialogs (saved per user, no secrets inside).
+- The agent can inspect the selected workspace: list/read/search files, edit files, and run commands. Assist mode requires explicit confirmation for every mutating action; **agent mode** performs the whole goal freely (plan → act → verify), while still backing up every edit and logging every call.
+- Give the agent a goal ("запусти тесты, найди падающий, почини и проверь") and it loops through tools until the goal is done: it can start/stop training, read metrics and logs, search GitHub and Hugging Face, and send e-mail notifications.
 - Works with any OpenAI-compatible provider that supports `tools`; a plain-text ` ```tool ` fallback protocol is used when function calling is unavailable.
 - Quick commands: model assessment, training progress, log error triage. Structured assessments are saved to the model dashboard automatically.
 - The mentor participates in training: send it a training log (or let the app do it automatically on failure) and it will find errors, read the code, and propose fixes. Every edit is backed up before it is applied.
@@ -98,9 +100,13 @@ The build script creates `dist\AlterEgoTrainingHub.exe`. Build and test it on Wi
 
 In the **Настройки** page, enter the provider's HTTPS OpenAI-compatible base URL (usually ending in `/v1`), fetch the model list or type the exact model ID, and save its key. Saving the key uses the operating-system credential store. The connection-test button asks for confirmation before sending (it may consume API credits).
 
-Then open the **Чат с наставником** page: talk to the mentor, ask it to read your project, find bugs, run tests, or fix code. It can only touch the folder you selected on the **Рабочая папка** page, and every file change or command execution is shown for your confirmation before it happens.
+Then use the **Наставник** panel on the right: talk to the mentor, ask it to read your project, find bugs, run tests, or fix code. It can only touch the folder you selected on the **Рабочая папка** page. In *Ассистент* mode every file change or command execution is shown for your confirmation before it happens; in *Режим агента* it acts towards your goal without step-by-step confirmations — review its work via the activity trail and backups (use Git to diff and roll back).
 
 Only use mentor outputs for model development if the selected API/model terms permit that use. Do not send private training data without checking the provider's data handling and terms.
+
+## Connect services (GitHub, Hugging Face, Gmail)
+
+Open the **Коннекторы** page. Tokens and passwords go straight to the OS credential store; nothing is written to settings files. For Gmail use an App Password (Google Account → Security → 2-Step Verification → App passwords) — the app sends through SMTP with STARTTLS. The same connectors are available to the mentor-agent as tools: `search_github`, `search_huggingface`, `huggingface_model_card`, `send_email`.
 
 ## Connect cloud GPUs
 
@@ -110,7 +116,7 @@ RunPod REST API v2 is in public beta; this adapter may need maintenance when the
 
 ## Scope and honest limitations
 
-This is a desktop control-plane MVP, not yet an end-to-end training orchestration product. It does not yet copy the selected AI repository to a remote worker, upload datasets, launch training on a cloud GPU, stream remote logs, enforce a total-spend ceiling, or synchronize/resume remote checkpoints. Training runs locally in the chosen workspace folder; cloud resource management is implemented separately. Do not assume that creating a pod starts training. The mentor's file edits always require confirmation and are ordinary file writes — use Git to review and roll them back.
+This is a desktop control-plane MVP, not yet an end-to-end training orchestration product. It does not yet copy the selected AI repository to a remote worker, upload datasets, launch training on a cloud GPU, stream remote logs, enforce a total-spend ceiling, or synchronize/resume remote checkpoints. Training runs locally in the chosen workspace folder; cloud resource management is implemented separately. Do not assume that creating a pod starts training. The mentor's file edits are ordinary file writes — in assist mode they are confirmed explicitly, in agent mode they are only backed up and logged, so use Git to review and roll them back.
 
 The next milestone is a typed remote training worker with resumable checkpoint/data transfers, explicit elapsed-time and total-cost guards, live logs, and end-to-end tests on a short disposable job.
 

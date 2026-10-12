@@ -1,4 +1,4 @@
-"""Tkinter desktop shell: sidebar navigation, pages, status bar, event loop."""
+"""Tkinter IDE shell: sidebar, center workspace, bottom terminal, right chat."""
 from __future__ import annotations
 
 import queue
@@ -11,7 +11,8 @@ from . import ui_common
 from .activity import ActivityLog
 from .agent import TRAINING_CONTEXT_TOOL_SCHEMAS
 from .cloud_gpu import RunPodClient
-from .config import AppSettings, SecretStore
+from .config import AppSettings, SecretStore, app_data_dir
+from .connectors import ConnectorManager
 from .git_manager import GitRepositoryManager
 from .mentor import ApiMentor, MentorError
 from .metrics import brief as metrics_brief, parse_log
@@ -25,9 +26,9 @@ from .ui_common import C, F_NAV, F_NAV_SMALL, confirm_from_worker
 class TrainingHubApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("AlterEgo Training Hub")
-        self.geometry("1320x840")
-        self.minsize(1080, 700)
+        self.title("AlterEgo Training Hub — LLM Studio")
+        self.geometry("1480x860")
+        self.minsize(1180, 720)
 
         self.settings = AppSettings.load()
         self.secrets = SecretStore()
@@ -46,15 +47,10 @@ class TrainingHubApp(tk.Tk):
         ui_common.apply_theme(self)
         self._build_layout()
         self._poll_events()
-
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     # ------------------------------------------------------------------ layout
     def _build_layout(self):
-        container = tk.Frame(self, bg=C["bg"])
-        container.pack(fill="both", expand=True)
-
-        # Status bar first so it stays at the bottom.
         self.status_bar = tk.Frame(self, bg="#e8edf5")
         self.status_bar.pack(side="bottom", fill="x")
         self.status_text = tk.StringVar(value="Готово")
@@ -65,20 +61,22 @@ class TrainingHubApp(tk.Tk):
         tk.Label(self.status_bar, textvariable=self.workspace_badge, bg="#e8edf5",
                  fg=C["muted"], font=ui_common.F_SMALL, padx=12).pack(side="right")
 
-        # Sidebar
-        sidebar = tk.Frame(container, bg=C["sidebar"], width=230)
+        container = tk.Frame(self, bg=C["bg"])
+        container.pack(fill="both", expand=True)
+
+        # ---- Left sidebar (navigation) --------------------------------
+        sidebar = tk.Frame(container, bg=C["sidebar"], width=200)
         sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
         brand = tk.Frame(sidebar, bg=C["sidebar"])
-        brand.pack(fill="x", pady=(22, 18), padx=18)
+        brand.pack(fill="x", pady=(18, 12), padx=16)
         tk.Label(brand, text="AlterEgo", bg=C["sidebar"], fg="#ffffff",
-                 font=("Segoe UI", 16, "bold")).pack(anchor="w")
-        tk.Label(brand, text="Training Hub", bg=C["sidebar"], fg=C["sidebar_fg"],
-                 font=("Segoe UI", 11)).pack(anchor="w")
+                 font=("Segoe UI", 15, "bold")).pack(anchor="w")
+        tk.Label(brand, text="LLM Studio", bg=C["sidebar"], fg=C["sidebar_fg"],
+                 font=("Segoe UI", 10)).pack(anchor="w")
 
         nav_groups = [
             ("РАЗРАБОТКА", [
-                ("chat", "Чат с наставником"),
                 ("editor", "Редактор кода"),
                 ("workspace", "Рабочая папка"),
             ]),
@@ -93,24 +91,34 @@ class TrainingHubApp(tk.Tk):
                 ("gpu", "Внешние GPU"),
             ]),
             ("СИСТЕМА", [
+                ("connectors", "Коннекторы"),
                 ("settings", "Настройки"),
             ]),
         ]
         for group_title, items in nav_groups:
             tk.Label(sidebar, text=group_title, bg=C["sidebar"], fg="#5b6b85",
-                     font=F_NAV_SMALL, anchor="w", padx=18).pack(fill="x",
-                                                                 pady=(12, 2))
+                     font=F_NAV_SMALL, anchor="w", padx=16).pack(fill="x",
+                                                                 pady=(10, 2))
             for key, label in items:
                 self._make_nav_item(sidebar, key, label)
 
-        tk.Label(sidebar, text="v0.3 · локальный контур", bg=C["sidebar"],
-                 fg="#5b6b85", font=F_NAV_SMALL).pack(side="bottom", pady=16)
+        tk.Label(sidebar, text="v0.5 · локальный контур", bg=C["sidebar"],
+                 fg="#5b6b85", font=F_NAV_SMALL).pack(side="bottom", pady=12)
 
-        # Pages area
-        self.pages_host = tk.Frame(container, bg=C["bg"])
-        self.pages_host.pack(side="left", fill="both", expand=True)
-
+        # ---- Right chat panel (docked) --------------------------------
         from .ui_chat import ChatPage
+
+        self.chat_panel = ChatPage(container, self)
+        self.chat_panel.pack(side="right", fill="y")
+        self.chat_panel.configure(width=390)
+        self.chat_panel.pack_propagate(False)
+
+        # ---- Center: pages + terminal ---------------------------------
+        center = tk.Frame(container, bg=C["bg"])
+        center.pack(side="left", fill="both", expand=True)
+        self.pages_host = tk.Frame(center, bg=C["bg"])
+        self.pages_host.pack(fill="both", expand=True)
+
         from .ui_datasets import DatasetsPage
         from .ui_editor import EditorPage
         from .ui_gpu import GpuPage
@@ -118,11 +126,12 @@ class TrainingHubApp(tk.Tk):
         from .ui_models import ModelsPage
         from .ui_playground import PlaygroundPage
         from .ui_settings import SettingsPage
+        from .ui_terminal import TerminalPanel
         from .ui_training import TrainingPage
         from .ui_workspace import WorkspacePage
+        from .ui_connectors import ConnectorsPage
 
         page_classes = [
-            ("chat", ChatPage),
             ("editor", EditorPage),
             ("workspace", WorkspacePage),
             ("models", ModelsPage),
@@ -131,14 +140,21 @@ class TrainingHubApp(tk.Tk):
             ("playground", PlaygroundPage),
             ("training", TrainingPage),
             ("gpu", GpuPage),
+            ("connectors", ConnectorsPage),
             ("settings", SettingsPage),
         ]
         for key, cls in page_classes:
             page = cls(self.pages_host, self)
             page.place(relx=0, rely=0, relwidth=1, relheight=1)
             self.pages[key] = page
+        self.pages["chat"] = self.chat_panel
 
-        self.show_page("chat")
+        self.terminal = TerminalPanel(center, self)
+        self.terminal.pack(side="bottom", fill="x", pady=(0, 2))
+        self.terminal.configure(height=190)
+        self.terminal.pack_propagate(False)
+
+        self.show_page("editor")
         self._refresh_workspace_badge()
 
     def _make_nav_item(self, parent, key: str, label: str):
@@ -147,7 +163,7 @@ class TrainingHubApp(tk.Tk):
         accent = tk.Frame(row, bg=C["sidebar"], width=4)
         accent.pack(side="left", fill="y")
         btn = tk.Label(row, text="  " + label, bg=C["sidebar"], fg=C["sidebar_fg"],
-                       font=F_NAV, anchor="w", padx=10, pady=8, cursor="hand2")
+                       font=F_NAV, anchor="w", padx=8, pady=8, cursor="hand2")
         btn.pack(side="left", fill="x", expand=True)
 
         def on_enter(_event, b=btn, k=key):
@@ -164,9 +180,12 @@ class TrainingHubApp(tk.Tk):
         self._nav_buttons[key] = btn
         self._nav_accent[key] = accent
 
-    _current_page = "chat"
+    _current_page = "editor"
 
     def show_page(self, key: str):
+        if key == "chat":
+            self.chat_panel.focus_set()
+            return
         self._current_page = key
         for name, button in self._nav_buttons.items():
             active = name == key
@@ -185,7 +204,6 @@ class TrainingHubApp(tk.Tk):
     # ------------------------------------------------------------- services
     def post_event(self, kind: str, payload: dict):
         if self._closing:
-            # Never leave a worker blocked on confirmation after shutdown.
             if kind == "confirm":
                 payload["box"]["ok"] = False
                 payload["event"].set()
@@ -238,8 +256,7 @@ class TrainingHubApp(tk.Tk):
                                 payload.get("message", ""), parent=self)
             return
         if kind == "chat_event":
-            chat = self.pages.get("chat")
-            handler = getattr(chat, "on_agent_event", None)
+            handler = getattr(self.chat_panel, "on_agent_event", None)
             if callable(handler):
                 handler(payload.get("kind", ""), payload.get("payload", {}))
             return
@@ -283,6 +300,11 @@ class TrainingHubApp(tk.Tk):
         path = Path(raw).expanduser()
         return path if path.is_dir() else None
 
+    def backup_dir(self) -> Path:
+        path = app_data_dir() / "backups"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
     def mentor_client(self) -> ApiMentor:
         base_url = (self.settings.mentor_base_url or "").strip()
         model = (self.settings.mentor_model or "").strip()
@@ -305,9 +327,12 @@ class TrainingHubApp(tk.Tk):
         key = self.secrets.get("runpod_api_key")
         return RunPodClient(key)
 
-    # ------------------------------------------------- mentor context tools
+    def confirm_from_worker(self, title: str, message: str) -> bool:
+        return confirm_from_worker(self, title, message)
+
+    # ------------------------------------------------- agent tool registry
     def agent_extra_tools(self):
-        """Read-only tools that let the mentor inspect training progress."""
+        """Context + connector + training-control tools for the mentor agent."""
         def get_training_status(_args):
             status = self.training.status()
             summary = parse_log(self.training.tail())
@@ -350,20 +375,69 @@ class TrainingHubApp(tk.Tk):
             ]
             return {"ok": True, "runs": runs}
 
-        tools = {
+        def start_training(args):
+            command = str(args.get("command") or "").strip() or self.settings.training_command
+            root = self.workspace_root()
+            if root is None:
+                return {"ok": False, "error": "Рабочая папка не выбрана."}
+            try:
+                log_path = self.training.start(command, root)
+            except Exception as exc:
+                return {"ok": False, "error": str(exc)}
+            record = self.runs.start(command, str(root), log_path)
+            self.activity.log("training", f"Агент запустил обучение: {command}",
+                              run_id=record.id)
+            return {"ok": True, "log_path": log_path, "run_id": record.id}
+
+        def stop_training(_args):
+            if not self.training.status().running:
+                return {"ok": True, "note": "Обучение не запущено."}
+            try:
+                self.training.stop()
+            except Exception as exc:
+                return {"ok": False, "error": str(exc)}
+            self.activity.log("training", "Агент остановил обучение")
+            return {"ok": True}
+
+        handlers = {
             "get_training_status": get_training_status,
             "read_training_log": read_training_log,
             "get_run_history": get_run_history,
+            "start_training": start_training,
+            "stop_training": stop_training,
         }
-        return tools, TRAINING_CONTEXT_TOOL_SCHEMAS
+        schemas = list(TRAINING_CONTEXT_TOOL_SCHEMAS) + [
+            {"type": "function", "function": {
+                "name": "start_training",
+                "description": "Запустить обучение в рабочей папке (командой из настроек "
+                               "или из аргумента command).",
+                "parameters": {"type": "object", "properties": {
+                    "command": {"type": "string"}}, "required": []}}},
+            {"type": "function", "function": {
+                "name": "stop_training",
+                "description": "Остановить текущее обучение.",
+                "parameters": {"type": "object", "properties": {}, "required": []}}},
+        ]
+        mutations = {"start_training", "stop_training"}
 
+        try:
+            manager = ConnectorManager(self.secrets,
+                                       gmail_from=self.settings.gmail_from)
+            conn_handlers, conn_schemas, conn_mutations = manager.agent_tools()
+            handlers.update(conn_handlers)
+            schemas.extend(conn_schemas)
+            mutations |= set(conn_mutations)
+        except Exception:  # noqa: BLE001 - connectors must not break the agent
+            pass
+
+        return handlers, schemas, frozenset(mutations)
+
+    # ---------------------------------------------------------- assessment
     def assessment_context(self) -> str:
-        """Snapshot of model + training state for a mentor assessment request."""
         lines: list[str] = []
-        registry = self.model_registry()
         entry = None
         try:
-            for candidate in registry.load():
+            for candidate in self.model_registry().load():
                 if candidate.id == self.settings.active_model_id:
                     entry = candidate
                     break
@@ -406,12 +480,6 @@ class TrainingHubApp(tk.Tk):
 
     def assessment_prompt(self) -> str:
         return REPORT_PROMPT_TEMPLATE.format(context=self.assessment_context())
-
-    def confirm_from_worker(self, title: str, message: str) -> bool:
-        return confirm_from_worker(self, title, message)
-
-    def request_confirmation(self, title: str, message: str) -> bool:
-        return messagebox.askyesno(title, message, parent=self)
 
     # ---------------------------------------------------------------- close
     def _on_close(self):

@@ -20,7 +20,19 @@ DEFAULT_AGENT_SYSTEM_PROMPT = (
     "the user writes in another language)."
 )
 
+AGENT_GOAL_SYSTEM_PROMPT = (
+    "You are an autonomous engineering agent. Work towards the user's goal "
+    "without waiting for step-by-step instructions: plan, use tools to inspect "
+    "the workspace, make changes, and verify results with commands or tests. "
+    "Use connectors (GitHub/Hugging Face search, e-mail) when they help. "
+    "After each action, check the result and continue until the goal is done "
+    "or you need a human decision. Finish with a short report: what was done, "
+    "what was verified, what remains. Answer in the user's language (Russian "
+    "unless the user writes in another language)."
+)
+
 MAX_TOOL_STEPS = 8
+AGENT_GOAL_STEPS = 14
 
 # Fallback instruction protocol for providers without native function calling.
 # The model can emit a fenced block:
@@ -108,16 +120,28 @@ class MentorAgent:
         enable_tools: bool = True,
         extra_tools: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] | None = None,
         extra_schemas: list[dict[str, Any]] | None = None,
+        extra_mutations: frozenset[str] | set[str] | None = None,
+        autonomy: str = "assist",
     ):
         self.mentor = mentor
         self.workspace = workspace
         self.max_steps = max(1, int(max_steps))
         self.extra_tools = dict(extra_tools or {})
         self.extra_schemas = list(extra_schemas or [])
+        self.extra_mutations = frozenset(extra_mutations or ())
+        self.autonomy = autonomy if autonomy in {"assist", "agent"} else "assist"
         self.enable_tools = bool(enable_tools) and (
             workspace is not None or bool(self.extra_tools)
         )
         self.known_tools = TOOL_NAMES | frozenset(self.extra_tools)
+
+    def needs_confirmation(self, name: str) -> bool:
+        """In agent autonomy mode actions run freely (still backed up/logged)."""
+        if self.autonomy == "agent":
+            return False
+        if name in self.extra_mutations:
+            return True
+        return name in TOOL_NAMES and not WorkspaceTools.is_readonly(name)
 
     def run_turn(
         self,
@@ -190,6 +214,29 @@ class MentorAgent:
             request_id=last_reply.request_id if last_reply else None,
         )
 
+    def run_goal(
+        self,
+        goal: str,
+        *,
+        confirm: ConfirmFn | None = None,
+        on_event: EventFn | None = None,
+        max_tokens: int = 1600,
+        temperature: float = 0.2,
+        transcript: list[dict[str, Any]] | None = None,
+    ) -> MentorReply:
+        """Autonomous turn: the agent plans and acts until the goal is done."""
+        if not isinstance(goal, str) or not goal.strip():
+            raise ValueError("goal must not be empty")
+        return self.run_turn(
+            [{"role": "user", "content": goal}],
+            confirm=confirm,
+            on_event=on_event,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            system_prompt=AGENT_GOAL_SYSTEM_PROMPT,
+            transcript=transcript,
+        )
+
     def _execute_call(
         self,
         call: ToolCall,
@@ -201,9 +248,20 @@ class MentorAgent:
         emit("tool_start", {"name": call.name, "arguments": call.arguments,
                             "description": description, "index": index})
         if call.name in self.extra_tools:
-            # Read-only context tools (training status, metrics, run history).
+            # Context tools: read-only run freely; mutations respect autonomy.
             try:
-                result: dict[str, Any] = self.extra_tools[call.name](call.arguments or {})
+                if self.needs_confirmation(call.name):
+                    try:
+                        approved = bool(confirm(call.name, call.arguments, description))
+                    except Exception:  # noqa: BLE001 - a broken dialog must not run mutations
+                        approved = False
+                    if not approved:
+                        result: dict[str, Any] = {
+                            "ok": False, "error": "Действие отклонено пользователем."}
+                    else:
+                        result = self.extra_tools[call.name](call.arguments or {})
+                else:
+                    result = self.extra_tools[call.name](call.arguments or {})
                 if not isinstance(result, dict):
                     result = {"ok": True, "result": str(result)}
             except Exception as exc:  # noqa: BLE001 - tool boundary must not crash
@@ -212,7 +270,7 @@ class MentorAgent:
             result = {"ok": False, "error": f"Неизвестный инструмент: {call.name}"}
         elif self.workspace is None:
             result = {"ok": False, "error": "Рабочая папка не подключена."}
-        elif not WorkspaceTools.is_readonly(call.name):
+        elif self.needs_confirmation(call.name):
             try:
                 approved = bool(confirm(call.name, call.arguments, description))
             except Exception:  # noqa: BLE001 - a broken dialog must not run mutations
@@ -249,11 +307,23 @@ def _describe(call: ToolCall) -> str:
 
     if call.name in TOOL_DESCRIPTIONS_RU:
         return WorkspaceTools.describe(call.name, call.arguments)
-    return {
+    descriptions = {
         "get_training_status": "Состояние текущего обучения и метрики",
         "read_training_log": "Прочитать лог обучения",
         "get_run_history": "История запусков обучения",
-    }.get(call.name, call.name)
+        "start_training": "Запустить обучение",
+        "stop_training": "Остановить обучение",
+        "search_github": "Поиск репозиториев на GitHub",
+        "search_huggingface": "Поиск моделей на Hugging Face",
+        "huggingface_model_card": "Карточка модели Hugging Face",
+        "send_email": "Отправить письмо (email)",
+    }
+    base = descriptions.get(call.name, call.name)
+    if call.name == "send_email":
+        return f"{base}: → {call.arguments.get('to', '')} «{call.arguments.get('subject', '')}»"
+    if call.name in {"search_github", "search_huggingface"}:
+        return f"{base}: {call.arguments.get('query', '')}"
+    return base
 
 
 def _summarize(result: dict[str, Any]) -> str:

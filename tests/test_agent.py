@@ -153,3 +153,70 @@ def test_workspace_write_creates_backup(tmp_path):
         "replace_in_file", {"path": "src/app.py", "find": "new", "replace": "newer"})
     assert result2["ok"] is True
     assert result2["backup"] != backup
+
+
+def test_agent_autonomy_modes(tmp_path):
+    workspace = WorkspaceTools(tmp_path)
+
+    # assist mode: mutation denied without a confirm callback
+    mentor = FakeMentor([
+        reply("", calls=[ToolCall("c1", "write_file", {"path": "a.py", "content": "x"})]),
+        reply("ok"),
+    ])
+    agent = MentorAgent(mentor, workspace, autonomy="assist")
+    agent.run_turn([{"role": "user", "content": "сделай"}])
+    assert not (tmp_path / "a.py").exists()
+
+    # agent mode: same action runs freely
+    mentor2 = FakeMentor([
+        reply("", calls=[ToolCall("c1", "write_file", {"path": "b.py", "content": "y"})]),
+        reply("готово"),
+    ])
+    agent2 = MentorAgent(mentor2, workspace, autonomy="agent")
+    assert agent2.needs_confirmation("write_file") is False
+    agent2.run_turn([{"role": "user", "content": "сделай"}])
+    assert (tmp_path / "b.py").exists()
+
+    # extra mutation tools respect the policy too
+    calls = []
+    mentor3 = FakeMentor([
+        reply("", calls=[ToolCall("c1", "send_email", {"to": "a@b.c"})]),
+        reply("отправлено"),
+    ])
+    agent3 = MentorAgent(
+        mentor3, workspace, autonomy="assist",
+        extra_tools={"send_email": lambda args: calls.append(args) or {"ok": True}},
+        extra_mutations={"send_email"},
+    )
+    agent3.run_turn([{"role": "user", "content": "отправь"}])
+    assert calls == []  # denied without confirmation
+    agent4 = MentorAgent(
+        mentor3, workspace, autonomy="agent",
+        extra_tools={"send_email": lambda args: calls.append(args) or {"ok": True}},
+        extra_mutations={"send_email"},
+    )
+    # replay: mentor3 queue is empty -> refill
+    mentor3.replies.append(reply("", calls=[ToolCall("c2", "send_email", {})]))
+    mentor3.replies.append(reply("отправлено"))
+    agent4.run_turn([{"role": "user", "content": "отправь"}])
+    assert calls  # ran without confirmation in agent mode
+
+
+def test_run_goal_uses_goal_prompt_and_extra_tools():
+    seen = {}
+    mentor = FakeMentor([
+        reply("", calls=[ToolCall("c1", "get_training_status", {})]),
+        reply("Цель выполнена: тесты проходят."),
+    ])
+
+    def status_tool(args):
+        return {"ok": True, "running": False, "returncode": 0}
+
+    agent = MentorAgent(
+        mentor, None, max_steps=14,
+        extra_tools={"get_training_status": status_tool},
+    )
+    final = agent.run_goal("Почини падающий тест и проверь, что он проходит")
+    assert "Цель выполнена" in final.text
+    seen["system"] = mentor.requests[0]["messages"][0]["content"]
+    assert "autonomous" in seen["system"].lower() or "агент" in seen["system"].lower()

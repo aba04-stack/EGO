@@ -35,6 +35,8 @@ class AppSettings:
     mentor_max_tokens: int = 1200
     model_library_path: str = ""
     active_model_id: str = ""
+    chat_autonomy: str = "assist"  # "assist" | "agent"
+    gmail_from: str = ""
     training_command: str = "python -m pytest -q"
     runpod_cloud: str = "SECURE"
     runpod_max_gpu_hourly_usd: float = 0.50

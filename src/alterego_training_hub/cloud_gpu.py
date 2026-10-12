@@ -79,7 +79,7 @@ class RunPodClient:
             raise CloudGpuError("Choose SECURE or COMMUNITY cloud.")
         response = self._request(
             "GET", "/catalog/gpus",
-            query={"include": "AVAILABILITY", "product": "POD", "count": 1, "cloud": cloud},
+            query={"include": "AVAILABILITY", "product": "POD", "count": 1},
         )
         items = response.get("gpus")
         if not isinstance(items, list):
@@ -100,6 +100,7 @@ class RunPodClient:
             return None
         value = float(value)
         return value if math.isfinite(value) and value > 0 else None
+
     def list_pods(self) -> list[dict[str, Any]]:
         response = self._request("GET", "/pods")
         items = response.get("pods")

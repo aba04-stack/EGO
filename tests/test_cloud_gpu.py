@@ -28,7 +28,7 @@ def test_gpu_price_limit_and_plan(monkeypatch):
     )
     assert plan["gpu_hourly_usd"] == 0.45
     assert plan["gpu_name"] == "Test GPU"
-    assert "not a total" not in plan["warning"].lower()  # warning is explicit about other charges
+    assert "not a total-bill cap" in plan["warning"].lower()
 
     with pytest.raises(CloudGpuError, match="exceeds"):
         provider.plan_pod(

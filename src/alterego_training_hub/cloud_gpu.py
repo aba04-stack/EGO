@@ -86,6 +86,20 @@ class RunPodClient:
             raise CloudGpuError("RunPod GPU catalog did not contain a GPU list.")
         return [item for item in items if isinstance(item, dict)]
 
+    @staticmethod
+    def gpu_hourly_price(gpu: dict[str, Any], cloud: str) -> float | None:
+        """Read both REST v2 catalog price fields and compatible price maps."""
+        cloud = cloud.lower()
+        if cloud not in {"secure", "community"}:
+            return None
+        prices = gpu.get("price")
+        value = prices.get(cloud) if isinstance(prices, dict) else None
+        if value is None:
+            value = gpu.get("securePrice" if cloud == "secure" else "communityPrice")
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        value = float(value)
+        return value if math.isfinite(value) and value > 0 else None
     def list_pods(self) -> list[dict[str, Any]]:
         response = self._request("GET", "/pods")
         items = response.get("pods")
@@ -124,13 +138,9 @@ class RunPodClient:
         )
         if matched is None:
             raise CloudGpuError("Selected GPU is no longer present in the live catalog.")
-        prices = matched.get("price")
-        if not isinstance(prices, dict):
-            raise CloudGpuError("GPU rate was not supplied by the live catalog; refusing to create a pod.")
-        price = prices.get(cloud.lower())
-        if isinstance(price, bool) or not isinstance(price, (int, float)):
-            raise CloudGpuError("GPU hourly rate is unavailable; refusing to create a pod.")
-        price = float(price)
+        price = self.gpu_hourly_price(matched, cloud)
+        if price is None:
+            raise CloudGpuError("GPU hourly rate was not supplied by the live catalog; refusing to create a pod.")
         if not math.isfinite(price) or price <= 0:
             raise CloudGpuError("GPU hourly rate is invalid; refusing to create a pod.")
         if price > float(max_gpu_hourly_usd):
@@ -141,7 +151,7 @@ class RunPodClient:
         return {
             "name": name,
             "gpu_id": gpu_id,
-            "gpu_name": matched.get("name", gpu_id),
+            "gpu_name": matched.get("name", matched.get("displayName", gpu_id)),
             "cloud": cloud,
             "image": image,
             "container_disk_gb": int(container_disk_gb),

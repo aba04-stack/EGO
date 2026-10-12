@@ -2,17 +2,17 @@
 from __future__ import annotations
 
 import json
+import math
 import queue
-import threading
+import tkinter as tk
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 
 from .cloud_gpu import CloudGpuError, RunPodClient
 from .config import AppSettings, SecretStore
 from .git_manager import GitRepositoryError, GitRepositoryManager
-from .mentor import ApiMentor, MentorError
+from .mentor import ApiMentor
 
 
 class TrainingHubApp(tk.Tk):
@@ -562,7 +562,7 @@ class TrainingHubApp(tk.Tk):
         try:
             budget = float(self.gpu_budget_var.get())
             disk = int(self.gpu_disk_var.get())
-            if budget <= 0:
+            if not math.isfinite(budget) or budget <= 0:
                 raise ValueError("Цена в час должна быть положительной.")
             if not 10 <= disk <= 1000:
                 raise ValueError("Контейнерный диск должен быть 10–1000 GB.")

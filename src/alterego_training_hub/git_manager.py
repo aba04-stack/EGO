@@ -56,7 +56,7 @@ def repo_name_from_url(url: str) -> str:
     else:
         path = urlsplit(safe_url).path
     name = path.rstrip("/").rsplit("/", 1)[-1]
-    return name[:-4] if name.endswith(".git") else name
+    return name.removesuffix(".git")
 
 
 class GitRepositoryManager:

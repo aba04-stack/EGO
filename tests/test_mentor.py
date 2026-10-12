@@ -57,3 +57,17 @@ def test_empty_model_or_key_is_rejected():
         ApiMentor("https://api.example.test/v1", "", "key")
     with pytest.raises(MentorError):
         ApiMentor("https://api.example.test/v1", "model", "")
+
+
+@pytest.mark.parametrize("max_tokens,temperature", [
+    (0, 0.2),
+    (8001, 0.2),
+    ("many", 0.2),
+    (50, -0.1),
+    (50, 2.5),
+    (50, "hot"),
+])
+def test_ask_rejects_invalid_generation_parameters(max_tokens, temperature):
+    mentor = ApiMentor("https://api.example.test/v1", "mentor-test", "test-key")
+    with pytest.raises(MentorError):
+        mentor.ask("Check this", max_tokens=max_tokens, temperature=temperature)

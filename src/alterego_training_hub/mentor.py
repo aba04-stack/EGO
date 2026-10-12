@@ -60,16 +60,23 @@ class ApiMentor:
     ) -> MentorReply:
         if not isinstance(prompt, str) or not prompt.strip():
             raise MentorError("Prompt must not be empty.")
-        if not 1 <= int(max_tokens) <= 8000:
+        try:
+            max_tokens = int(max_tokens)
+            temperature = float(temperature)
+        except (TypeError, ValueError):
+            raise MentorError("Max response tokens and temperature must be numbers.") from None
+        if not 1 <= max_tokens <= 8000:
             raise MentorError("Max response tokens must be between 1 and 8000.")
+        if not 0.0 <= temperature <= 2.0:
+            raise MentorError("Temperature must be between 0 and 2.")
         payload = {
             "model": self.model,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt},
             ],
-            "max_tokens": int(max_tokens),
-            "temperature": float(temperature),
+            "max_tokens": max_tokens,
+            "temperature": temperature,
         }
         request = urllib.request.Request(
             self.endpoint,

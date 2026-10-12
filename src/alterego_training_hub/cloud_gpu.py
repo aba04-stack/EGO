@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import math
-import os
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -133,7 +132,7 @@ class RunPodClient:
             raise CloudGpuError("Pod name must contain 1 to 100 characters.")
 
         matched = next(
-            (item for item in self.gpu_catalog(cloud)
+            (item for item in self.gpu_catalog(cloud=cloud)
              if item.get("id") == gpu_id),
             None,
         )
@@ -160,7 +159,7 @@ class RunPodClient:
             "availability": matched.get("availability"),
             "gpu_only_budget_usd": float(max_gpu_hourly_usd),
             "warning": (
-                "The rate limit covers the listed GPU rate only, not total charges. "
+                "The rate limit covers the listed GPU rate only and is not a total-bill cap. "
                 "Container disk, storage, networking, and other account fees may apply. "
                 "Terminating the pod may delete data stored only on its container disk."
             ),

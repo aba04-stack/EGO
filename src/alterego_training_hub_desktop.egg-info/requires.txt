@@ -1,0 +1,7 @@
+keyring>=25.0
+
+[dev]
+pytest>=8.0
+
+[package]
+pyinstaller>=6.0

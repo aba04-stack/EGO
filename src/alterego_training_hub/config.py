@@ -6,7 +6,6 @@ import os
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
 
 
 APP_NAME = "AlterEgoTrainingHub"
@@ -38,7 +37,7 @@ class AppSettings:
     runpod_image: str = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1"
 
     @classmethod
-    def load(cls, path: Path | None = None) -> "AppSettings":
+    def load(cls, path: Path | None = None) -> AppSettings:
         settings_path = path or (app_data_dir() / "settings.json")
         if not settings_path.exists():
             return cls()

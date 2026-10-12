@@ -1,6 +1,6 @@
-# AlterEgo Training Hub Desktop
+# AlterEgo Training Hub — LLM Studio
 
-A Windows-first desktop control panel for managing AI-model research from a laptop. It can connect local Git workspaces, clone remote repositories, work with an AI mentor through a chat panel, catalogue models locally and in cloud storage, run training jobs with mentor-assisted debugging, and inspect/manage RunPod GPU resources.
+A desktop development environment for LLM research: chat mentor with code tools, code editor, model/dataset library, training with live metrics, model playground, and RunPod GPU management — all in one Windows-first app.
 
 ## Interface
 
@@ -9,6 +9,28 @@ A Windows-first desktop control panel for managing AI-model research from a lapt
 | ![Chat](docs/ui-chat.png) | ![Dashboard](docs/ui-dashboard.png) |
 
 Mockups are rendered from the app's real design tokens by `scripts/render_ui_mockup.py`.
+
+## Studio features
+
+**Разработка**
+- **Чат с наставником** — conversational panel with persistent dialogs; the mentor reads/searches/edits code and runs commands inside the chosen workspace (sandboxed, every mutation confirmed). Quick commands: model assessment, training progress, log error triage.
+- **Редактор кода** — file tree of the workspace, built-in editor (Ctrl+S), "обсудить с наставником" for any file, and **project scaffolding from templates**: a ready-to-run `train.py` + `config.json` + `eval.py` (stdlib-only) whose metrics are parsed by the dashboard out of the box.
+- **Рабочая папка** — pick one folder on your PC; all tools and training are confined to it. Git connect/clone/fetch/pull-ff/branch flows included.
+
+**Библиотека**
+- **Модели** — registry of local checkpoints (`*.safetensors`, `*.gguf`, …) and cloud artefacts (`s3://`, `hf://`, `runpod://`, `https://`), folder scanning, portable JSON manifests. The library folder can be a cloud-synced directory (OneDrive, Yandex.Disk, …).
+- **Датасеты** — JSONL/CSV/TXT catalogue with row counts, sizes and previews.
+- **Модель и прогресс** — model card, live training chart (loss/acc), trend verdicts, anomaly detection (NaN/Inf, divergence, stagnation), mentor assessment card (score, reasoning, what is good/bad, risks, recommendations) and a full activity trail.
+
+**Эксперименты**
+- **Playground** — probe any configured model with test prompts and compare A/B side by side with latency.
+- **Обучение** — run training in the workspace, stream logs, auto-send failures to the mentor, persistent run history with metric snapshots and mentor scores. The mentor can query training state itself (status, log tail, run history).
+- **Внешние GPU** — live RunPod catalog, GPU-rate budget gate (not a total-bill cap), confirmed pod lifecycle.
+
+**Система**
+- API keys only in the OS credential store (`keyring`); settings files contain no secrets.
+- Automatic timestamped backups before mentor file edits; JSONL audit trail outside the repository.
+- Package as a Windows executable using PyInstaller.
 
 ## Features
 

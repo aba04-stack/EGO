@@ -56,10 +56,11 @@ class _Treeview(_Widget):
         return item_id
 
     def get_children(self):
-        return []
+        return [item_id for item_id, _ in self._items]
 
     def delete(self, *items):
-        self._items = []
+        if items:
+            self._items = []
 
     def selection(self):
         return ()
@@ -74,6 +75,25 @@ class _Treeview(_Widget):
 class _Listbox(_Widget):
     def curselection(self):
         return ()
+
+
+class _Text(_Widget):
+    """Stateful text widget fake: insert/delete/get work like a small buffer."""
+
+    def __init__(self, *args, **kwargs):
+        self._buffer = ""
+
+    def insert(self, index, text="", *tags, **kwargs):
+        if str(index).startswith("end"):
+            self._buffer += str(text)
+        else:
+            self._buffer = str(text) + self._buffer
+
+    def delete(self, start, end=None):
+        self._buffer = ""
+
+    def get(self, start, end=None):
+        return self._buffer
 
 
 class _Tk(_Widget):
@@ -95,7 +115,7 @@ def _fake_tkinter():
     tk_mod.Frame = _Widget
     tk_mod.Label = _Widget
     tk_mod.Entry = _Widget
-    tk_mod.Text = _Widget
+    tk_mod.Text = _Text
     tk_mod.Listbox = _Listbox
     tk_mod.Checkbutton = _Widget
     tk_mod.Canvas = _Widget
@@ -177,9 +197,10 @@ def test_app_builds_and_pages_switch(fake_ui):
     app_module = fake_ui["alterego_training_hub.ui"]
     app = app_module.TrainingHubApp()
 
-    assert set(app.pages) == {"chat", "workspace", "models", "model", "training",
-                              "gpu", "settings"}
-    for key in ["chat", "workspace", "models", "model", "training", "gpu", "settings"]:
+    assert set(app.pages) == {"chat", "editor", "workspace", "models", "datasets",
+                              "model", "playground", "training", "gpu", "settings"}
+    for key in ["chat", "editor", "workspace", "models", "datasets", "model",
+                "playground", "training", "gpu", "settings"]:
         app.show_page(key)
     assert app._current_page == "settings"
 
@@ -250,3 +271,37 @@ def test_dashboard_training_and_agent_context(fake_ui):
     assert "Обучение" in context
     prompt = app.assessment_prompt()
     assert "```report" in prompt and "Контекст" in prompt
+
+
+def test_editor_datasets_and_playground(fake_ui, tmp_path):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+
+    # workspace with one file
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    (workspace / "hello.py").write_text("print('hi')\n", encoding="utf-8")
+    app.settings.workspace_path = str(workspace)
+    app.save_settings()
+
+    editor = app.pages["editor"]
+    editor.refresh_tree()
+    assert editor.tree.get_children()  # files discovered
+    editor.project_var.set("demo")
+    editor.create_project()
+    assert (workspace / "demo" / "train.py").exists()
+    editor.open_file(workspace / "hello.py")
+    assert "print" in editor.editor.get("1.0", "end")
+    editor.editor.delete("1.0", "end")
+    editor.editor.insert("1.0", "x = 1\n")
+    editor.save_file()
+    assert (workspace / "hello.py").read_text(encoding="utf-8") == "x = 1\n"
+
+    datasets = app.pages["datasets"]
+    datasets.refresh()
+    datasets.add_manual()
+
+    playground = app.pages["playground"]
+    playground.refresh_models()
+    playground.prompt.insert("1.0", "привет")
+    playground.run_single()  # no model configured -> dialog, no crash

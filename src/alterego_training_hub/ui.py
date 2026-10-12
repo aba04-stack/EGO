@@ -76,17 +76,32 @@ class TrainingHubApp(tk.Tk):
         tk.Label(brand, text="Training Hub", bg=C["sidebar"], fg=C["sidebar_fg"],
                  font=("Segoe UI", 11)).pack(anchor="w")
 
-        nav_items = [
-            ("chat", "Чат с наставником"),
-            ("workspace", "Рабочая папка"),
-            ("models", "Каталог моделей"),
-            ("model", "Модель и прогресс"),
-            ("training", "Обучение"),
-            ("gpu", "Внешние GPU"),
-            ("settings", "Настройки"),
+        nav_groups = [
+            ("РАЗРАБОТКА", [
+                ("chat", "Чат с наставником"),
+                ("editor", "Редактор кода"),
+                ("workspace", "Рабочая папка"),
+            ]),
+            ("БИБЛИОТЕКА", [
+                ("models", "Модели"),
+                ("datasets", "Датасеты"),
+                ("model", "Модель и прогресс"),
+            ]),
+            ("ЭКСПЕРИМЕНТЫ", [
+                ("playground", "Playground"),
+                ("training", "Обучение"),
+                ("gpu", "Внешние GPU"),
+            ]),
+            ("СИСТЕМА", [
+                ("settings", "Настройки"),
+            ]),
         ]
-        for key, label in nav_items:
-            self._make_nav_item(sidebar, key, label)
+        for group_title, items in nav_groups:
+            tk.Label(sidebar, text=group_title, bg=C["sidebar"], fg="#5b6b85",
+                     font=F_NAV_SMALL, anchor="w", padx=18).pack(fill="x",
+                                                                 pady=(12, 2))
+            for key, label in items:
+                self._make_nav_item(sidebar, key, label)
 
         tk.Label(sidebar, text="v0.3 · локальный контур", bg=C["sidebar"],
                  fg="#5b6b85", font=F_NAV_SMALL).pack(side="bottom", pady=16)
@@ -96,18 +111,24 @@ class TrainingHubApp(tk.Tk):
         self.pages_host.pack(side="left", fill="both", expand=True)
 
         from .ui_chat import ChatPage
+        from .ui_datasets import DatasetsPage
+        from .ui_editor import EditorPage
         from .ui_gpu import GpuPage
         from .ui_model import ModelDashboardPage
         from .ui_models import ModelsPage
+        from .ui_playground import PlaygroundPage
         from .ui_settings import SettingsPage
         from .ui_training import TrainingPage
         from .ui_workspace import WorkspacePage
 
         page_classes = [
             ("chat", ChatPage),
+            ("editor", EditorPage),
             ("workspace", WorkspacePage),
             ("models", ModelsPage),
+            ("datasets", DatasetsPage),
             ("model", ModelDashboardPage),
+            ("playground", PlaygroundPage),
             ("training", TrainingPage),
             ("gpu", GpuPage),
             ("settings", SettingsPage),
@@ -126,7 +147,7 @@ class TrainingHubApp(tk.Tk):
         accent = tk.Frame(row, bg=C["sidebar"], width=4)
         accent.pack(side="left", fill="y")
         btn = tk.Label(row, text="  " + label, bg=C["sidebar"], fg=C["sidebar_fg"],
-                       font=F_NAV, anchor="w", padx=10, pady=11, cursor="hand2")
+                       font=F_NAV, anchor="w", padx=10, pady=8, cursor="hand2")
         btn.pack(side="left", fill="x", expand=True)
 
         def on_enter(_event, b=btn, k=key):

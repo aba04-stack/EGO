@@ -67,31 +67,33 @@ class Canvas:
         return path
 
 
-NAV_ITEMS = [
-    "Чат с наставником",
-    "Рабочая папка",
-    "Каталог моделей",
-    "Модель и прогресс",
-    "Обучение",
-    "Внешние GPU",
-    "Настройки",
+NAV_GROUPS = [
+    ("РАЗРАБОТКА", ["Чат с наставником", "Редактор кода", "Рабочая папка"]),
+    ("БИБЛИОТЕКА", ["Модели", "Датасеты", "Модель и прогресс"]),
+    ("ЭКСПЕРИМЕНТЫ", ["Playground", "Обучение", "Внешние GPU"]),
+    ("СИСТЕМА", ["Настройки"]),
 ]
 
 
-def draw_shell(c: Canvas, active: int, status: str, badge: str):
+def draw_shell(c: Canvas, active: str, status: str, badge: str):
     c.rect(0, 0, VW, VH, C["bg"])
     c.rect(0, 0, SIDE, VH, C["sidebar"])
     c.text(24, 30, "AlterEgo", 17, bold=True, fill="#ffffff")
     c.text(24, 58, "Training Hub", 12, fill=C["sidebar_fg"])
-    for idx, label in enumerate(NAV_ITEMS):
-        y = 110 + idx * 46
-        is_active = idx == active
-        if is_active:
-            c.rect(0, y, SIDE, 44, C["sidebar_active"])
-            c.rect(0, y, 4, 44, C["accent"])
-        c.text(30, y + 13, label, 10.5, bold=is_active,
-               fill=C["sidebar_fg_active"] if is_active else C["sidebar_fg"])
-    c.text(24, VH - 36, "v0.3 · локальный контур", 8.5, fill="#5b6b85")
+    y = 96
+    for group_title, items in NAV_GROUPS:
+        c.text(18, y, group_title, 7.8, bold=True, fill="#5b6b85")
+        y += 20
+        for label in items:
+            is_active = label == active
+            if is_active:
+                c.rect(0, y, SIDE, 38, C["sidebar_active"])
+                c.rect(0, y, 4, 38, C["accent"])
+            c.text(30, y + 11, label, 10, bold=is_active,
+                   fill=C["sidebar_fg_active"] if is_active else C["sidebar_fg"])
+            y += 38
+        y += 6
+    c.text(24, VH - 36, "v0.4 · локальный контур", 8.5, fill="#5b6b85")
     c.rect(0, VH - 26, VW, 26, "#e8edf5")
     c.text(12, VH - 19, status, 8.5, fill=C["muted"])
     c.text(VW - 14, VH - 19, badge, 8.5, fill=C["muted"], anchor="ra")
@@ -107,7 +109,7 @@ def card(c: Canvas, x, y, w, h, title=None):
 
 def render_chat() -> Path:
     c = Canvas()
-    draw_shell(c, 0, "Готово: ответ наставника", "папка: alterego-train")
+    draw_shell(c, "Чат с наставником", "Готово: ответ наставника", "папка: alterego-train")
     c.text(PX0, 36, "Чат с наставником", 16, bold=True)
     c.text(PX0, 64, "Диалог, инструменты и правки кода в выбранной рабочей папке. "
                     "Каждое изменение требует вашего подтверждения.", 9.5, fill=C["muted"])
@@ -196,7 +198,7 @@ def render_chat() -> Path:
 
 def render_dashboard() -> Path:
     c = Canvas()
-    draw_shell(c, 3, "Готово: оценка наставника", "папка: alterego-train")
+    draw_shell(c, "Модель и прогресс", "Готово: оценка наставника", "папка: alterego-train")
     c.text(PX0, 36, "Модель и прогресс", 16, bold=True)
     c.text(PX0, 64, "Сводка по выбранной модели: прогресс обучения, оценка "
                     "наставника и журнал действий.", 9.5, fill=C["muted"])

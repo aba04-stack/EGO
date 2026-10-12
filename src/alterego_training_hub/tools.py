@@ -198,10 +198,14 @@ class WorkspaceTools:
         }.get(str(name))
         if handler is None:
             return {"ok": False, "error": f"Неизвестный инструмент: {name}"}
+        import inspect
+
         try:
-            return handler(**args)
+            inspect.signature(handler).bind(**args)
         except TypeError:
             return {"ok": False, "error": f"Неверные аргументы инструмента {name}: {args}"}
+        try:
+            return handler(**args)
         except ToolError as exc:
             return {"ok": False, "error": str(exc)}
         except Exception as exc:  # noqa: BLE001 - tool boundary must not crash the agent

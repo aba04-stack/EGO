@@ -184,19 +184,22 @@ class TrainingPage(tk.Frame):
         )
 
     def _tick(self):
-        if self.winfo_exists():
-            status = self.app.training.status()
-            if status.running:
-                self.status_var.set(f"Выполняется: {status.command}")
-                self.refresh_log()
-            else:
-                was_running = getattr(self, "_was_running", False)
-                self.status_var.set(
-                    f"Не запущено. Последний код возврата: {status.returncode}"
-                    if status.returncode is not None else "Обучение не запущено")
-                if was_running:
-                    self._on_finished(status.returncode)
-            self._was_running = status.running
+        try:
+            if self.winfo_exists():
+                status = self.app.training.status()
+                if status.running:
+                    self.status_var.set(f"Выполняется: {status.command}")
+                    self.refresh_log()
+                else:
+                    was_running = getattr(self, "_was_running", False)
+                    self.status_var.set(
+                        f"Не запущено. Последний код возврата: {status.returncode}"
+                        if status.returncode is not None else "Обучение не запущено")
+                    if was_running:
+                        self._on_finished(status.returncode)
+                self._was_running = status.running
+        except Exception:  # noqa: BLE001 - the ticker must survive any UI hiccup
+            pass
         self.after(1200, self._tick)
 
     def _on_finished(self, returncode):

@@ -145,3 +145,13 @@ def test_models_endpoint_and_list_models(monkeypatch):
 
     monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
     assert mentor.list_models() == ["gpt-x", "mentor-test"]
+
+
+def test_respond_rejects_corrupt_history():
+    mentor = ApiMentor("https://api.example.test/v1", "mentor-test", "test-key")
+    with pytest.raises(MentorError):
+        mentor.respond([])
+    with pytest.raises(MentorError):
+        mentor.respond([{"content": "no role"}])
+    with pytest.raises(MentorError):
+        mentor.respond(["not a dict"])

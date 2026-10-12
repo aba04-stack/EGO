@@ -124,6 +124,12 @@ class ModelDashboardPage(tk.Frame):
             return []
 
     def refresh(self):
+        try:
+            self._refresh_inner()
+        except Exception as exc:  # noqa: BLE001 - dashboard must not die on odd data
+            self.app.set_status(f"Не удалось обновить дашборд: {exc}")
+
+    def _refresh_inner(self):
         entries = self._load_model_entries()
         labels = [f"{entry.name}  ·  {entry.kind}" for entry in entries]
         self.model_combo.configure(values=labels)
@@ -226,8 +232,8 @@ class ModelDashboardPage(tk.Frame):
                      "Журнал пуст. Здесь появятся действия наставника, запуски "
                      "обучения и правки файлов.")
             return
-        icons = {"training": "📈", "mentor_tool": "⚙", "file_edit": "✏",
-                 "report": "📋", "system": "·"}
+        icons = {"training": "▶", "mentor_tool": "»", "file_edit": "✎",
+                 "report": "★", "system": "·"}
         lines = []
         for event in events:
             icon = icons.get(event.kind, "·")

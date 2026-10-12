@@ -29,6 +29,15 @@ HIGHER_BETTER_KEYS = {
     "acc", "accuracy", "val_acc", "val_accuracy", "eval_acc", "f1", "bleu",
     "rouge", "reward", "score", "precision", "recall", "exact_match", "em",
 }
+# Substring hints for metrics not listed above (val_f1, bleu4, map_score, ...).
+_HIGHER_BETTER_HINTS = ("acc", "f1", "bleu", "rouge", "precision", "recall",
+                        "reward", "score", "exact", "pass@")
+
+
+def _is_higher_better(key: str) -> bool:
+    if key in HIGHER_BETTER_KEYS or "loss" in key:
+        return key in HIGHER_BETTER_KEYS
+    return any(hint in key for hint in _HIGHER_BETTER_HINTS)
 
 
 @dataclass
@@ -134,12 +143,10 @@ def parse_log(text: str) -> MetricsSummary:
             for key, value in point.values.items():
                 if key not in summary.best:
                     summary.best[key] = value
-                elif key in HIGHER_BETTER_KEYS or key.startswith("val_") and "acc" in key:
+                elif _is_higher_better(key):
                     summary.best[key] = max(summary.best[key], value)
-                elif "loss" in key:
-                    summary.best[key] = min(summary.best[key], value)
                 else:
-                    summary.best[key] = value  # neutral: keep latest-known extreme min/max loosely
+                    summary.best[key] = min(summary.best[key], value)
         summary.trend = _trends(summary)
         summary.anomalies = _anomalies(summary, nan_lines)
 
@@ -166,7 +173,7 @@ def _trends(summary: MetricsSummary) -> dict[str, str]:
         relative = abs(delta) / scale
         if relative < 0.02:
             trends[key] = "стабильно"
-        elif (delta < 0) == (key not in HIGHER_BETTER_KEYS):
+        elif (delta < 0) != _is_higher_better(key):
             trends[key] = "улучшается"
         else:
             trends[key] = "ухудшается"
@@ -179,12 +186,18 @@ def _anomalies(summary: MetricsSummary, nan_lines: list[int]) -> list[str]:
     if key:
         values = summary.series(key)
         if values:
-            if values[-1] > values[0] * 1.25 and values[-1] > 0:
+            # Divergence warning makes sense only for error-like metrics.
+            if not _is_higher_better(key) and values[-1] > values[0] * 1.25 and values[-1] > 0:
                 anomalies.append(
                     f"«{key}» вырос с {values[0]:.4g} до {values[-1]:.4g} — возможна расходимость."
                 )
             best = summary.best.get(key, values[-1])
-            if "loss" in key and best > 0 and values[-1] > best * 1.6:
+            if _is_higher_better(key):
+                if values[-1] < best * 0.7 and best > 0:
+                    anomalies.append(
+                        f"«{key}» сейчас ({values[-1]:.4g}) заметно хуже лучшего ({best:.4g})."
+                    )
+            elif best > 0 and values[-1] > best * 1.6:
                 anomalies.append(
                     f"«{key}» сейчас ({values[-1]:.4g}) заметно хуже лучшего ({best:.4g})."
                 )

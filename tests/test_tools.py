@@ -78,6 +78,19 @@ def test_run_command_capture(workspace):
 def test_unknown_tool_and_bad_args(workspace):
     assert workspace.execute("hack", {})["ok"] is False
     assert workspace.execute("read_file", {"wrong": 1})["ok"] is False
+    bad = workspace.execute("read_file", {"wrong": 1})
+    assert "Неверные аргументы" in bad["error"]
+
+
+def test_internal_type_error_is_not_reported_as_bad_args(workspace, monkeypatch):
+    def boom(path, max_bytes=1):
+        raise TypeError("internal bug")
+
+    monkeypatch.setattr(workspace, "read_file", boom)
+    result = workspace.execute("read_file", {"path": "a"})
+    assert result["ok"] is False
+    assert "internal bug" in result["error"]
+    assert "Неверные аргументы" not in result["error"]
 
 
 def test_readonly_classification():

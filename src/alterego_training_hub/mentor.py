@@ -167,6 +167,9 @@ class ApiMentor:
         """Send a full conversation (OpenAI message list) and return the reply."""
         if not isinstance(messages, list) or not messages:
             raise MentorError("Conversation history must not be empty.")
+        for item in messages:
+            if not isinstance(item, dict) or "role" not in item:
+                raise MentorError("Conversation history contains an invalid message.")
         try:
             max_tokens = int(max_tokens)
             temperature = float(temperature)

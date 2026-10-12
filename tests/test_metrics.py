@@ -58,3 +58,18 @@ def test_ignores_noise_keys():
     assert "lr" in summary.last
     assert "it" not in summary.last and "time" not in summary.last
     assert "epoch" not in summary.last
+
+
+def test_rising_accuracy_is_not_flagged_as_divergence():
+    summary = parse_log("acc=0.10\nacc=0.30\nacc=0.55\nacc=0.80\n")
+    assert summary.primary_key == "acc"
+    assert not any("расходим" in item.lower() for item in summary.anomalies)
+    assert summary.trend["acc"] == "улучшается"
+    assert summary.best["acc"] == 0.80
+
+
+def test_higher_better_like_metrics_trend_up():
+    summary = parse_log("val_f1=0.2\nval_f1=0.3\nval_f1=0.4\nval_f1=0.5\n")
+    assert summary.trend["val_f1"] == "улучшается"
+    worsening = parse_log("val_f1=0.8\nval_f1=0.6\nval_f1=0.4\nval_f1=0.2\n")
+    assert worsening.trend["val_f1"] == "ухудшается"

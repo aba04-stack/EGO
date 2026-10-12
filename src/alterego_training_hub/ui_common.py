@@ -1,4 +1,8 @@
-"""Shared design system for the desktop UI: colors, fonts, widgets, helpers."""
+"""Shared design system for the desktop UI: widgets and helpers.
+
+Color/font tokens live in :mod:`alterego_training_hub.theme` so that design
+tools (e.g. the mockup renderer) can reuse them without importing Tk.
+"""
 from __future__ import annotations
 
 import threading
@@ -6,41 +10,17 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Any, Callable
 
-# ---------------------------------------------------------------------------
-# Palette: deep navy chrome, light workspace, blue accent — calm and professional.
-# ---------------------------------------------------------------------------
-C = {
-    "sidebar": "#141b2d",
-    "sidebar_hover": "#1d2941",
-    "sidebar_active": "#243656",
-    "sidebar_fg": "#9fb0c9",
-    "sidebar_fg_active": "#ffffff",
-    "accent": "#3b82f6",
-    "accent_hover": "#2563eb",
-    "bg": "#f4f6fa",
-    "panel": "#ffffff",
-    "panel_alt": "#f8fafc",
-    "border": "#dde3ec",
-    "text": "#1b2430",
-    "muted": "#64748b",
-    "success": "#16a34a",
-    "warning": "#d97706",
-    "danger": "#dc2626",
-    "code_bg": "#0f172a",
-    "code_fg": "#e2e8f0",
-    "user_bubble": "#dbeafe",
-    "tool_bubble": "#fef3c7",
-    "assistant_bubble": "#ffffff",
-}
-
-F_BASE = ("Segoe UI", 10)
-F_BOLD = ("Segoe UI", 10, "bold")
-F_TITLE = ("Segoe UI", 15, "bold")
-F_SUB = ("Segoe UI", 10)
-F_SMALL = ("Segoe UI", 9)
-F_MONO = ("Consolas", 9)
-F_NAV = ("Segoe UI", 10, "bold")
-F_NAV_SMALL = ("Segoe UI", 9)
+from .theme import (  # noqa: F401  (re-exported for page modules)
+    C,
+    F_BASE,
+    F_BOLD,
+    F_MONO,
+    F_NAV,
+    F_NAV_SMALL,
+    F_SMALL,
+    F_SUB,
+    F_TITLE,
+)
 
 
 def apply_theme(root: tk.Tk) -> ttk.Style:

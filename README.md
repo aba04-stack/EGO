@@ -2,6 +2,14 @@
 
 A Windows-first desktop control panel for managing AI-model research from a laptop. It can connect local Git workspaces, clone remote repositories, work with an AI mentor through a chat panel, catalogue models locally and in cloud storage, run training jobs with mentor-assisted debugging, and inspect/manage RunPod GPU resources.
 
+## Interface
+
+| Chat with mentor | Model dashboard |
+| --- | --- |
+| ![Chat](docs/ui-chat.png) | ![Dashboard](docs/ui-dashboard.png) |
+
+Mockups are rendered from the app's real design tokens by `scripts/render_ui_mockup.py`.
+
 ## Features
 
 **Chat mentor with tools**

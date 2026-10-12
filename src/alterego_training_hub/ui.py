@@ -197,7 +197,10 @@ class TrainingHubApp(tk.Tk):
         try:
             while True:
                 kind, payload = self.events.get_nowait()
-                self._handle_event(kind, payload)
+                try:
+                    self._handle_event(kind, payload)
+                except Exception as exc:  # noqa: BLE001 - one bad event must not kill the loop
+                    self.set_status(f"Ошибка обработки события: {exc}")
         except queue.Empty:
             pass
         self.after(100, self._poll_events)
@@ -262,7 +265,10 @@ class TrainingHubApp(tk.Tk):
     def mentor_client(self) -> ApiMentor:
         base_url = (self.settings.mentor_base_url or "").strip()
         model = (self.settings.mentor_model or "").strip()
-        key = self.secrets.get("mentor_api_key") if base_url and model else ""
+        try:
+            key = self.secrets.get("mentor_api_key") if base_url and model else ""
+        except RuntimeError as exc:
+            raise MentorError(str(exc)) from None
         if not base_url or not model or not key:
             raise MentorError(
                 "Настройте провайдера, модель и API-ключ на странице «Настройки»."

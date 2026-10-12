@@ -134,7 +134,7 @@ def _match_header(line: str) -> str | None:
         return None
     candidate = match.group(1).strip().lower().rstrip(":")
     for key, aliases in _SECTION_ALIASES.items():
-        if candidate in aliases or any(alias in candidate for alias in aliases):
+        if candidate in aliases:
             return key
     return None
 

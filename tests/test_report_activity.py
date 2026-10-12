@@ -57,6 +57,17 @@ def test_parse_report_fallback_and_score_hint():
     assert empty.is_empty()
 
 
+def test_header_matching_requires_exact_section_titles():
+    text = (
+        "Анализ данных завершён: всё готово\n"
+        "Просто строка с двоеточием: да\n"
+    )
+    report = parse_report(text)
+    # Neither line is a real section header — the whole text stays reasoning.
+    assert "Анализ данных завершён" in report.reasoning
+    assert report.strengths == [] and report.weaknesses == []
+
+
 def test_report_store_and_markdown(tmp_path):
     store = ReportStore(tmp_path / "reports")
     report = ModelReport(score=8, reasoning="всё ок", strengths=["быстро"])

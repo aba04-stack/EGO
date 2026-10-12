@@ -360,7 +360,15 @@ class TrainingHubApp(tk.Tk):
                 else:
                     self.status_text.set(f"Готово: {label}")
                     if callback:
-                        callback(value)
+                        try:
+                            callback(value)
+                        except Exception as exc:
+                            self.status_text.set(f"Ошибка обработки результата: {label}")
+                            messagebox.showerror(
+                                "AlterEgo Training Hub",
+                                f"Операция завершилась, но интерфейс не смог обновить результат: {exc}",
+                                parent=self,
+                            )
         except queue.Empty:
             pass
         self.after(120, self._poll_events)

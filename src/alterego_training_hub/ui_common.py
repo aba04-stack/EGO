@@ -159,3 +159,48 @@ def confirm_from_worker(app: Any, title: str, message: str, timeout: float = 600
     app.post_event("confirm", {"title": title, "message": message, "event": done, "box": box})
     done.wait(timeout)
     return bool(box.get("ok"))
+
+
+CHART_COLORS = ["#3b82f6", "#16a34a", "#d97706", "#dc2626", "#8b5cf6"]
+
+
+def draw_line_chart(canvas: tk.Canvas, series: dict[str, list[float]],
+                    *, width: int = 520, height: int = 200) -> None:
+    """Draw a small multi-line chart on a tk.Canvas (metrics history)."""
+    canvas.delete("all")
+    valid = {key: values for key, values in series.items() if len(values) >= 2}
+    if not valid:
+        canvas.create_text(width / 2, height / 2, text="Нет данных для графика",
+                           fill=C["muted"], font=F_SMALL)
+        return
+    all_values = [value for values in valid.values() for value in values]
+    vmin, vmax = min(all_values), max(all_values)
+    if vmax - vmin < 1e-12:
+        vmax = vmin + 1.0
+    pad_x, pad_y = 46, 26
+
+    def xy(index: int, count: int, value: float):
+        x = pad_x + (width - 2 * pad_x) * index / max(1, count - 1)
+        y = height - pad_y - (height - 2 * pad_y) * (value - vmin) / (vmax - vmin)
+        return x, y
+
+    canvas.create_line(pad_x, height - pad_y, width - 10, height - pad_y,
+                       fill=C["border"])
+    canvas.create_line(pad_x, 10, pad_x, height - pad_y, fill=C["border"])
+    canvas.create_text(pad_x - 6, 14, text=f"{vmax:.3g}", anchor="e",
+                       fill=C["muted"], font=F_SMALL)
+    canvas.create_text(pad_x - 6, height - pad_y, text=f"{vmin:.3g}", anchor="e",
+                       fill=C["muted"], font=F_SMALL)
+
+    for idx, (key, values) in enumerate(valid.items()):
+        color = CHART_COLORS[idx % len(CHART_COLORS)]
+        coords: list[float] = []
+        for i, value in enumerate(values):
+            x, y = xy(i, len(values), value)
+            coords.extend((x, y))
+        canvas.create_line(*coords, fill=color, width=2, smooth=True)
+        last_x, last_y = xy(len(values) - 1, len(values), values[-1])
+        canvas.create_oval(last_x - 3, last_y - 3, last_x + 3, last_y + 3,
+                           fill=color, outline=color)
+        canvas.create_text(width - 12, 14 + idx * 16, text=f"{key}: {values[-1]:.4g}",
+                           anchor="e", fill=color, font=F_SMALL)

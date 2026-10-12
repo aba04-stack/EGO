@@ -149,11 +149,12 @@ def _clip(text: str, limit: int = MAX_TOOL_OUTPUT_CHARS) -> str:
 class WorkspaceTools:
     """File and command tools confined to one workspace folder."""
 
-    def __init__(self, root: str | Path):
+    def __init__(self, root: str | Path, backup_dir: str | Path | None = None):
         root_path = Path(root).expanduser().resolve()
         if not root_path.is_dir():
             raise ToolError(f"Рабочая папка не найдена: {root_path}")
         self.root = root_path
+        self.backup_dir = Path(backup_dir) if backup_dir else None
 
     # -- path safety -----------------------------------------------------
     def _resolve(self, relative: str, *, must_exist: bool = False) -> Path:
@@ -166,6 +167,23 @@ class WorkspaceTools:
         if must_exist and not candidate.exists():
             raise ToolError(f"Не найдено: {rel or '.'}")
         return candidate
+
+    def _backup(self, target: Path) -> str | None:
+        """Copy the pre-edit file into the backup folder; returns backup path."""
+        if self.backup_dir is None or not target.is_file():
+            return None
+        import shutil
+        from datetime import datetime
+
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+        try:
+            rel = target.relative_to(self.root)
+        except ValueError:
+            return None
+        destination = self.backup_dir / stamp / rel
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(target, destination)
+        return str(destination)
 
     # -- dispatch --------------------------------------------------------
     def execute(self, name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -251,10 +269,18 @@ class WorkspaceTools:
         if target == self.root:
             raise ToolError("Укажите путь файла внутри рабочей папки.")
         created = not target.exists()
+        backup = self._backup(target)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
-        return {"ok": True, "path": str(target.relative_to(self.root)),
-                "created": created, "bytes": len(content.encode("utf-8"))}
+        result: dict[str, Any] = {
+            "ok": True,
+            "path": str(target.relative_to(self.root)),
+            "created": created,
+            "bytes": len(content.encode("utf-8")),
+        }
+        if backup:
+            result["backup"] = backup
+        return result
 
     def replace_in_file(self, path: str, find: str, replace: str, count: int = 0) -> dict[str, Any]:
         if not isinstance(find, str) or not find:
@@ -269,10 +295,18 @@ class WorkspaceTools:
         if occurrences == 0:
             raise ToolError("Искомый фрагмент не найден в файле.")
         limit = occurrences if int(count) <= 0 else min(int(count), occurrences)
+        backup = self._backup(target)
         new_text = text.replace(find, replace, limit)
         target.write_text(new_text, encoding="utf-8")
-        return {"ok": True, "path": str(target.relative_to(self.root)),
-                "replaced": limit, "remaining": occurrences - limit}
+        result: dict[str, Any] = {
+            "ok": True,
+            "path": str(target.relative_to(self.root)),
+            "replaced": limit,
+            "remaining": occurrences - limit,
+        }
+        if backup:
+            result["backup"] = backup
+        return result
 
     def search_files(self, pattern: str, glob: str = "**/*") -> dict[str, Any]:
         try:

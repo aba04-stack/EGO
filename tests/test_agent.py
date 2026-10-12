@@ -110,3 +110,46 @@ def test_agent_without_workspace_still_chats():
     final = agent.run_turn([{"role": "user", "content": "привет"}])
     assert final.text == "Просто отвечаю."
     assert mentor.requests[0]["tools"] is None
+
+
+def test_agent_extra_context_tools(tmp_path):
+    calls = []
+
+    def status_tool(args):
+        calls.append(args)
+        return {"ok": True, "running": True, "metrics": {"loss": 0.5}}
+
+    mentor = FakeMentor([
+        reply("", calls=[ToolCall("c1", "get_training_status", {})]),
+        reply("Обучение идёт."),
+    ])
+    agent = MentorAgent(
+        mentor, None,
+        extra_tools={"get_training_status": status_tool},
+        extra_schemas=[{"type": "function",
+                        "function": {"name": "get_training_status", "parameters": {}}}],
+    )
+    final = agent.run_turn([{"role": "user", "content": "как обучение?"}])
+    assert final.text == "Обучение идёт."
+    assert calls and calls[0] == {}
+    # extra tools are advertised and executed without a workspace
+    assert mentor.requests[0]["tools"] is not None
+    tool_messages = [m for m in mentor.requests[1]["messages"] if m["role"] == "tool"]
+    assert json.loads(tool_messages[0]["content"])["running"] is True
+
+
+def test_workspace_write_creates_backup(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("old\n", encoding="utf-8")
+    workspace = WorkspaceTools(tmp_path, backup_dir=tmp_path / "backups")
+
+    result = workspace.execute("write_file", {"path": "src/app.py", "content": "new\n"})
+    assert result["ok"] is True
+    backup = result["backup"]
+    assert backup.endswith("app.py")
+    assert open(backup, encoding="utf-8").read() == "old\n"
+
+    result2 = workspace.execute(
+        "replace_in_file", {"path": "src/app.py", "find": "new", "replace": "newer"})
+    assert result2["ok"] is True
+    assert result2["backup"] != backup

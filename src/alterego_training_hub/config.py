@@ -34,6 +34,7 @@ class AppSettings:
     mentor_temperature: float = 0.2
     mentor_max_tokens: int = 1200
     model_library_path: str = ""
+    active_model_id: str = ""
     training_command: str = "python -m pytest -q"
     runpod_cloud: str = "SECURE"
     runpod_max_gpu_hourly_usd: float = 0.50

@@ -78,10 +78,30 @@ class ChatPage(tk.Frame):
         self.messages.tag_configure("tool", background=C["tool_bubble"], font=F_MONO,
                                     lmargin1=20, lmargin2=20, rmargin=20, spacing3=6)
         self.messages.tag_configure("meta", font=("Segoe UI", 8, "bold"), foreground=C["muted"])
+        self.messages.tag_configure("h", font=("Segoe UI", 10, "bold"))
         self.messages.tag_configure("sys", foreground=C["muted"], font=F_SMALL)
 
         input_bar = tk.Frame(chat_inner, bg=C["panel"])
         input_bar.pack(fill="x", padx=12, pady=(4, 12))
+
+        quick = tk.Frame(chat_inner, bg=C["panel"])
+        quick.pack(fill="x", padx=12)
+        tk.Label(quick, text="Быстрые команды:", bg=C["panel"], fg=C["muted"],
+                 font=F_SMALL).pack(side="left", padx=(0, 6))
+        for label, builder in [
+            ("Оценка модели", lambda: self.app.assessment_prompt()),
+            ("Прогресс обучения", lambda: (
+                "Проанализируй прогресс обучения: что улучшается, что вызывает "
+                "опасность, что изменить?\n\n" + self.app.assessment_context())),
+            ("Разбор ошибок в логе", lambda: (
+                "Найди ошибки в логе обучения и предложи исправления кода.\n\n```\n"
+                + self.app.training.tail(8000) + "\n```")),
+        ]:
+            ttk.Button(quick, text=label,
+                       command=lambda b=builder: self.send_preset(b())
+            ).pack(side="left", padx=(0, 6))
+        tk.Label(chat_inner, text="", bg=C["panel"], height=0).pack()
+
         self.input = tk.Text(input_bar, height=3, wrap="word", font=F_BASE, bd=1,
                              relief="solid", highlightthickness=0)
         self.input.pack(side="left", fill="both", expand=True)
@@ -209,7 +229,9 @@ class ChatPage(tk.Frame):
     def _insert_bubble(self, author: str, text: str, tag: str, created_at: float):
         stamp = time.strftime("%H:%M", time.localtime(created_at))
         self.messages.insert("end", f"{author} · {stamp}\n", "meta")
-        self.messages.insert("end", text.rstrip() + "\n", tag)
+        for line in text.rstrip().splitlines():
+            heading = line.lstrip().startswith(("#", "**")) and tag == "assistant"
+            self.messages.insert("end", line + "\n", (tag, "h") if heading else tag)
 
     def set_activity(self, text: str):
         set_text(self.activity, text)
@@ -226,6 +248,11 @@ class ChatPage(tk.Frame):
         elif kind == "tool_result":
             mark = "ok" if payload.get("ok") else "err"
             self.log_activity(f"  [{mark}] {payload.get('summary', '')}", mark)
+            self.app.activity.log(
+                "mentor_tool",
+                f"{payload.get('name', '?')}: {payload.get('summary', '')[:120]}",
+                ok=bool(payload.get("ok")),
+            )
         elif kind == "assistant":
             count = payload.get("tool_calls", 0)
             if count:
@@ -266,7 +293,13 @@ class ChatPage(tk.Frame):
         history = self.session.history_for_api()
         transcript: list[dict] = []
         settings = self.app.settings
-        agent = MentorAgent(mentor, workspace, enable_tools=workspace is not None)
+        extra_tools, extra_schemas = self.app.agent_extra_tools()
+        agent = MentorAgent(
+            mentor, workspace,
+            enable_tools=workspace is not None or bool(extra_tools),
+            extra_tools=extra_tools,
+            extra_schemas=extra_schemas,
+        )
 
         self._busy = True
         self.send_btn.configure(state="disabled")
@@ -279,6 +312,7 @@ class ChatPage(tk.Frame):
                 self.session.messages.append(ChatMessage.from_dict(item))
             self.session.add("assistant", reply.text)
             self.store.save(self.session)
+            self._maybe_save_report(reply.text)
             self._render_messages()
             self.refresh_sessions()
 
@@ -306,3 +340,22 @@ class ChatPage(tk.Frame):
             )
 
         self.app.start_async("Ответ наставника", work, done, failed)
+
+    def _maybe_save_report(self, text: str):
+        """Persist a structured assessment to the model dashboard when present."""
+        from .report import parse_report
+
+        report = parse_report(text)
+        if report.is_empty():
+            return
+        structured = (report.score is not None or report.strengths
+                      or report.weaknesses or report.recommendations)
+        if not structured:
+            return
+        self.app.reports.save(report)
+        self.app.activity.log(
+            "report",
+            "Сохранена оценка наставника"
+            + (f" ({report.score:g}/10)" if report.score is not None else ""),
+        )
+        self.log_activity("оценка сохранена в «Модель и прогресс»", "ok")

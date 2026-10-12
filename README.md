@@ -7,22 +7,24 @@ A Windows-first desktop control panel for managing AI-model research from a lapt
 **Chat mentor with tools**
 - Conversational panel with persistent dialogs (saved per user, no secrets inside).
 - The mentor can inspect the selected workspace: list/read/search files, edit files, and run commands — every mutating action requires explicit confirmation.
+- The mentor can also query training state (current metrics, log tail, run history) even without a workspace.
 - Works with any OpenAI-compatible provider that supports `tools`; a plain-text ` ```tool ` fallback protocol is used when function calling is unavailable.
-- The mentor participates in training: send it a training log (or let the app do it automatically on failure) and it will find errors, read the code, and propose fixes.
+- Quick commands: model assessment, training progress, log error triage. Structured assessments are saved to the model dashboard automatically.
+- The mentor participates in training: send it a training log (or let the app do it automatically on failure) and it will find errors, read the code, and propose fixes. Every edit is backed up before it is applied.
 
-**Workspace**
-- Choose one working folder on your PC; all mentor tools and training runs are sandboxed inside it (no shell, no path escapes).
-- Connect an existing local Git repository or clone an HTTPS/SSH repository URL.
-- Show current branch, remote, and uncommitted changes; fetch and pull using fast-forward-only mode; switch branches only when the worktree is clean.
+**Training progress and metrics**
+- Parses logs for loss/accuracy/lr series, epoch progress, and draws a live chart.
+- Trend analysis (улучшается / ухудшается / стабильно) and anomaly detection: NaN/Inf, divergence, stagnation.
+- Persistent run history with exit codes, metric snapshots, and mentor scores.
+
+**Model dashboard**
+- Model card (kind, location, API id, metrics, notes), training progress with chart, and a full activity feed of actions (training runs, mentor tool calls, file edits, saved reports).
+- Mentor assessment card: score 0–10, reasoning, what is good, what is bad, risks, recommendations — rendered as a structured report and exportable to Markdown.
 
 **Models registry**
 - Catalogue of models: local checkpoints (`*.safetensors`, `*.gguf`, …) and cloud artefacts (`s3://`, `hf://`, `runpod://`, `https://`).
 - The library folder can point at a cloud-synced directory (OneDrive, Google Drive, Yandex.Disk) to keep the catalogue in the cloud.
 - Scan folders for checkpoints, export/import a portable JSON manifest.
-
-**Training**
-- Run a training command inside the workspace, stream logs, stop safely.
-- On failure, the log can be sent to the mentor for analysis — automatically or on demand.
 
 **Cloud GPUs and security**
 - Browse the live RunPod GPU catalog and list GPU pods.

@@ -8,11 +8,16 @@ from pathlib import Path
 from tkinter import messagebox
 
 from . import ui_common
+from .activity import ActivityLog
+from .agent import TRAINING_CONTEXT_TOOL_SCHEMAS
 from .cloud_gpu import RunPodClient
 from .config import AppSettings, SecretStore
 from .git_manager import GitRepositoryManager
 from .mentor import ApiMentor, MentorError
+from .metrics import brief as metrics_brief, parse_log
 from .models_registry import ModelRegistry, default_library_dir
+from .report import REPORT_PROMPT_TEMPLATE, ReportStore
+from .runs import RunStore
 from .training import TrainingRun
 from .ui_common import C, F_NAV, F_NAV_SMALL, confirm_from_worker
 
@@ -28,6 +33,9 @@ class TrainingHubApp(tk.Tk):
         self.secrets = SecretStore()
         self.git = GitRepositoryManager(timeout_seconds=600)
         self.training = TrainingRun()
+        self.runs = RunStore()
+        self.activity = ActivityLog()
+        self.reports = ReportStore()
         self.events: queue.Queue = queue.Queue()
         self.executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="alterego-hub")
         self._closing = False
@@ -71,7 +79,8 @@ class TrainingHubApp(tk.Tk):
         nav_items = [
             ("chat", "Чат с наставником"),
             ("workspace", "Рабочая папка"),
-            ("models", "Модели"),
+            ("models", "Каталог моделей"),
+            ("model", "Модель и прогресс"),
             ("training", "Обучение"),
             ("gpu", "Внешние GPU"),
             ("settings", "Настройки"),
@@ -79,7 +88,7 @@ class TrainingHubApp(tk.Tk):
         for key, label in nav_items:
             self._make_nav_item(sidebar, key, label)
 
-        tk.Label(sidebar, text="v0.2 · локальный контур", bg=C["sidebar"],
+        tk.Label(sidebar, text="v0.3 · локальный контур", bg=C["sidebar"],
                  fg="#5b6b85", font=F_NAV_SMALL).pack(side="bottom", pady=16)
 
         # Pages area
@@ -88,6 +97,7 @@ class TrainingHubApp(tk.Tk):
 
         from .ui_chat import ChatPage
         from .ui_gpu import GpuPage
+        from .ui_model import ModelDashboardPage
         from .ui_models import ModelsPage
         from .ui_settings import SettingsPage
         from .ui_training import TrainingPage
@@ -97,6 +107,7 @@ class TrainingHubApp(tk.Tk):
             ("chat", ChatPage),
             ("workspace", WorkspacePage),
             ("models", ModelsPage),
+            ("model", ModelDashboardPage),
             ("training", TrainingPage),
             ("gpu", GpuPage),
             ("settings", SettingsPage),
@@ -266,6 +277,108 @@ class TrainingHubApp(tk.Tk):
     def runpod_client(self) -> RunPodClient:
         key = self.secrets.get("runpod_api_key")
         return RunPodClient(key)
+
+    # ------------------------------------------------- mentor context tools
+    def agent_extra_tools(self):
+        """Read-only tools that let the mentor inspect training progress."""
+        def get_training_status(_args):
+            status = self.training.status()
+            summary = parse_log(self.training.tail())
+            return {
+                "ok": True,
+                "running": status.running,
+                "returncode": status.returncode,
+                "command": status.command,
+                "metrics": summary.last,
+                "best": summary.best,
+                "trend": summary.trend,
+                "anomalies": summary.anomalies,
+                "epoch": summary.epoch_current,
+                "epochs_total": summary.epochs_total,
+                "progress": summary.progress_ratio,
+            }
+
+        def read_training_log(args):
+            try:
+                max_bytes = max(500, min(int(args.get("max_bytes", 8000)), 60000))
+            except (TypeError, ValueError):
+                max_bytes = 8000
+            return {"ok": True, "output": self.training.tail(max_bytes)}
+
+        def get_run_history(args):
+            try:
+                limit = max(1, min(int(args.get("limit", 5)), 20))
+            except (TypeError, ValueError):
+                limit = 5
+            runs = [
+                {
+                    "command": record.command,
+                    "status": record.status_ru,
+                    "started": record.started_at,
+                    "metrics": record.metrics_last,
+                    "anomalies": record.anomalies,
+                    "score": record.analysis_score,
+                }
+                for record in self.runs.list(limit)
+            ]
+            return {"ok": True, "runs": runs}
+
+        tools = {
+            "get_training_status": get_training_status,
+            "read_training_log": read_training_log,
+            "get_run_history": get_run_history,
+        }
+        return tools, TRAINING_CONTEXT_TOOL_SCHEMAS
+
+    def assessment_context(self) -> str:
+        """Snapshot of model + training state for a mentor assessment request."""
+        lines: list[str] = []
+        registry = self.model_registry()
+        entry = None
+        try:
+            for candidate in registry.load():
+                if candidate.id == self.settings.active_model_id:
+                    entry = candidate
+                    break
+        except Exception:
+            entry = None
+        if entry is not None:
+            lines += [
+                f"Модель: {entry.name} ({entry.kind})",
+                f"Путь/URI: {entry.location}",
+                f"API model id: {entry.model_id or '—'}",
+                f"Заметки: {entry.notes or '—'}",
+                "",
+            ]
+        else:
+            lines += ["Модель не выбрана в каталоге.", ""]
+
+        status = self.training.status()
+        summary = parse_log(self.training.tail())
+        lines += [
+            f"Обучение: {'выполняется' if status.running else 'остановлено'}",
+            f"Команда: {status.command or '—'}",
+            f"Код возврата: {status.returncode}",
+            f"Метрики: {metrics_brief(summary)}",
+        ]
+        if summary.anomalies:
+            lines.append("Аномалии: " + "; ".join(summary.anomalies))
+        recent_runs = self.runs.list(5)
+        if recent_runs:
+            lines.append("")
+            lines.append("Последние запуски:")
+            for record in recent_runs:
+                lines.append(
+                    f"- {record.command} → {record.status_ru}; "
+                    f"метрики: {record.metrics_last or '—'}"
+                )
+        tail = self.training.tail(6000)
+        if tail.strip():
+            lines += ["", "Хвост лога:", "```", tail, "```"]
+        return "\n".join(lines)
+
+    def assessment_prompt(self) -> str:
+        return REPORT_PROMPT_TEMPLATE.format(context=self.assessment_context())
 
     def confirm_from_worker(self, title: str, message: str) -> bool:
         return confirm_from_worker(self, title, message)

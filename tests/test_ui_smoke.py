@@ -116,6 +116,7 @@ def _fake_tkinter():
     ttk_mod.Scrollbar = _Widget
     ttk_mod.LabelFrame = _Widget
     ttk_mod.Notebook = _Widget
+    ttk_mod.Progressbar = _Widget
 
     messagebox_mod = types.ModuleType("tkinter.messagebox")
     messagebox_mod.showinfo = lambda *a, **k: True
@@ -176,8 +177,9 @@ def test_app_builds_and_pages_switch(fake_ui):
     app_module = fake_ui["alterego_training_hub.ui"]
     app = app_module.TrainingHubApp()
 
-    assert set(app.pages) == {"chat", "workspace", "models", "training", "gpu", "settings"}
-    for key in ["chat", "workspace", "models", "training", "gpu", "settings"]:
+    assert set(app.pages) == {"chat", "workspace", "models", "model", "training",
+                              "gpu", "settings"}
+    for key in ["chat", "workspace", "models", "model", "training", "gpu", "settings"]:
         app.show_page(key)
     assert app._current_page == "settings"
 
@@ -220,3 +222,31 @@ def test_chat_and_models_pages_interact(fake_ui):
     workspace = app.pages["workspace"]
     workspace.refresh_repo_status()  # no repo connected -> status only
     app.save_settings()
+
+
+def test_dashboard_training_and_agent_context(fake_ui):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+
+    dashboard = app.pages["model"]
+    dashboard.refresh()
+    dashboard._render_assessment()
+    dashboard._render_activity()
+    dashboard.request_assessment()  # no mentor configured -> dialog + settings page
+
+    training = app.pages["training"]
+    training.refresh_metrics()
+    training.refresh_runs()
+    training.start_training()  # no workspace -> dialog, no crash
+
+    tools, schemas = app.agent_extra_tools()
+    assert set(tools) == {"get_training_status", "read_training_log", "get_run_history"}
+    assert tools["get_training_status"]({})["ok"] is True
+    assert tools["read_training_log"]({"max_bytes": 1000})["ok"] is True
+    assert tools["get_run_history"]({"limit": 3})["ok"] is True
+    assert len(schemas) == 3
+
+    context = app.assessment_context()
+    assert "Обучение" in context
+    prompt = app.assessment_prompt()
+    assert "```report" in prompt and "Контекст" in prompt

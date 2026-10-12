@@ -32,6 +32,49 @@ TOOL_BLOCK_RE = re.compile(r"```tool\s*\n(\{.*?\})\s*\n```", re.DOTALL)
 ConfirmFn = Callable[[str, dict[str, Any], str], bool]
 EventFn = Callable[[str, dict[str, Any]], None]
 
+# Read-only context tools: the mentor can inspect training progress even
+# without a workspace. The UI supplies the implementations.
+TRAINING_CONTEXT_TOOL_SCHEMAS: list[dict[str, Any]] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_training_status",
+            "description": "Состояние текущего/последнего обучения: команда, код возврата, "
+                           "метрики, аномалии, прогресс эпох.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_training_log",
+            "description": "Хвост лога текущего/последнего обучения.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "max_bytes": {"type": "integer", "description": "Сколько байт хвоста",
+                                  "default": 8000},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_run_history",
+            "description": "Последние запуски обучения: статус, код возврата, метрики, оценка.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "Сколько запусков", "default": 5},
+                },
+                "required": [],
+            },
+        },
+    },
+]
+
 
 def extract_text_tool_calls(text: str) -> tuple[str, list[ToolCall]]:
     """Parse fallback tool blocks out of plain text replies."""
@@ -63,11 +106,18 @@ class MentorAgent:
         *,
         max_steps: int = MAX_TOOL_STEPS,
         enable_tools: bool = True,
+        extra_tools: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] | None = None,
+        extra_schemas: list[dict[str, Any]] | None = None,
     ):
         self.mentor = mentor
         self.workspace = workspace
         self.max_steps = max(1, int(max_steps))
-        self.enable_tools = bool(enable_tools) and workspace is not None
+        self.extra_tools = dict(extra_tools or {})
+        self.extra_schemas = list(extra_schemas or [])
+        self.enable_tools = bool(enable_tools) and (
+            workspace is not None or bool(self.extra_tools)
+        )
+        self.known_tools = TOOL_NAMES | frozenset(self.extra_tools)
 
     def run_turn(
         self,
@@ -92,9 +142,13 @@ class MentorAgent:
         last_reply: MentorReply | None = None
 
         for step in range(self.max_steps):
+            tool_schemas = (
+                WORKSPACE_TOOL_SCHEMAS + self.extra_schemas
+                if self.enable_tools else None
+            )
             reply = self.mentor.respond(
                 messages,
-                tools=WORKSPACE_TOOL_SCHEMAS if self.enable_tools else None,
+                tools=tool_schemas,
                 max_tokens=max_tokens,
                 temperature=temperature,
             )
@@ -146,8 +200,16 @@ class MentorAgent:
         description = _describe(call)
         emit("tool_start", {"name": call.name, "arguments": call.arguments,
                             "description": description, "index": index})
-        if call.name not in TOOL_NAMES:
-            result: dict[str, Any] = {"ok": False, "error": f"Неизвестный инструмент: {call.name}"}
+        if call.name in self.extra_tools:
+            # Read-only context tools (training status, metrics, run history).
+            try:
+                result: dict[str, Any] = self.extra_tools[call.name](call.arguments or {})
+                if not isinstance(result, dict):
+                    result = {"ok": True, "result": str(result)}
+            except Exception as exc:  # noqa: BLE001 - tool boundary must not crash
+                result = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+        elif call.name not in TOOL_NAMES:
+            result = {"ok": False, "error": f"Неизвестный инструмент: {call.name}"}
         elif self.workspace is None:
             result = {"ok": False, "error": "Рабочая папка не подключена."}
         elif not WorkspaceTools.is_readonly(call.name):
@@ -183,9 +245,15 @@ def _assistant_payload(reply: MentorReply, calls: list[ToolCall]) -> dict[str, A
 
 
 def _describe(call: ToolCall) -> str:
-    from .tools import WorkspaceTools
+    from .tools import TOOL_DESCRIPTIONS_RU, WorkspaceTools
 
-    return WorkspaceTools.describe(call.name, call.arguments)
+    if call.name in TOOL_DESCRIPTIONS_RU:
+        return WorkspaceTools.describe(call.name, call.arguments)
+    return {
+        "get_training_status": "Состояние текущего обучения и метрики",
+        "read_training_log": "Прочитать лог обучения",
+        "get_run_history": "История запусков обучения",
+    }.get(call.name, call.name)
 
 
 def _summarize(result: dict[str, Any]) -> str:

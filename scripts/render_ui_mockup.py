@@ -353,6 +353,19 @@ def render_chat() -> Path:
         mark, mark_color = marks.get(idx, (" ", C["muted"]))
         c.text(ex + 8, y, f"{idx:>2} {mark}", 7.6, mono=True, fill=mark_color)
         draw_code_line(c, ex + 42, y, line)
+    # Minimap strip on the right edge of the code area.
+    mx = ex + ew - 36
+    c.rect(mx, 202, 35, 290, C["panel_alt"])
+    for idx, line in enumerate(code, 1):
+        y = 212 + (idx - 1) * 12
+        stripped = line.strip()
+        if not stripped:
+            continue
+        indent = min(len(line) - len(line.lstrip()), 16) // 2
+        width = max(3, min(len(stripped) // 3, 18))
+        color = (C["accent"] if stripped.startswith(("def ", "class "))
+                 else ("#4f7a4f" if stripped.startswith("#") else "#8a97a8"))
+        c.rect(mx + 5 + indent, y, width, 3, color, radius=1)
 
     draw_terminal(c)
     draw_chat_panel(c, agent_mode=True)

@@ -7,6 +7,9 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 from .finding import iter_matches, next_match_index, replace_all
+from .formatter import format_source
+from .lint import check_source
+from .minimap import minimap_bars
 from .pairing import (
     PAIRS,
     auto_close_decision,
@@ -56,6 +59,7 @@ class EditorPage(tk.Frame):
         self._highlight_after: str | None = None
         self._matches: list[tuple[int, int]] = []
         self._match_index: int | None = None
+        self._zoom: int = 0
         self._build()
         self.completion = CompletionPopup(self)
 
@@ -191,14 +195,26 @@ class EditorPage(tk.Frame):
         self.file_var = tk.StringVar(value="файл не открыт")
         tk.Label(bar, textvariable=self.file_var, bg=C["panel"], fg=C["muted"],
                  font=F_MONO).pack(side="left")
+        self.format_on_save = tk.BooleanVar(value=False)
+        tk.Checkbutton(bar, text="формат при сохранении",
+                       variable=self.format_on_save, bg=C["panel"],
+                       font=F_SMALL).pack(side="left", padx=(10, 0))
+        self.lint_on_save = tk.BooleanVar(value=True)
+        tk.Checkbutton(bar, text="линт при сохранении",
+                       variable=self.lint_on_save, bg=C["panel"],
+                       font=F_SMALL).pack(side="left", padx=(6, 0))
         ttk.Button(bar, text="Сохранить", style="Accent.TButton",
                    command=self.save_file).pack(side="right")
         ttk.Button(bar, text="Перечитать",
                    command=self.reload_file).pack(side="right", padx=6)
+        ttk.Button(bar, text="Формат",
+                   command=self.format_file).pack(side="right", padx=6)
+        ttk.Button(bar, text="Проверить",
+                   command=self.run_lint).pack(side="right", padx=6)
         ttk.Button(bar, text="Обсудить с наставником",
                    command=self.send_to_mentor).pack(side="right", padx=6)
 
-        # Code area: gutter + editor + scrollbar
+        # Code area: gutter + editor + minimap + scrollbar
         code_wrap = tk.Frame(right, bg=C["code_bg"])
         code_wrap.pack(fill="both", expand=True)
         self.gutter = tk.Text(code_wrap, width=7, wrap="none", font=F_MONO,
@@ -214,6 +230,11 @@ class EditorPage(tk.Frame):
                               selectbackground=C["accent"],
                               selectforeground="#ffffff")
         self.editor.pack(side="left", fill="both", expand=True)
+        self.minimap = tk.Canvas(code_wrap, width=64, bd=0,
+                                 highlightthickness=0, bg=C["panel_alt"],
+                                 cursor="hand2")
+        self.minimap.pack(side="right", fill="y")
+        self.minimap.bind("<Button-1>", self._on_minimap_click)
         scroll = ttk.Scrollbar(code_wrap, command=self.editor.yview)
         scroll.pack(side="right", fill="y")
         self.editor.configure(yscrollcommand=lambda a, b: self._sync_scroll(a, b))
@@ -228,6 +249,16 @@ class EditorPage(tk.Frame):
         self.editor.bind("<Control-Tab>", lambda _e: (self.next_tab(), "break")[1])
         self.editor.bind("<Control-g>",
                          lambda _e: (self.open_goto_line(), "break")[1])
+        self.editor.bind("<Control-plus>",
+                         lambda _e: (self.zoom_in(), "break")[1])
+        self.editor.bind("<Control-equal>",
+                         lambda _e: (self.zoom_in(), "break")[1])
+        self.editor.bind("<Control-KP_Add>",
+                         lambda _e: (self.zoom_in(), "break")[1])
+        self.editor.bind("<Control-minus>",
+                         lambda _e: (self.zoom_out(), "break")[1])
+        self.editor.bind("<Control-KP_Subtract>",
+                         lambda _e: (self.zoom_out(), "break")[1])
         for char in ("(", "[", "{", '"', "'", ")", "]", "}"):
             self.editor.bind(
                 char, lambda _e, ch=char: self._on_auto_char(ch, _e))
@@ -556,6 +587,100 @@ class EditorPage(tk.Frame):
             self.editor.tag_add("bracket_match", f"1.0+{position}c",
                                 f"1.0+{position + 1}c")
 
+    # ------------------------------------------------------------- zoom
+    def zoom_in(self):
+        self._apply_zoom(1)
+
+    def zoom_out(self):
+        self._apply_zoom(-1)
+
+    def _apply_zoom(self, step: int):
+        self._zoom = max(-4, min(12, getattr(self, "_zoom", 0) + step))
+        size = max(6, F_MONO[1] + self._zoom)
+        font = (F_MONO[0], size)
+        for widget in (self.editor, self.gutter):
+            try:
+                widget.configure(font=font)
+            except Exception:  # noqa: BLE001
+                pass
+        self.status_var.set(f"масштаб шрифта: {size} пт")
+
+    # ----------------------------------------------------------- minimap
+    def _redraw_minimap(self):
+        try:
+            self.minimap.delete("all")
+            text = self.editor.get("1.0", "end-1c")
+        except Exception:  # noqa: BLE001 - fake widgets
+            return
+        bars = minimap_bars(text)
+        if not bars:
+            return
+        try:
+            width = int(self.minimap.winfo_width() or 64)
+            height = int(self.minimap.winfo_height() or 400)
+        except Exception:  # noqa: BLE001
+            width, height = 64, 400
+        row_h = max(2, height // max(1, len(bars)))
+        colors = {"code": "#6b7c93", "def": "#3b82f6", "head": "#8ab4f8",
+                  "comment": "#4f7a4f", "blank": None}
+        for index, bar in enumerate(bars):
+            if bar["kind"] == "blank" or bar["width"] == 0:
+                continue
+            color = colors.get(bar["kind"], "#6b7c93")
+            x0 = 4 + min(bar["indent"], 24)
+            x1 = min(width - 4, x0 + max(2, bar["width"] // 2))
+            y0 = index * row_h + 1
+            self.minimap.create_rectangle(x0, y0, x1, y0 + max(1, row_h - 1),
+                                          fill=color, outline="")
+
+    def _on_minimap_click(self, event=None):
+        try:
+            y = int(getattr(event, "y", 0))
+            height = int(self.minimap.winfo_height() or 0)
+            if height <= 0:
+                return
+            total = self._line_count()
+            self.open_at(1 + int(y / height * max(1, total - 1)))
+        except Exception:  # noqa: BLE001 - cosmetic only
+            pass
+
+    # ------------------------------------------------- format and linting
+    def format_file(self):
+        if self._active is None or not self._tabs:
+            messagebox.showinfo("Редактор", "Сначала откройте файл.",
+                                parent=self)
+            return
+        text = self.editor.get("1.0", "end-1c")
+        new_text, fixes = format_source(text)
+        if not fixes:
+            self.status_var.set("форматирование: изменений нет")
+            return
+        self.editor.delete("1.0", "end")
+        self.editor.insert("1.0", new_text)
+        self._on_modified_force()
+        self._schedule_highlight()
+        self.status_var.set(f"форматировано: {fixes} исправлений")
+
+    def run_lint(self):
+        if self._active is None or not self._tabs:
+            messagebox.showinfo("Редактор", "Сначала откройте файл.",
+                                parent=self)
+            return
+        path = self._tabs[self._active]["path"]
+        text = self.editor.get("1.0", "end-1c")
+        rows = check_source(text, path=path.name,
+                            language=detect_language(str(path)))
+        problems = getattr(self.app, "problems", None)
+        if problems is not None:
+            problems.file_items = rows
+            problems.refresh()
+        errors = sum(1 for row in rows if row["severity"] == "error")
+        if rows:
+            self.status_var.set(
+                f"линт: {errors} ошиб(ок), {len(rows) - errors} предупреждений")
+        else:
+            self.status_var.set("линт: проблем не найдено")
+
     def close_tab(self, index: int | None = None):
         if not self._tabs:
             return
@@ -818,6 +943,7 @@ class EditorPage(tk.Frame):
         except Exception:  # noqa: BLE001 - cosmetic only
             pass
         self._regen_gutter()
+        self._redraw_minimap()
 
     def _schedule_highlight(self):
         if self._highlight_after is not None:
@@ -915,6 +1041,16 @@ class EditorPage(tk.Frame):
             return
         tab = self._tabs[self._active]
         content = self.editor.get("1.0", "end-1c")
+        note = ""
+        try:
+            if self.format_on_save.get():
+                content, fixes = format_source(content)
+                if fixes:
+                    self.editor.delete("1.0", "end")
+                    self.editor.insert("1.0", content)
+                    note = f" · формат: {fixes} исправлений"
+        except Exception:  # noqa: BLE001 - formatting must not block saving
+            pass
         try:
             tab["path"].write_text(content, encoding="utf-8")
         except OSError as exc:
@@ -924,7 +1060,13 @@ class EditorPage(tk.Frame):
         tab["modified"] = False
         self._render_tabs()
         self.app.activity.log("file_edit", f"Сохранён файл {tab['path'].name}")
-        self.status_var.set(f"сохранено {time.strftime('%H:%M:%S')}")
+        if self.lint_on_save.get():
+            try:
+                self.run_lint()
+                note += " · " + self.status_var.get()
+            except Exception:  # noqa: BLE001 - linting must not block saving
+                pass
+        self.status_var.set(f"сохранено {time.strftime('%H:%M:%S')}{note}")
         self.app.set_status("Файл сохранён")
 
     def send_to_mentor(self):

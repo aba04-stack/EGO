@@ -15,6 +15,7 @@ class ProblemsPanel(tk.Frame):
         super().__init__(parent, bg=C["panel"])
         self.app = app
         self._items: list[dict] = []
+        self.file_items: list[dict] = []  # from the editor's linter
         self._build()
 
     def _build(self):
@@ -52,11 +53,13 @@ class ProblemsPanel(tk.Frame):
         for item in self.tree.get_children():
             self.tree.delete(item)
         self._items = []
+        self.file_items = []
         self.count_var.set("ПРОБЛЕМЫ (0)")
         self.status_var.set("Очищено.")
 
     def collect(self) -> list[dict]:
-        problems = parse_problems(self.app.training.tail(60_000))
+        problems = list(self.file_items)
+        problems.extend(parse_problems(self.app.training.tail(60_000)))
         try:
             summary = parse_log(self.app.training.tail())
             for anomaly in summary.anomalies:

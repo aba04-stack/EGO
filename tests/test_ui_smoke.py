@@ -964,3 +964,48 @@ def test_git_panel_and_editor_polish(fake_ui, tmp_path, monkeypatch):
     editor.tree._selection = (str(workspace / "c.py"),)
     editor.delete_selected()
     assert not (workspace / "c.py").exists()
+
+
+def test_editor_format_lint_zoom_minimap(fake_ui, tmp_path):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    (workspace / "code.py").write_text("x = 1  \n\n\n\n\ny = 2",
+                                       encoding="utf-8")
+    app.settings.workspace_path = str(workspace)
+    app.save_settings()
+
+    editor = app.pages["editor"]
+    app.show_page("editor")
+    editor.open_file(workspace / "code.py")
+
+    # Formatter cleans the buffer and reports the number of fixes.
+    editor.format_file()
+    buffer = editor.editor.get("1.0", "end")
+    assert "x = 1\n" in buffer and "  \n" not in buffer
+    assert "исправлений" in editor.status_var.get()
+
+    # Linter feeds the problems panel (and thus the gutter).
+    editor.editor.insert("end", "\ndef broken(:\n")
+    editor.run_lint()
+    assert any(item["severity"] == "error"
+               for item in app.problems.file_items)
+    assert app.problems._items  # refresh() merged them in
+    assert "линт" in editor.status_var.get()
+
+    # Zoom adjusts fonts without crashing.
+    editor.zoom_in()
+    editor.zoom_out()
+
+    # Minimap redraws and click-to-jump is crash-free.
+    editor._redraw_minimap()
+    editor._on_minimap_click(type("E", (), {"y": 10})())
+
+    # Save honours format-on-save and lint-on-save.
+    editor.format_on_save.set(True)
+    editor.editor.delete("1.0", "end")
+    editor.editor.insert("1.0", "z = 3  \n")
+    editor.save_file()
+    saved = (workspace / "code.py").read_text(encoding="utf-8")
+    assert saved == "z = 3\n"

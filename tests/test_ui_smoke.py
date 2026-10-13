@@ -78,8 +78,38 @@ class _Treeview(_Widget):
 
 
 class _Listbox(_Widget):
+    def __init__(self, *args, **kwargs):
+        self._items = []
+        self._selection = ()
+
+    def insert(self, index, item):
+        self._items.append(str(item))
+
+    def delete(self, first, last=None):
+        self._items = []
+
+    def size(self):
+        return len(self._items)
+
+    def get(self, first, last=None):
+        if 0 <= first < len(self._items):
+            return self._items[first]
+        return ""
+
     def curselection(self):
-        return ()
+        return self._selection
+
+    def selection_set(self, first, last=None):
+        self._selection = (first,)
+
+    def selection_clear(self, first, last=None):
+        self._selection = ()
+
+    def activate(self, index):
+        pass
+
+    def see(self, index):
+        pass
 
 
 class _Entry(_Widget):
@@ -144,6 +174,10 @@ class _Tk(_Widget):
         pass
 
 
+class _Toplevel(_Widget):
+    pass
+
+
 class _Style(_Widget):
     def theme_use(self, name):
         pass
@@ -155,6 +189,7 @@ TclError = type("TclError", (Exception,), {})
 def _fake_tkinter():
     tk_mod = types.ModuleType("tkinter")
     tk_mod.Tk = _Tk
+    tk_mod.Toplevel = _Toplevel
     tk_mod.Frame = _Widget
     tk_mod.Label = _Widget
     tk_mod.Entry = _Entry
@@ -219,6 +254,8 @@ def fake_ui(monkeypatch, tmp_path):
         "alterego_training_hub.ui_common",
         "alterego_training_hub.ui_chat",
         "alterego_training_hub.ui_workspace",
+        "alterego_training_hub.ui_search",
+        "alterego_training_hub.ui_palette",
         "alterego_training_hub.ui_models",
         "alterego_training_hub.ui_model",
         "alterego_training_hub.ui_editor",
@@ -246,10 +283,10 @@ def test_app_builds_and_pages_switch(fake_ui):
     app_module = fake_ui["alterego_training_hub.ui"]
     app = app_module.TrainingHubApp()
 
-    assert set(app.pages) == {"chat", "editor", "workspace", "models", "datasets",
-                              "model", "playground", "training", "gpu",
-                              "servers", "connectors", "settings"}
-    for key in ["editor", "workspace", "models", "datasets", "model",
+    assert set(app.pages) == {"chat", "editor", "workspace", "search", "models",
+                              "datasets", "model", "playground", "training",
+                              "gpu", "servers", "connectors", "settings"}
+    for key in ["editor", "workspace", "search", "models", "datasets", "model",
                 "playground", "training", "gpu", "servers", "connectors",
                 "settings"]:
         app.show_page(key)
@@ -661,3 +698,87 @@ def test_shortcuts_and_diagnostics_settings(fake_ui, monkeypatch):
     # Chat panel exposes focus_input used by Ctrl+K.
     chat = app.pages["chat"]
     chat.focus_input()
+
+
+def test_editor_tabs_palette_and_search(fake_ui, monkeypatch, tmp_path):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    (workspace / "a.py").write_text("print('a')\n", encoding="utf-8")
+    (workspace / "b.py").write_text("print('b')\nval_loss = 1\n", encoding="utf-8")
+    app.settings.workspace_path = str(workspace)
+    app.save_settings()
+
+    editor = app.pages["editor"]
+    app.show_page("editor")
+
+    # Tabs: two open files, buffers are kept per tab.
+    editor.open_file(workspace / "a.py")
+    editor.open_file(workspace / "b.py")
+    assert len(editor._tabs) == 2
+    assert editor._current_path == workspace / "b.py"
+    editor.editor.delete("1.0", "end")
+    editor.editor.insert("1.0", "edited b\n")
+    editor._select_tab(0)  # switch to a.py — b's buffer must be stashed
+    assert editor._current_path == workspace / "a.py"
+    assert "print" in editor.editor.get("1.0", "end")
+    editor._select_tab(1)
+    assert editor.editor.get("1.0", "end") == "edited b\n"
+
+    # Closing a modified tab asks first (faked yes) and removes the tab.
+    editor._tabs[1]["modified"] = True
+    editor.close_tab(1)
+    assert len(editor._tabs) == 1
+
+    # Save the active tab after editing.
+    editor.editor.delete("1.0", "end")
+    editor.editor.insert("1.0", "x = 42\n")
+    editor.save_file()
+    assert (workspace / "a.py").read_text(encoding="utf-8") == "x = 42\n"
+
+    # Ctrl+Tab cycles tabs.
+    editor.open_file(workspace / "b.py")
+    editor.next_tab()
+    assert editor._current_path == workspace / "a.py"
+
+    # Quick open palette (Ctrl+P): fuzzy filter + Enter opens the file.
+    palette = app.open_command_palette("files")
+    assert len(palette._filtered) == 2
+    palette.query.insert(0, "b.py")
+    palette.refresh()
+    assert len(palette._filtered) == 1
+    palette.run_selected()
+    assert editor._current_path == workspace / "b.py"
+
+    # Command palette (Ctrl+Shift+P): commands run through.
+    def sync_start(label, task, on_success=None, on_error=None):
+        try:
+            value = task()
+        except Exception as exc:  # noqa: BLE001
+            if on_error:
+                on_error(str(exc))
+            return
+        if on_success:
+            on_success(value)
+
+    monkeypatch.setattr(app, "start_async", sync_start)
+    cmds = app.open_command_palette("commands")
+    assert len(cmds._items) >= 15
+    cmds.query.insert(0, "Диагностика")
+    cmds.refresh()
+    assert len(cmds._filtered) == 1
+    cmds.run_selected()
+    assert "Проверка завершена" in app.pages["settings"].diag_status.get()
+
+    # Search page: regex search, jump-to-line opens the file in the editor.
+    search = app.pages["search"]
+    app.show_page("search")
+    search.query_var.set("val_loss")
+    search.run_search()
+    assert search._results
+    search.tree.selection_set(search.tree.get_children()[0])
+    search.open_selected()
+    assert editor._current_path == workspace / "b.py"
+    assert search.status_var.get().startswith("Совпадений")

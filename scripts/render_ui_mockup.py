@@ -274,8 +274,18 @@ def render_chat() -> Path:
     ew = CX1 - ex
     c.rect(ex, 150, ew, 342, C["border"], radius=6)
     c.rect(ex + 1, 151, ew - 2, 340, C["code_bg"], radius=6)
-    c.rect(ex + 1, 151, ew - 2, 26, C["panel"], radius=6)
-    c.text(ex + 12, 158, "src/train.py", 8.6, mono=True, fill=C["text"])
+    # Tab bar (IDE-style tabs)
+    tabs = [("train.py •", True), ("data.py", False), ("config.yaml", False)]
+    tx = ex + 1
+    for label, active in tabs:
+        width = 12 + len(label) * 8
+        c.rect(tx, 151, width, 26, C["accent"] if active else C["panel"], radius=4)
+        c.text(tx + 10, 158, label, 8.2, mono=True,
+               fill="#ffffff" if active else C["muted"])
+        c.text(tx + width - 14, 158, "✕", 8,
+               fill="#ffffff" if active else C["muted"])
+        tx += width + 2
+    c.rect(ex + 1, 177, ew - 2, 1, C["border"])
     code = [
         "def train(model, loader, *, epochs=10, lr=3e-4):",
         "    opt = torch.optim.AdamW(model.parameters(), lr=lr)",

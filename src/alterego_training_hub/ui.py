@@ -85,6 +85,7 @@ class TrainingHubApp(tk.Tk):
             ("РАЗРАБОТКА", [
                 ("editor", "Редактор кода"),
                 ("workspace", "Рабочая папка"),
+                ("search", "Поиск"),
             ]),
             ("БИБЛИОТЕКА", [
                 ("models", "Модели"),
@@ -132,6 +133,7 @@ class TrainingHubApp(tk.Tk):
         from .ui_model import ModelDashboardPage
         from .ui_models import ModelsPage
         from .ui_playground import PlaygroundPage
+        from .ui_search import SearchPage
         from .ui_servers import ServersPage
         from .ui_settings import SettingsPage
         from .ui_terminal import TerminalPanel
@@ -142,6 +144,7 @@ class TrainingHubApp(tk.Tk):
         page_classes = [
             ("editor", EditorPage),
             ("workspace", WorkspacePage),
+            ("search", SearchPage),
             ("models", ModelsPage),
             ("datasets", DatasetsPage),
             ("model", ModelDashboardPage),
@@ -177,8 +180,22 @@ class TrainingHubApp(tk.Tk):
         self.bind_all("<Control-Key-0>", lambda _e: self.show_page("settings"))
         self.bind_all("<Control-k>", lambda _e: self.show_page("chat"))
         self.bind_all("<Control-j>", lambda _e: self.terminal.toggle())
+        self.bind_all("<Control-p>", lambda _e: self.open_command_palette("files"))
+        self.bind_all("<Control-Shift-P>",
+                      lambda _e: self.open_command_palette("commands"))
+        self.bind_all("<Control-Shift-p>",
+                      lambda _e: self.open_command_palette("commands"))
+        self.bind_all("<Control-Shift-F>",
+                      lambda _e: self.show_page("search"))
+        self.bind_all("<Control-Shift-f>",
+                      lambda _e: self.show_page("search"))
         self.bind_all("<F5>", lambda _e: self.refresh_current())
         self.bind_all("<F1>", lambda _e: self.show_shortcuts_help())
+
+    def open_command_palette(self, mode: str = "commands"):
+        from .ui_palette import open_command_palette
+
+        return open_command_palette(self, mode)
 
     def refresh_current(self):
         page = self.pages.get(self._current_page)
@@ -193,8 +210,13 @@ class TrainingHubApp(tk.Tk):
             "Ctrl+1…Ctrl+9 — страницы (редактор, папка, модели, датасеты,\n"
             "   модель, playground, обучение, GPU, серверы)\n"
             "Ctrl+0 — настройки\n"
+            "Ctrl+P — быстрое открытие файла\n"
+            "Ctrl+Shift+P — палитра команд\n"
+            "Ctrl+Shift+F — поиск по проекту\n"
             "Ctrl+K — фокус в чат наставника\n"
             "Ctrl+J — свернуть/развернуть терминал\n"
+            "Ctrl+W — закрыть вкладку редактора\n"
+            "Ctrl+Tab — следующая вкладка редактора\n"
             "F5 — обновить текущую страницу\n"
             "F1 — эта справка\n"
             "Ctrl+Enter — отправить сообщение в чате\n"

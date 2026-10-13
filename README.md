@@ -16,12 +16,21 @@ Mockups are rendered from the app's real design tokens by `scripts/render_ui_moc
 | --- | --- |
 | `Ctrl+1`…`Ctrl+9` | Pages: editor, workspace, models, datasets, model, playground, training, GPU, servers |
 | `Ctrl+0` | Settings |
+| `Ctrl+P` | Quick open file (fuzzy) |
+| `Ctrl+Shift+P` | Command palette |
+| `Ctrl+Shift+F` | Search across the project |
 | `Ctrl+K` | Focus the mentor chat |
 | `Ctrl+J` | Collapse/expand the terminal |
+| `Ctrl+W` | Close editor tab |
+| `Ctrl+Tab` | Next editor tab |
 | `F5` | Refresh the current page |
 | `F1` | Shortcut help |
 | `Ctrl+Enter` | Send a chat message |
 | `Ctrl+S` | Save file in the editor |
+
+## Editor, palette, search
+
+The editor opens files in **IDE-style tabs** (each tab keeps its buffer, `•` marks unsaved changes, `Ctrl+W` closes, `Ctrl+Tab` cycles) with a cursor position readout. **Ctrl+P** opens any workspace file by fuzzy name; **Ctrl+Shift+P** runs commands from one palette (navigation, training, diagnostics). **Ctrl+Shift+F** searches the workspace by regex and jumps straight to the matching line in the editor.
 
 ## Diagnostics and logs
 

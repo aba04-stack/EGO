@@ -121,6 +121,18 @@ class SettingsPage(tk.Frame):
                      width=24).pack(side="left", padx=(0, 8))
         ttk.Button(profile_row, text="Применить профиль",
                    command=self.apply_agent_profile).pack(side="left")
+        tk.Label(profile_row, text="Роль доступа", bg=C["panel"],
+                 font=F_BASE).pack(side="left", padx=(16, 6))
+        from .roles import ROLE_LABELS, normalize_role, role_labels
+
+        self.access_role_var = tk.StringVar(
+            value=ROLE_LABELS.get(normalize_role(self.app.settings.access_role),
+                                  role_labels()[0]))
+        ttk.Combobox(profile_row, textvariable=self.access_role_var,
+                     values=role_labels(), state="readonly",
+                     width=28).pack(side="left", padx=(0, 8))
+        ttk.Button(profile_row, text="Сохранить роль",
+                   command=self.save_access_role).pack(side="left")
 
         agent_row = tk.Frame(agent_card, bg=C["panel"])
         agent_row.pack(fill="x")
@@ -353,6 +365,18 @@ class SettingsPage(tk.Frame):
             )
         except Exception as exc:
             messagebox.showerror("ИИ-наставник", str(exc), parent=self)
+
+    def save_access_role(self):
+        from .roles import role_id_by_label
+
+        self.app.settings.access_role = role_id_by_label(
+            self.access_role_var.get())
+        self.app.save_settings()
+        messagebox.showinfo(
+            "Роль доступа",
+            f"Роль сохранена: «{self.access_role_var.get()}».\n"
+            "Гостевой режим делает агента и инструменты только для чтения.",
+            parent=self)
 
     def apply_agent_profile(self):
         from .agent_profiles import apply_profile, profile_id_by_label

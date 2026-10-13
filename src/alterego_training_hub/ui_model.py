@@ -40,6 +40,8 @@ class ModelDashboardPage(tk.Frame):
                    command=self.request_assessment).pack(side="left", padx=8)
         ttk.Button(bar, text="Подобрать параметры",
                    command=self.suggest_fixes).pack(side="left", padx=8)
+        ttk.Button(bar, text="Экспорт отчёта",
+                   command=self.export_report).pack(side="left", padx=8)
         ttk.Button(bar, text="Открыть чат",
                    command=lambda: self.app.show_page("chat")).pack(side="left")
 
@@ -277,6 +279,28 @@ class ModelDashboardPage(tk.Frame):
         set_text(self.activity_text, "\n".join(lines))
 
     # ------------------------------------------------------------- actions
+    def export_report(self):
+        """Save the full training report as Markdown/HTML (print → PDF)."""
+        from tkinter import filedialog, messagebox
+
+        from .report_export import save_report
+
+        path = filedialog.asksaveasfilename(
+            title="Экспорт отчёта", defaultextension=".md",
+            filetypes=[("Markdown", "*.md"), ("HTML", "*.html")])
+        if not path:
+            return
+        fmt = path.rsplit(".", 1)[-1].lower()
+        try:
+            exported = save_report(path, self.app.build_report_context(),
+                                   fmt=fmt)
+        except Exception as exc:
+            messagebox.showerror("Отчёт", str(exc), parent=self)
+            return
+        note = ("\n" + exported.note) if exported.note else ""
+        messagebox.showinfo("Отчёт", f"Сохранено: {exported.path}{note}",
+                            parent=self)
+
     def suggest_fixes(self):
         """Propose hyperparameter changes from metrics and apply on demand."""
         from tkinter import messagebox

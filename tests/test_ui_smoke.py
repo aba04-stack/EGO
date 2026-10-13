@@ -1306,3 +1306,75 @@ def test_stage18_model_tools_export_quantize_bench_suite(fake_ui, tmp_path):
     # Playground suite button exists and errors cleanly without models.
     playground_page = app.pages["playground"]
     playground_page.run_prompt_suite()  # no models → error dialog, no crash
+
+
+def test_stage19_reports_cloud_queue_roles(fake_ui, tmp_path):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    app.settings.workspace_path = str(workspace)
+    app.save_settings()
+
+    tools, schemas, mutations = app.agent_extra_tools()
+    for name in ("export_report", "list_cloud_jobs", "submit_cloud_job"):
+        assert name in tools
+        assert any(schema["function"]["name"] == name for schema in schemas)
+    assert {"export_report", "submit_cloud_job"} <= mutations
+
+    # Report export through the agent tool.
+    result = tools["export_report"]({"path": "reports/отчёт", "format": "md"})
+    assert result["ok"] is True, result
+    assert (workspace / "reports" / "отчёт.md").exists()
+    result = tools["export_report"]({"format": "html"})
+    assert result["ok"] is True
+
+    # Cloud queue: list empty, add via tool requires RunPod key (clean error),
+    # and the queue itself works offline.
+    result = tools["list_cloud_jobs"]({})
+    assert result["ok"] and result["jobs"] == []
+    result = tools["submit_cloud_job"]({"name": "run", "command": "python t.py"})
+    assert result["ok"] is False  # no RunPod key in the sandbox
+
+    from alterego_training_hub.cloud_queue import CloudJob, CloudJobQueue
+
+    queue = CloudJobQueue(app.model_registry().library_dir)
+    queue.add(CloudJob(name="demo", command="python train.py"))
+    result = tools["list_cloud_jobs"]({})
+    assert len(result["jobs"]) == 1 and "demo" in result["jobs"][0]["line"]
+
+    # build_report_context assembles everything without crashing.
+    context = app.build_report_context()
+    text = __import__("alterego_training_hub.report_export",
+                      fromlist=["build_markdown_report"]).build_markdown_report(
+        context)
+    assert "Модель" in text
+
+    # Guest role blocks every mutation through agent tools.
+    app.settings.access_role = "viewer"
+    tools, _schemas, _mutations = app.agent_extra_tools()
+    for name in ("start_training", "set_training_control", "export_report",
+                 "prepare_dataset", "export_model", "submit_cloud_job"):
+        result = tools[name]({})
+        assert result["ok"] is False and "Гостевой режим" in result["error"]
+    # Read-only tools still work.
+    assert tools["list_cloud_jobs"]({})["ok"] is True
+    app.settings.access_role = "owner"
+
+    # Settings: role combobox saves.
+    settings_page = app.pages["settings"]
+    settings_page.access_role_var.set("Редактор — без секретов и смены ролей")
+    settings_page.save_access_role()
+    assert app.settings.access_role == "editor"
+
+    # GPU page queue widgets exist and refresh offline.
+    gpu_page = app.pages["gpu"]
+    gpu_page.refresh_jobs()
+    gpu_page.job_name_var.set("t2")
+    gpu_page.job_cmd_var.set("python t.py")
+    gpu_page.add_cloud_job()
+    assert gpu_page.job_tree.get_children()
+
+    # Chat session export/import methods are wired (empty session → info).
+    chat_page = app.pages["chat"]
+    chat_page.export_session()  # empty → info dialog, no crash

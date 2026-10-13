@@ -39,6 +39,10 @@ class ChatPage(tk.Frame):
                    command=self.new_session).pack(side="left", padx=(4, 0))
         ttk.Button(row, text="✕", width=3, style="Danger.TButton",
                    command=self.delete_session).pack(side="left", padx=(3, 0))
+        ttk.Button(row, text="Выгрузить",
+                   command=self.export_session).pack(side="left", padx=(8, 0))
+        ttk.Button(row, text="Импорт",
+                   command=self.import_session).pack(side="left", padx=(3, 0))
 
         mode_row = tk.Frame(top, bg=C["panel"])
         mode_row.pack(fill="x", pady=(6, 0))
@@ -184,6 +188,57 @@ class ChatPage(tk.Frame):
         self.sessions_combo.set("Новый диалог")
         self._render_messages()
 
+    def export_session(self):
+        from tkinter import filedialog
+
+        from .session_share import export_session as _export
+
+        if not self.session.messages:
+            messagebox.showinfo("Сессия", "Диалог пуст — нечего выгружать.",
+                                parent=self)
+            return
+        path = filedialog.asksaveasfilename(
+            title="Выгрузить сессию", defaultextension=".md",
+            filetypes=[("Markdown", "*.md"), ("HTML", "*.html"),
+                       ("JSON", "*.json")])
+        if not path:
+            return
+        fmt = path.rsplit(".", 1)[-1].lower()
+        try:
+            exported = _export(self.session, path, fmt=fmt)
+        except Exception as exc:
+            messagebox.showerror("Сессия", str(exc), parent=self)
+            return
+        self.app.activity.log("share",
+                              f"Сессия выгружена: {exported.path} "
+                              f"({exported.messages} сообщений)")
+        messagebox.showinfo("Сессия",
+                            f"Готово: {exported.messages} сообщений → "
+                            f"{exported.path}", parent=self)
+
+    def import_session(self):
+        from tkinter import filedialog
+
+        from .session_share import import_session as _import
+
+        path = filedialog.askopenfilename(
+            title="Импорт сессии", filetypes=[("JSON сессии", "*.json"),
+                                              ("Все файлы", "*.*")])
+        if not path:
+            return
+        try:
+            session = _import(path)
+        except Exception as exc:
+            messagebox.showerror("Сессия", str(exc), parent=self)
+            return
+        self.session = session
+        self.store.save(session)
+        self.refresh_sessions()
+        self.sessions_combo.set(session.title)
+        self._render_messages()
+        self.app.activity.log("share",
+                              f"Сессия импортирована: {session.title}")
+
     # --------------------------------------------------------------- render
     def _render_messages(self):
         set_text(self.messages, "")
@@ -328,6 +383,10 @@ class ChatPage(tk.Frame):
             self._render_messages()
 
         def work():
+            from .roles import can as role_can
+
+            guest = not role_can(getattr(settings, "access_role", "owner"),
+                                 "mutate")
             common = dict(
                 confirm=None if autonomy == "agent" else (
                     lambda name, args, desc: self.app.confirm_from_worker(
@@ -341,8 +400,10 @@ class ChatPage(tk.Frame):
             system_extra = str(getattr(settings, "agent_system_extra", "") or "")
             if autonomy == "agent":
                 return agent.run_goal(text, **common, system_extra=system_extra,
-                                      verify=bool(getattr(settings, "agent_verify", True)))
-            return agent.run_turn(history, **common, system_extra=system_extra)
+                                      verify=bool(getattr(settings, "agent_verify", True)),
+                                      readonly=guest)
+            return agent.run_turn(history, **common, system_extra=system_extra,
+                                  readonly=guest)
 
         self.app.start_async("Ответ наставника", work, done, failed)
 

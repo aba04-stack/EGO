@@ -15,6 +15,7 @@ from .agent import MODEL_TOOLS_SCHEMAS, TRAINING_CONTEXT_TOOL_SCHEMAS
 from .cloud_gpu import RunPodClient
 from .config import AppSettings, SecretStore, app_data_dir
 from .connectors import ConnectorManager
+from .roles import can
 from .diagnostics import diagnostics_summary, diagnostics_text, run_diagnostics
 from .git_manager import GitRepositoryManager
 from .logging_setup import install_excepthook, log_worker_error, setup_logging
@@ -490,6 +491,56 @@ class TrainingHubApp(tk.Tk):
                     or entry.model_id.lower() == key:
                 return entry
         return None
+
+    def build_report_context(self):
+        """Assemble everything known about the current training into a report."""
+        from .evaluation import build_eval_report
+        from .report_export import ReportContext
+        from .watchdog import detect_issues
+
+        summary = parse_log(self.training.tail())
+        context = ReportContext(title="Отчёт по обучению — AlterEgo Training Hub")
+        entry = None
+        for candidate in self.model_registry().load():
+            if candidate.id == self.settings.active_model_id:
+                entry = candidate
+                break
+        context.model_info = {
+            "Модель": entry.name if entry else self.settings.active_model_id or "—",
+            "Тип": entry.kind if entry else "—",
+            "Расположение": entry.location if entry else "—",
+            "Команда обучения": self.settings.training_command or "—",
+        }
+        context.metrics_lines = [
+            f"- {key}: {value:g}" for key, value in sorted(summary.last.items())]
+        if summary.trend:
+            context.metrics_lines.append(
+                "- тренды: " + ", ".join(f"{k}={v}"
+                                         for k, v in summary.trend.items()))
+        context.eval_lines = build_eval_report(self.training.tail()).lines()
+        status = self.training.status()
+        context.watchdog_lines = [
+            issue.line() for issue in detect_issues(
+                summary, running=status.running)]
+        context.plan_tasks = list(self.agent_tasks or
+                                  [{"title": t, "status": "pending"}
+                                   for t in self.agent_plan])
+        context.activity_lines = [
+            f"{item.kind}: {item.summary[:120]}"
+            for item in self.activity.recent(15)]
+        report = self.reports.latest()
+        if report is not None and not report.is_empty():
+            if report.score is not None:
+                context.assessment_lines.append(f"Оценка: {report.score:g}/10")
+            for label, items in (("Сильные стороны", report.strengths),
+                                 ("Слабые стороны", report.weaknesses),
+                                 ("Риски", report.risks),
+                                 ("Рекомендации", report.recommendations)):
+                for item in items:
+                    context.assessment_lines.append(f"- ({label}) {item}")
+            if report.reasoning:
+                context.assessment_lines.append(report.reasoning[:1500])
+        return context
 
     # ----------------------------------------------------------- watchdog
     def _start_watchdog(self):
@@ -1071,6 +1122,59 @@ class TrainingHubApp(tk.Tk):
                     "mean_latency_ms": result.mean_latency_ms,
                     "report": format_suite_report(result)}
 
+        def export_report(args):
+            from .report_export import save_report
+
+            root = self.workspace_root()
+            if root is None:
+                return {"ok": False, "error": "Рабочая папка не выбрана."}
+            rel = str(args.get("path") or "reports/report")
+            fmt = str(args.get("format") or "md").lower()
+            try:
+                exported = save_report(Path(root) / rel, self.build_report_context(),
+                                       fmt=fmt)
+            except Exception as exc:
+                return {"ok": False, "error": str(exc)}
+            self.activity.log("report", f"Отчёт сохранён: {exported.path}")
+            return {"ok": True, "path": exported.path, "format": exported.fmt,
+                    "note": exported.note}
+
+        def list_cloud_jobs(_args):
+            from .cloud_queue import CloudJobQueue
+
+            queue = CloudJobQueue(self.model_registry().library_dir)
+            return {"ok": True,
+                    "jobs": [{"id": job.id, "name": job.name,
+                              "command": job.command, "status": job.status,
+                              "pod_id": job.pod_id, "error": job.error,
+                              "line": job.line()}
+                             for job in queue.list()],
+                    "lines": [job.line() for job in queue.list()]}
+
+        def submit_cloud_job(args):
+            from .cloud_queue import CloudJob, CloudJobQueue
+
+            try:
+                key = self.secrets.get("runpod_api_key")
+            except RuntimeError as exc:
+                return {"ok": False, "error": str(exc)}
+            try:
+                job = CloudJob(
+                    name=str(args.get("name") or "задание"),
+                    command=str(args.get("command") or ""),
+                    image=str(args.get("image") or "python:3.11-slim"),
+                    gpu_type=str(args.get("gpu_type") or ""))
+                queue = CloudJobQueue(self.model_registry().library_dir)
+                queue.add(job)
+                client = RunPodClient(key)
+                queued = queue.submit(job.id, client)
+            except Exception as exc:
+                return {"ok": False, "error": str(exc)}
+            self.activity.log("cloud", f"Облачное задание: {queued.line()}")
+            return {"ok": queued.status == "submitted", "job": queued.line(),
+                    "status": queued.status, "pod_id": queued.pod_id,
+                    "error": queued.error}
+
         def spawn_subagent(args):
             if not self.settings.agent_subagents:
                 return {"ok": False, "error": "Подагенты отключены в настройках агента."}
@@ -1135,7 +1239,22 @@ class TrainingHubApp(tk.Tk):
             "quantize_model": quantize_model,
             "benchmark_model": benchmark_model,
             "run_prompt_suite": run_prompt_suite,
+            "export_report": export_report,
+            "list_cloud_jobs": list_cloud_jobs,
+            "submit_cloud_job": submit_cloud_job,
         }
+        if not can(self.settings.access_role, "mutate"):
+            # Guest role: every mutation is refused up-front (read-only agent).
+            def _denied(_args):
+                return {"ok": False,
+                        "error": "Гостевой режим (роль «гость»): действие недоступно."}
+
+            for name in ("start_training", "stop_training",
+                         "set_training_control", "prepare_dataset",
+                         "export_model", "quantize_model", "benchmark_model",
+                         "run_prompt_suite", "export_report",
+                         "submit_cloud_job"):
+                handlers[name] = _denied
         schemas = list(TRAINING_CONTEXT_TOOL_SCHEMAS) + list(MODEL_TOOLS_SCHEMAS) + [
             {"type": "function", "function": {
                 "name": "start_training",
@@ -1155,7 +1274,8 @@ class TrainingHubApp(tk.Tk):
         ]
         mutations = {"start_training", "stop_training", "set_training_control",
                      "prepare_dataset", "export_model", "quantize_model",
-                     "benchmark_model", "run_prompt_suite"}
+                     "benchmark_model", "run_prompt_suite", "export_report",
+                     "submit_cloud_job"}
 
         try:
             manager = ConnectorManager(self.secrets,

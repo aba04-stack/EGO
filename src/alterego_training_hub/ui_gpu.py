@@ -6,7 +6,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from .cloud_gpu import CloudGpuError
-from .ui_common import C, F_BASE, F_SMALL, Collapsible, card, page_header
+from .ui_common import C, F_BASE, F_MONO, F_SMALL, Collapsible, card, page_header
 
 
 class GpuPage(tk.Frame):
@@ -123,6 +123,49 @@ class GpuPage(tk.Frame):
         ttk.Button(pod_buttons, text="Удалить ресурс…", style="Danger.TButton",
                    command=self.terminate_pod).pack(side="left", padx=8)
 
+        # Cloud training job queue
+        jobs = card(self, "Очередь облачных заданий обучения")
+        jobs.pack(fill="x", padx=24, pady=(0, 12))
+        job_form = tk.Frame(jobs, bg=C["panel"])
+        job_form.pack(fill="x")
+        tk.Label(job_form, text="Название", bg=C["panel"],
+                 font=F_BASE).pack(side="left", padx=(0, 6))
+        self.job_name_var = tk.StringVar(value="train-run")
+        tk.Entry(job_form, textvariable=self.job_name_var, width=18, bd=1,
+                 relief="solid", font=F_BASE).pack(side="left", padx=(0, 10))
+        tk.Label(job_form, text="Команда", bg=C["panel"],
+                 font=F_BASE).pack(side="left", padx=(0, 6))
+        self.job_cmd_var = tk.StringVar(value="python train.py")
+        tk.Entry(job_form, textvariable=self.job_cmd_var, width=36, bd=1,
+                 relief="solid", font=F_MONO).pack(side="left", padx=(0, 10),
+                                                   fill="x", expand=True)
+        ttk.Button(job_form, text="В очередь",
+                   command=self.add_cloud_job).pack(side="left")
+
+        job_columns = ("status", "name", "command", "pod")
+        self.job_tree = ttk.Treeview(jobs, columns=job_columns, show="headings",
+                                     height=4)
+        for col, title, width in [
+            ("status", "Статус", 110), ("name", "Название", 180),
+            ("command", "Команда", 320), ("pod", "Pod", 160),
+        ]:
+            self.job_tree.heading(col, text=title)
+            self.job_tree.column(col, width=width, anchor="w")
+        self.job_tree.pack(side="left", fill="x", expand=True, pady=(6, 0))
+        job_scroll = ttk.Scrollbar(jobs, orient="vertical",
+                                   command=self.job_tree.yview)
+        job_scroll.pack(side="right", fill="y", pady=(6, 0))
+        self.job_tree.configure(yscrollcommand=job_scroll.set)
+        job_buttons = tk.Frame(jobs, bg=C["panel"])
+        job_buttons.pack(fill="x", pady=(6, 0))
+        ttk.Button(job_buttons, text="Обновить очередь",
+                   command=self.refresh_jobs).pack(side="left")
+        ttk.Button(job_buttons, text="Отправить в RunPod…",
+                   command=self.submit_selected_job).pack(side="left", padx=8)
+        ttk.Button(job_buttons, text="Отменить", style="Danger.TButton",
+                   command=self.cancel_selected_job).pack(side="left")
+        self.refresh_jobs()
+
         self.gpu_notes_var = tk.StringVar(
             value="Подключите ключ RunPod и обновите каталог. Внешнее обучение "
                   "моделей запускается отдельно на странице «Обучение».")
@@ -136,6 +179,80 @@ class GpuPage(tk.Frame):
             return "Ключ сохранён" if self.app.secrets.get(name) else "Ключ не сохранён"
         except Exception:
             return "Хранилище ключей недоступно"
+
+    # ------------------------------------------------------- cloud job queue
+    def refresh_jobs(self):
+        from .cloud_queue import CloudJobQueue
+
+        queue = CloudJobQueue(self.app.model_registry().library_dir)
+        self.job_tree.delete(*self.job_tree.get_children())
+        self._jobs = {}
+        for job in queue.list():
+            iid = self.job_tree.insert("", "end", values=(
+                job.status, job.name, job.command[:60], job.pod_id or "—"))
+            self._jobs[iid] = job
+
+    def add_cloud_job(self):
+        from .cloud_queue import CloudJob, CloudJobQueue
+
+        try:
+            job = CloudJob(name=self.job_name_var.get().strip(),
+                           command=self.job_cmd_var.get().strip())
+            CloudJobQueue(self.app.model_registry().library_dir).add(job)
+        except Exception as exc:
+            messagebox.showerror("Облачные задания", str(exc), parent=self)
+            return
+        self.refresh_jobs()
+        self.app.activity.log("cloud", f"Задание добавлено в очередь: {job.name}")
+
+    def _selected_job(self):
+        selection = self.job_tree.selection()
+        return self._jobs.get(selection[0]) if selection else None
+
+    def submit_selected_job(self):
+        from .cloud_queue import CloudJobQueue
+
+        job = self._selected_job()
+        if job is None:
+            messagebox.showinfo("Облачные задания", "Выберите задание.",
+                                parent=self)
+            return
+        if not messagebox.askyesno(
+            "RunPod",
+            f"Отправить «{job.name}» в RunPod? Будет создан платный GPU-ресурс.\n"
+            "Лимит цены и ключ задаются в секции RunPod API.", parent=self):
+            return
+        try:
+            key = self.app.secrets.get("runpod_api_key")
+        except RuntimeError as exc:
+            messagebox.showerror("RunPod", str(exc), parent=self)
+            return
+        from .cloud_gpu import RunPodClient
+
+        queue = CloudJobQueue(self.app.model_registry().library_dir)
+        updated = queue.submit(job.id, RunPodClient(key))
+        self.refresh_jobs()
+        self.app.activity.log("cloud", f"Отправка задания: {updated.line()}")
+        if updated.error:
+            messagebox.showerror("Облачные задания", updated.error, parent=self)
+        else:
+            messagebox.showinfo("Облачные задания",
+                                f"Создан pod: {updated.pod_id}", parent=self)
+
+    def cancel_selected_job(self):
+        from .cloud_queue import CloudJobQueue
+
+        job = self._selected_job()
+        if job is None:
+            messagebox.showinfo("Облачные задания", "Выберите задание.",
+                                parent=self)
+            return
+        try:
+            CloudJobQueue(self.app.model_registry().library_dir).cancel(job.id)
+        except Exception as exc:
+            messagebox.showerror("Облачные задания", str(exc), parent=self)
+            return
+        self.refresh_jobs()
 
     def _persist_gpu_settings(self):
         try:

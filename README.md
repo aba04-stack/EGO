@@ -155,6 +155,8 @@ While training runs, a **watchdog** monitors the log: loss spikes, a rising loss
 
 **Model tooling**: export models to **ONNX/GGUF** with artifact verification (GGUF magic, size), **quantize** with Q8_0→Q3_K_M/INT8 recipes (projected size and quality impact, post-checks), **benchmark** models (ms/run, tok/s, ranking table in `benchmarks.json`), and run **batch prompt suites** (5 graded prompts out of the box, custom JSON suites supported). All of it is available from the «Модели» page buttons and as agent tools (`export_model`, `quantize_model`, `benchmark_model`, `run_prompt_suite`).
 
+**Cloud & collaboration**: a **RunPod job queue** for cloud training (submit with cost confirmation, live pod tracking), **full report export** (Markdown or print-ready HTML → PDF) with metrics/eval/watchdog/plan/activity, **session sharing** (Markdown/HTML/JSON export + JSON import), and **access roles** (owner / editor / guest — the guest role turns the agent and every tool strictly read-only).
+
 Then use the **Наставник** panel on the right: talk to the mentor, ask it to read your project, find bugs, run tests, or fix code. It can only touch the folder you selected on the **Рабочая папка** page. In *Ассистент* mode every file change or command execution is shown for your confirmation before it happens; in *Режим агента* it acts towards your goal without step-by-step confirmations — review its work via the activity trail and backups (use Git to diff and roll back).
 
 Only use mentor outputs for model development if the selected API/model terms permit that use. Do not send private training data without checking the provider's data handling and terms.

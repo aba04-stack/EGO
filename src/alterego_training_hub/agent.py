@@ -360,6 +360,51 @@ MODEL_TOOLS_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "export_report",
+            "description": "Собрать полный отчёт (модель, метрики, eval, watchdog, "
+                           "план, журнал) и сохранить в Markdown/HTML. Мутация.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Куда сохранить (в рабочей папке), "
+                                                             "по умолчанию reports/report"},
+                    "format": {"type": "string", "enum": ["md", "html", "pdf"], "default": "md"},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_cloud_jobs",
+            "description": "Показать очередь облачных заданий обучения "
+                           "(статусы, pod, ошибки). Только чтение.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "submit_cloud_job",
+            "description": "Создать облачное задание (команда обучения) и поставить "
+                           "в очередь RunPod. Мутация: может списывать деньги — "
+                           "требует подтверждения.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Название задания"},
+                    "command": {"type": "string", "description": "Команда обучения на машине"},
+                    "image": {"type": "string", "description": "Docker-образ (по умолчанию python:3.11-slim)"},
+                    "gpu_type": {"type": "string", "description": "Тип GPU (пусто = по умолчанию)"},
+                },
+                "required": ["name", "command"],
+            },
+        },
+    },
 ]
 
 
@@ -567,12 +612,14 @@ class MentorAgent:
         transcript: list[dict[str, Any]] | None = None,
         verify: bool = True,
         system_extra: str = "",
+        readonly: bool = False,
     ) -> MentorReply:
         """Autonomous turn: the agent plans, acts, then verifies its own work.
 
         When ``verify`` is on and the agent mutated anything, one extra
         read-only verification pass reviews the result and its verdict is
-        appended to the final report.
+        appended to the final report. ``readonly`` forces read-only tools
+        (guest access mode).
         """
         if not isinstance(goal, str) or not goal.strip():
             raise ValueError("goal must not be empty")
@@ -586,6 +633,7 @@ class MentorAgent:
             system_prompt=AGENT_GOAL_SYSTEM_PROMPT,
             transcript=transcript,
             system_extra=system_extra,
+            readonly=readonly,
         )
         if not verify or not self._used_mutation:
             return reply
@@ -740,6 +788,9 @@ def _describe(call: ToolCall) -> str:
         "quantize_model": "Квантизация модели",
         "benchmark_model": "Бенчмарк скорости модели",
         "run_prompt_suite": "Пакетное тестирование промптов",
+        "export_report": "Экспорт полного отчёта (Markdown/HTML)",
+        "list_cloud_jobs": "Очередь облачных заданий",
+        "submit_cloud_job": "Поставить задание в облако (RunPod)",
     }
     base = descriptions.get(call.name, call.name)
     if call.name == "send_email":

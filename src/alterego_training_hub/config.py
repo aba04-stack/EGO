@@ -44,6 +44,7 @@ class AppSettings:
     agent_reasoning: str = "medium"  # off | low | medium | high
     agent_system_extra: str = ""
     agent_profile: str = "full"  # preset id from agent_profiles
+    access_role: str = "owner"  # owner | editor | viewer (guest, read-only)
     gmail_from: str = ""
     training_command: str = "python -m pytest -q"
     runpod_cloud: str = "SECURE"

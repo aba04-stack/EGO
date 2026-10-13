@@ -37,6 +37,12 @@ class AppSettings:
     active_model_id: str = ""
     chat_autonomy: str = "assist"  # "assist" | "agent"
     ui_theme: str = "light"  # "light" | "dark"
+    llm_provider: str = "openai"  # id from llm_providers.PROVIDERS
+    agent_max_steps: int = 20
+    agent_verify: bool = True
+    agent_subagents: bool = True
+    agent_reasoning: str = "medium"  # off | low | medium | high
+    agent_system_extra: str = ""
     gmail_from: str = ""
     training_command: str = "python -m pytest -q"
     runpod_cloud: str = "SECURE"

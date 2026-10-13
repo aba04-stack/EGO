@@ -80,7 +80,7 @@ The **Диагностика** section on the settings page checks the environme
 - Docked chat panel on the right with persistent dialogs (saved per user, no secrets inside).
 - The agent can inspect the selected workspace: list/read/search files, edit files, and run commands. Assist mode requires explicit confirmation for every mutating action; **agent mode** performs the whole goal freely (plan → act → verify), while still backing up every edit and logging every call.
 - Give the agent a goal ("запусти тесты, найди падающий, почини и проверь") and it loops through tools until the goal is done: it can start/stop training, read metrics and logs, search GitHub and Hugging Face, and send e-mail notifications.
-- Works with any OpenAI-compatible provider that supports `tools`; a plain-text ` ```tool ` fallback protocol is used when function calling is unavailable.
+- Works with popular providers through one agent: **OpenAI (GPT/Codex)**, **Anthropic (Claude)**, **Google (Gemini)**, **OpenRouter**, **Ollama** (local models), DeepSeek, Groq, Mistral, or any OpenAI-compatible server; native function calling for Claude and Gemini, with a plain-text ` ```tool ` fallback protocol for models without it.
 - Quick commands: model assessment, training progress, log error triage. Structured assessments are saved to the model dashboard automatically.
 - The mentor participates in training: send it a training log (or let the app do it automatically on failure) and it will find errors, read the code, and propose fixes. Every edit is backed up before it is applied.
 
@@ -116,7 +116,7 @@ The **Диагностика** section on the settings page checks the environme
 - Python 3.10 or newer for running from source.
 - Git for Windows and a working credential helper for private repositories.
 - A RunPod API key only if using RunPod features.
-- An API key and model ID for an OpenAI-compatible mentor provider.
+- An API key and model ID for the chosen AI provider (OpenAI, Anthropic, Gemini, OpenRouter, Ollama, …).
 - An SSH-reachable server is optional (the `paramiko` package is installed with the app).
 
 ## Run from source
@@ -145,7 +145,9 @@ The build script creates `dist\AlterEgoTrainingHub.exe`. Build and test it on Wi
 
 ## Connect a mentor
 
-In the **Настройки** page, enter the provider's HTTPS OpenAI-compatible base URL (usually ending in `/v1`), fetch the model list or type the exact model ID, and save its key. Saving the key uses the operating-system credential store. The connection-test button asks for confirmation before sending (it may consume API credits).
+In the **Настройки** page pick the AI provider (OpenAI/Codex, Claude, Gemini, OpenRouter, Ollama, DeepSeek, Groq, Mistral or a custom OpenAI-compatible server) — the base URL and model hints fill in automatically. Fetch the model list or type the exact model ID, and save its key. Saving the key uses the operating-system credential store. The connection-test button asks for confirmation before sending (it may consume API credits).
+
+The **ИИ-агент** section configures the agent itself: max tool steps, reasoning effort (for OpenAI/Codex), mandatory self-verification of results, subagents for narrow subtasks, and extra system-prompt instructions. The agent sees the full picture of the model and its training (`get_model_info`, `get_metrics_history`, `list_model_catalog`), can correct a **running** training between epochs (`set_training_control`: learning rate, epoch limit, early stopping, gradient clipping, stop), publishes its working plan (`set_plan`) and spawns read-only subagents (`spawn_subagent`). In agent mode every change is verified by an independent read-only review pass whose PASSED/FAILED verdict is appended to the report.
 
 Then use the **Наставник** panel on the right: talk to the mentor, ask it to read your project, find bugs, run tests, or fix code. It can only touch the folder you selected on the **Рабочая папка** page. In *Ассистент* mode every file change or command execution is shown for your confirmation before it happens; in *Режим агента* it acts towards your goal without step-by-step confirmations — review its work via the activity trail and backups (use Git to diff and roll back).
 

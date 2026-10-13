@@ -285,7 +285,7 @@ class ChatPage(tk.Frame):
             extra_schemas=extra_schemas,
             extra_mutations=extra_mutations,
             autonomy=autonomy,
-            max_steps=14 if autonomy == "agent" else 8,
+            max_steps=max(4, min(int(getattr(settings, "agent_max_steps", 20) or 20), 40)),
         )
 
         self._busy = True
@@ -322,9 +322,11 @@ class ChatPage(tk.Frame):
                 temperature=float(settings.mentor_temperature),
                 transcript=transcript,
             )
+            system_extra = str(getattr(settings, "agent_system_extra", "") or "")
             if autonomy == "agent":
-                return agent.run_goal(text, **common)
-            return agent.run_turn(history, **common)
+                return agent.run_goal(text, **common, system_extra=system_extra,
+                                      verify=bool(getattr(settings, "agent_verify", True)))
+            return agent.run_turn(history, **common, system_extra=system_extra)
 
         self.app.start_async("Ответ наставника", work, done, failed)
 

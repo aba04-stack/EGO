@@ -1048,3 +1048,60 @@ def test_theme_toggle_and_split_editor(fake_ui, tmp_path):
     editor._apply_highlight()
     editor.toggle_split()
     assert editor.split_visible is False
+
+
+def test_agent_settings_and_model_tools(fake_ui, tmp_path):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    settings_page = app.pages["settings"]
+
+    # Agent settings are editable and persist.
+    settings_page.agent_steps_var.set("12")
+    settings_page.agent_verify_var.set(False)
+    settings_page.agent_subagents_var.set(False)
+    settings_page.agent_reasoning_var.set("high")
+    settings_page.agent_extra_text.insert("1.0", "Пиши по-русски.")
+    settings_page.save_agent()
+    assert app.settings.agent_max_steps == 12
+    assert app.settings.agent_verify is False
+    assert app.settings.agent_subagents is False
+    assert app.settings.agent_reasoning == "high"
+    assert "Пиши по-русски." in app.settings.agent_system_extra
+
+    # Provider picker fills defaults and stores the canonical id.
+    settings_page.provider_var.set("Anthropic (Claude)")
+    settings_page._on_provider_selected()
+    assert "anthropic" in settings_page.mentor_vars["mentor_base_url"].get()
+    settings_page._collect_mentor()
+    assert app.settings.llm_provider == "anthropic"
+    assert app.settings.mentor_provider == "Anthropic (Claude)"
+
+    # New agent tools are wired: model info, hot control, plan.
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    app.settings.workspace_path = str(workspace)
+    app.save_settings()
+    tools, schemas, mutations = app.agent_extra_tools()
+    for name in ("get_model_info", "list_model_catalog", "get_metrics_history",
+                 "get_training_control", "set_training_control", "set_plan",
+                 "spawn_subagent"):
+        assert name in tools
+        assert any(schema["function"]["name"] == name for schema in schemas)
+    assert "set_training_control" in mutations
+
+    result = tools["set_training_control"]({"lr": 0.1, "note": "тест"})
+    assert result["ok"] is True
+    assert (workspace / "control.json").exists()
+    result = tools["get_training_control"]({})
+    assert result["ok"] and result["control"]["lr"] == 0.1
+    result = tools["get_model_info"]({})
+    assert result["ok"] and "metrics" in result and "training" in result
+    result = tools["get_metrics_history"]({})
+    assert result["ok"] and "series" in result
+    result = tools["list_model_catalog"]({})
+    assert result["ok"] is True
+    result = tools["set_plan"]({"steps": ["шаг 1", "шаг 2"]})
+    assert result["ok"] and app.agent_plan == ["шаг 1", "шаг 2"]
+    # Subagents are disabled in settings → tool refuses politely.
+    result = tools["spawn_subagent"]({"goal": "проверка"})
+    assert result["ok"] is False

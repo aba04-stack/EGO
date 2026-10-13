@@ -35,17 +35,27 @@ class SettingsPage(tk.Frame):
         mentor_card.columnconfigure(1, weight=1)
 
         self.mentor_vars: dict[str, tk.StringVar] = {}
-        fields = [
-            ("Название провайдера", "mentor_provider", self.app.settings.mentor_provider),
-            ("Базовый HTTPS URL", "mentor_base_url", self.app.settings.mentor_base_url),
-        ]
-        for row, (label, key, value) in enumerate(fields):
-            tk.Label(mentor_card, text=label, bg=C["panel"], font=F_BASE).grid(
-                row=row, column=0, sticky="w", padx=(0, 10), pady=5)
-            var = tk.StringVar(value=value)
-            self.mentor_vars[key] = var
-            tk.Entry(mentor_card, textvariable=var, bd=1, relief="solid",
-                     font=F_BASE).grid(row=row, column=1, sticky="ew", pady=5)
+        # Provider picker: id -> label from the shared registry.
+        from .llm_providers import provider_info, provider_labels
+
+        tk.Label(mentor_card, text="Провайдер ИИ", bg=C["panel"],
+                 font=F_BASE).grid(row=0, column=0, sticky="w", padx=(0, 10), pady=5)
+        current_label = provider_info(self.app.settings.llm_provider).label
+        self.provider_var = tk.StringVar(value=current_label)
+        self.provider_combo = ttk.Combobox(
+            mentor_card, textvariable=self.provider_var,
+            values=provider_labels(), state="readonly", font=F_BASE)
+        self.provider_combo.grid(row=0, column=1, sticky="ew", pady=5)
+        self.provider_combo.bind("<<ComboboxSelected>>", self._on_provider_selected)
+
+        tk.Label(mentor_card, text="Базовый URL", bg=C["panel"],
+                 font=F_BASE).grid(row=1, column=0, sticky="w", padx=(0, 10), pady=5)
+        base_value = self.app.settings.mentor_base_url \
+            or provider_info(self.app.settings.llm_provider).base_url
+        self.mentor_vars["mentor_base_url"] = tk.StringVar(value=base_value)
+        tk.Entry(mentor_card, textvariable=self.mentor_vars["mentor_base_url"],
+                 bd=1, relief="solid", font=F_BASE).grid(
+            row=1, column=1, sticky="ew", pady=5)
 
         tk.Label(mentor_card, text="ID модели", bg=C["panel"], font=F_BASE).grid(
             row=2, column=0, sticky="w", padx=(0, 10), pady=5)
@@ -90,6 +100,60 @@ class SettingsPage(tk.Frame):
         ttk.Button(btn_row, text="Удалить сохранённый ключ",
                    style="Danger.TButton", command=self.delete_mentor_key).pack(side="left",
                                                                                 padx=8)
+
+        # Agent behaviour
+        agent_section = Collapsible(self, "ИИ-агент: точность и возможности")
+        agent_section.pack(fill="x", padx=24, pady=(0, 12))
+        agent_section.set_hint("свернуть/развернуть")
+        agent_card = agent_section.body
+        agent_card.columnconfigure(1, weight=1)
+
+        agent_row = tk.Frame(agent_card, bg=C["panel"])
+        agent_row.pack(fill="x")
+        tk.Label(agent_row, text="Максимум шагов", bg=C["panel"],
+                 font=F_BASE).pack(side="left", padx=(0, 6))
+        self.agent_steps_var = tk.StringVar(
+            value=str(self.app.settings.agent_max_steps))
+        tk.Entry(agent_row, textvariable=self.agent_steps_var, width=5,
+                 bd=1, relief="solid", font=F_BASE).pack(side="left", padx=(0, 16))
+        tk.Label(agent_row, text="Уровень рассуждений", bg=C["panel"],
+                 font=F_BASE).pack(side="left", padx=(0, 6))
+        self.agent_reasoning_var = tk.StringVar(
+            value=self.app.settings.agent_reasoning)
+        ttk.Combobox(agent_row, textvariable=self.agent_reasoning_var,
+                     values=("off", "low", "medium", "high"),
+                     state="readonly", width=8).pack(side="left", padx=(0, 16))
+        self.agent_verify_var = tk.BooleanVar(
+            value=bool(self.app.settings.agent_verify))
+        tk.Checkbutton(agent_row, text="Самопроверка результата",
+                       variable=self.agent_verify_var, bg=C["panel"],
+                       font=F_BASE).pack(side="left", padx=(0, 10))
+        self.agent_subagents_var = tk.BooleanVar(
+            value=bool(self.app.settings.agent_subagents))
+        tk.Checkbutton(agent_row, text="Подагенты",
+                       variable=self.agent_subagents_var, bg=C["panel"],
+                       font=F_BASE).pack(side="left")
+
+        tk.Label(agent_card,
+                 text="Дополнительные инструкции для агента (системный промпт):",
+                 bg=C["panel"], fg=C["muted"], font=F_SMALL).pack(anchor="w",
+                                                                  pady=(6, 0))
+        self.agent_extra_text = tk.Text(agent_card, height=3, wrap="word",
+                                        bd=1, relief="solid", font=F_MONO)
+        self.agent_extra_text.pack(fill="x", pady=(2, 6))
+        if self.app.settings.agent_system_extra:
+            self.agent_extra_text.insert("1.0", self.app.settings.agent_system_extra)
+        ttk.Button(agent_card, text="Сохранить настройки агента",
+                   style="Accent.TButton", command=self.save_agent).pack(
+            anchor="w", pady=(2, 4))
+        tk.Label(agent_card,
+                 text="Агент видит модель, метрики и обучение (get_model_info, "
+                      "get_metrics_history), корректирует обучение на лету "
+                      "(set_training_control), планирует (set_plan) и запускает "
+                      "подагентов (spawn_subagent). Провайдеры: OpenAI/Codex, "
+                      "Claude, Gemini, OpenRouter, Ollama, DeepSeek, Groq, Mistral.",
+                 bg=C["panel"], fg=C["muted"], font=F_SMALL, wraplength=860,
+                 justify="left").pack(anchor="w", pady=(2, 0))
 
         # Keys for cloud
         keys_section = Collapsible(self, "Ключи облачных сервисов")
@@ -227,10 +291,24 @@ class SettingsPage(tk.Frame):
                               if current_theme() == "dark" else "светлая") + ".")
 
     # ------------------------------------------------------------- handlers
+    def _on_provider_selected(self, _event=None):
+        from .llm_providers import provider_id_by_label, provider_info
+
+        info = provider_info(provider_id_by_label(self.provider_var.get()))
+        if info.base_url:
+            self.mentor_vars["mentor_base_url"].set(info.base_url)
+        if info.model_hint and not self.model_var.get().strip():
+            self.model_var.set(info.model_hint)
+
     def _collect_mentor(self):
-        self.app.settings.mentor_provider = (
-            self.mentor_vars["mentor_provider"].get().strip() or "OpenAI-compatible")
-        self.app.settings.mentor_base_url = self.mentor_vars["mentor_base_url"].get().strip()
+        from .llm_providers import provider_id_by_label, provider_info
+
+        provider_id = provider_id_by_label(self.provider_var.get().strip())
+        info = provider_info(provider_id)
+        self.app.settings.llm_provider = info.id
+        self.app.settings.mentor_provider = info.label
+        self.app.settings.mentor_base_url = (
+            self.mentor_vars["mentor_base_url"].get().strip() or info.base_url)
         self.app.settings.mentor_model = self.model_var.get().strip()
         try:
             temperature = float(self.temp_var.get())
@@ -261,6 +339,27 @@ class SettingsPage(tk.Frame):
             )
         except Exception as exc:
             messagebox.showerror("ИИ-наставник", str(exc), parent=self)
+
+    def save_agent(self):
+        try:
+            steps = int(self.agent_steps_var.get())
+            if not 4 <= steps <= 40:
+                raise ValueError("Максимум шагов: от 4 до 40.")
+        except ValueError as exc:
+            messagebox.showerror("ИИ-агент", str(exc) or "Шаги должны быть числом.",
+                                 parent=self)
+            return
+        reasoning = self.agent_reasoning_var.get().strip().lower()
+        if reasoning not in {"off", "low", "medium", "high"}:
+            reasoning = "medium"
+        self.app.settings.agent_max_steps = steps
+        self.app.settings.agent_reasoning = reasoning
+        self.app.settings.agent_verify = bool(self.agent_verify_var.get())
+        self.app.settings.agent_subagents = bool(self.agent_subagents_var.get())
+        self.app.settings.agent_system_extra = self.agent_extra_text.get(
+            "1.0", "end").strip()[:2000]
+        self.app.save_settings()
+        messagebox.showinfo("ИИ-агент", "Настройки агента сохранены.", parent=self)
 
     def fetch_models(self):
         try:

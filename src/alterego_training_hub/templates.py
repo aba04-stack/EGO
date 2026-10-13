@@ -73,6 +73,30 @@ ROOT = Path(__file__).resolve().parent
 CONFIG = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
 
 
+def read_control() -> dict:
+    """Hot parameters from the mentor/user, applied between epochs."""
+    path = ROOT / "control.json"
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def consume_stop(ctrl: dict) -> None:
+    """Apply a stop request once: clear the flag so the next run starts clean."""
+    if ctrl.get("stop"):
+        try:
+            updated = dict(ctrl)
+            updated["stop"] = False
+            (ROOT / "control.json").write_text(
+                json.dumps(updated, ensure_ascii=False), encoding="utf-8")
+        except Exception:
+            pass
+
+
 def main() -> int:
     random.seed(int(CONFIG.get("seed", 42)))
     lr = float(CONFIG.get("lr", 0.05))
@@ -86,7 +110,33 @@ def main() -> int:
     ckpt_dir.mkdir(exist_ok=True)
     print(f"config: lr={lr} epochs={epochs} n={n}")
     start = time.time()
-    for epoch in range(1, epochs + 1):
+    best_loss = float("inf")
+    stale_epochs = 0
+    epoch = 1
+    while epoch <= epochs:
+        ctrl = read_control()
+        if ctrl.get("stop"):
+            consume_stop(ctrl)
+            print(f"training stopped by control.json: {ctrl.get('note', '')}")
+            break
+        if "lr" in ctrl:
+            try:
+                lr = float(ctrl["lr"])
+            except (TypeError, ValueError):
+                pass
+        if "max_epochs" in ctrl:
+            try:
+                epochs = min(epochs, max(1, int(ctrl["max_epochs"])))
+            except (TypeError, ValueError):
+                pass
+        try:
+            patience = max(0, int(ctrl.get("early_stop_patience", 0) or 0))
+        except (TypeError, ValueError):
+            patience = 0
+        try:
+            grad_clip = max(0.0, float(ctrl.get("grad_clip", 0.0) or 0.0))
+        except (TypeError, ValueError):
+            grad_clip = 0.0
         grad_w = grad_b = loss = 0.0
         for x, y in zip(xs, ys):
             pred = w * x + b
@@ -94,11 +144,24 @@ def main() -> int:
             loss += err * err
             grad_w += 2 * err * x
             grad_b += 2 * err
+        if grad_clip > 0:
+            scale = min(1.0, grad_clip / (abs(grad_w) + abs(grad_b) + 1e-12))
+            grad_w *= scale
+            grad_b *= scale
         w -= lr * grad_w / n
         b -= lr * grad_b / n
         loss = loss / n
         acc = max(0.0, 1.0 - loss / 4.0)
         print(f"epoch {epoch}/{epochs} loss={loss:.4f} acc={acc:.4f} lr={lr}")
+        if patience > 0:
+            if loss < best_loss - 1e-6:
+                best_loss, stale_epochs = loss, 0
+            else:
+                stale_epochs += 1
+                if stale_epochs >= patience:
+                    print(f"early stop: no improvement for {patience} epochs")
+                    break
+        epoch += 1
     (ckpt_dir / "model.json").write_text(
         json.dumps({"w": w, "b": b, "config": CONFIG}), encoding="utf-8")
     print(f"checkpoint saved: checkpoints/model.json ({time.time() - start:.1f}s)")

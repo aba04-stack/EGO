@@ -1,6 +1,7 @@
 """Tkinter IDE shell: sidebar, center workspace, bottom terminal, right chat."""
 from __future__ import annotations
 
+import json
 import queue
 import tkinter as tk
 from concurrent.futures import ThreadPoolExecutor
@@ -9,7 +10,7 @@ from tkinter import messagebox
 
 from . import ui_common
 from .activity import ActivityLog
-from .agent import TRAINING_CONTEXT_TOOL_SCHEMAS
+from .agent import MODEL_TOOLS_SCHEMAS, TRAINING_CONTEXT_TOOL_SCHEMAS
 from .cloud_gpu import RunPodClient
 from .config import AppSettings, SecretStore, app_data_dir
 from .connectors import ConnectorManager
@@ -48,6 +49,7 @@ class TrainingHubApp(tk.Tk):
         self.reports = ReportStore()
         self.servers = ServerStore()
         self.events: queue.Queue = queue.Queue()
+        self.agent_plan: list[str] = []
         self.executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="alterego-hub")
         self._closing = False
         self._nav_buttons: dict[str, tk.Label] = {}
@@ -515,7 +517,15 @@ class TrainingHubApp(tk.Tk):
             raise MentorError(
                 "Настройте провайдера, модель и API-ключ на странице «Настройки»."
             )
-        return ApiMentor(base_url, model, key)
+        from .mentor import build_mentor
+
+        return build_mentor(
+            provider=self.settings.llm_provider,
+            base_url=base_url,
+            model=model,
+            api_key=key,
+            reasoning_effort=self.settings.agent_reasoning,
+        )
 
     def model_registry(self) -> ModelRegistry:
         raw = (self.settings.model_library_path or "").strip()
@@ -606,6 +616,160 @@ class TrainingHubApp(tk.Tk):
             return {"ok": True, "summary": diagnostics_summary(results),
                     "report": diagnostics_text(results), "checks": results}
 
+        def get_model_info(_args):
+            from .training import read_control as read_hot_control
+
+            root = self.workspace_root()
+            entry = None
+            try:
+                for candidate in self.model_registry().load():
+                    if candidate.id == self.settings.active_model_id:
+                        entry = candidate
+                        break
+            except Exception:  # noqa: BLE001
+                entry = None
+            config_data: object = None
+            if root is not None:
+                config_file = Path(root) / "config.json"
+                if config_file.is_file():
+                    try:
+                        config_data = json.loads(
+                            config_file.read_text(encoding="utf-8"))
+                    except Exception:  # noqa: BLE001
+                        config_data = config_file.read_text(
+                            encoding="utf-8", errors="replace")[:1500]
+            status = self.training.status()
+            summary = parse_log(self.training.tail())
+            return {
+                "ok": True,
+                "model": None if entry is None else {
+                    "id": entry.id, "name": entry.name, "kind": entry.kind,
+                    "location": entry.location, "model_id": entry.model_id,
+                    "notes": entry.notes,
+                },
+                "project_config": config_data,
+                "training_control": (read_hot_control(root)
+                                     if root is not None else {}),
+                "training": {"running": status.running,
+                             "command": status.command,
+                             "returncode": status.returncode},
+                "metrics": {"last": summary.last, "best": summary.best,
+                            "trend": summary.trend,
+                            "anomalies": summary.anomalies,
+                            "epoch": summary.epoch_current,
+                            "epochs_total": summary.epochs_total},
+            }
+
+        def list_model_catalog(_args):
+            try:
+                entries = self.model_registry().load()
+            except Exception as exc:  # noqa: BLE001
+                return {"ok": False, "error": str(exc)}
+            return {"ok": True, "models": [
+                {"id": entry.id, "name": entry.name, "kind": entry.kind,
+                 "location": entry.location, "model_id": entry.model_id,
+                 "notes": entry.notes}
+                for entry in entries
+            ]}
+
+        def get_metrics_history(args):
+            raw_keys = args.get("keys") or []
+            keys = [str(key) for key in raw_keys][:8] if isinstance(
+                raw_keys, list) else []
+            try:
+                limit = max(1, min(int(args.get("limit", 200)), 1000))
+            except (TypeError, ValueError):
+                limit = 200
+            summary = parse_log(self.training.tail())
+            wanted = keys or sorted({
+                key for point in summary.points for key in point.values})
+            series = {
+                key: summary.series(key)[-limit:] for key in wanted
+            }
+            return {"ok": True, "series": series,
+                    "epochs": [point.epoch for point in summary.points[-limit:]],
+                    "best": summary.best, "trend": summary.trend,
+                    "anomalies": summary.anomalies}
+
+        def get_training_control(_args):
+            root = self.workspace_root()
+            if root is None:
+                return {"ok": False, "error": "Рабочая папка не выбрана."}
+            from .training import CONTROL_KEYS, read_control as read_hot_control
+
+            return {"ok": True, "control": read_hot_control(root),
+                    "keys": list(CONTROL_KEYS)}
+
+        def set_training_control(args):
+            root = self.workspace_root()
+            if root is None:
+                return {"ok": False, "error": "Рабочая папка не выбрана."}
+            from .training import write_control
+
+            params = {key: value for key, value in (args or {}).items()
+                      if value is not None}
+            try:
+                current = write_control(root, params)
+            except Exception as exc:
+                return {"ok": False, "error": str(exc)}
+            self.activity.log(
+                "training",
+                "Агент скорректировал обучение: "
+                + ", ".join(f"{key}={value}" for key, value in params.items()),
+            )
+            return {"ok": True, "control": current,
+                    "note": "Изменения применяются со следующей эпохи обучения."}
+
+        def set_plan(args):
+            steps = args.get("steps") or []
+            if not isinstance(steps, list) or not steps:
+                return {"ok": False, "error": "План должен содержать шаги."}
+            clean = [str(step).strip()[:200] for step in steps if str(step).strip()][:12]
+            self.agent_plan = clean
+            self.activity.log("plan", "План агента:\n- " + "\n- ".join(clean))
+            return {"ok": True, "steps": clean}
+
+        def spawn_subagent(args):
+            if not self.settings.agent_subagents:
+                return {"ok": False, "error": "Подагенты отключены в настройках агента."}
+            goal = str(args.get("goal") or "").strip()
+            if not goal:
+                return {"ok": False, "error": "Укажите подзадачу (goal)."}
+            try:
+                steps = max(2, min(int(args.get("max_steps", 6)), 10))
+            except (TypeError, ValueError):
+                steps = 6
+            try:
+                from .agent import MentorAgent, MODEL_TOOLS_SCHEMAS as _MTS
+                from .agent import TRAINING_CONTEXT_TOOL_SCHEMAS as _TCS
+                from .tools import WorkspaceTools
+
+                workspace = None
+                root = self.workspace_root()
+                if root is not None:
+                    workspace = WorkspaceTools(root)
+                mentor = self.mentor_client()
+                subagent = MentorAgent(
+                    mentor, workspace,
+                    max_steps=steps,
+                    extra_tools={
+                        "get_training_status": get_training_status,
+                        "read_training_log": read_training_log,
+                        "get_run_history": get_run_history,
+                        "get_model_info": get_model_info,
+                        "list_model_catalog": list_model_catalog,
+                        "get_metrics_history": get_metrics_history,
+                        "get_training_control": get_training_control,
+                    },
+                    extra_schemas=_TCS + _MTS,
+                    extra_mutations={"set_training_control", "set_plan"},
+                    autonomy="assist",
+                )
+                reply = subagent.run_goal(goal, max_tokens=900, verify=False)
+            except Exception as exc:
+                return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+            return {"ok": True, "report": reply.text[:4000], "steps": steps}
+
         handlers = {
             "get_training_status": get_training_status,
             "read_training_log": read_training_log,
@@ -613,8 +777,15 @@ class TrainingHubApp(tk.Tk):
             "start_training": start_training,
             "stop_training": stop_training,
             "run_diagnostics": diagnostics,
+            "get_model_info": get_model_info,
+            "list_model_catalog": list_model_catalog,
+            "get_metrics_history": get_metrics_history,
+            "get_training_control": get_training_control,
+            "set_training_control": set_training_control,
+            "set_plan": set_plan,
+            "spawn_subagent": spawn_subagent,
         }
-        schemas = list(TRAINING_CONTEXT_TOOL_SCHEMAS) + [
+        schemas = list(TRAINING_CONTEXT_TOOL_SCHEMAS) + list(MODEL_TOOLS_SCHEMAS) + [
             {"type": "function", "function": {
                 "name": "start_training",
                 "description": "Запустить обучение в рабочей папке (командой из настроек "
@@ -631,7 +802,7 @@ class TrainingHubApp(tk.Tk):
                                "рабочая папка, диск, настройки наставника.",
                 "parameters": {"type": "object", "properties": {}, "required": []}}},
         ]
-        mutations = {"start_training", "stop_training"}
+        mutations = {"start_training", "stop_training", "set_training_control"}
 
         try:
             manager = ConnectorManager(self.secrets,

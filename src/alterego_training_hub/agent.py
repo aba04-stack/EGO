@@ -22,17 +22,34 @@ DEFAULT_AGENT_SYSTEM_PROMPT = (
 
 AGENT_GOAL_SYSTEM_PROMPT = (
     "You are an autonomous engineering agent. Work towards the user's goal "
-    "without waiting for step-by-step instructions: plan, use tools to inspect "
-    "the workspace, make changes, and verify results with commands or tests. "
+    "without waiting for step-by-step instructions. Precision matters more "
+    "than speed: act like a jeweller. "
+    "Protocol: (1) first inspect what exists (read the relevant files/metrics "
+    "before changing anything) and call set_plan with a short checklist of "
+    "steps; (2) execute the smallest correct changes, updating the plan as you "
+    "go; (3) verify every change (re-read the file, run tests or a short "
+    "command, compare metrics) before moving on; (4) if something is wrong in "
+    "the model, its config or the running training, fix it with the available "
+    "tools (including hot training control via set_training_control). "
     "Use connectors (GitHub/Hugging Face search, e-mail) when they help. "
-    "After each action, check the result and continue until the goal is done "
-    "or you need a human decision. Finish with a short report: what was done, "
-    "what was verified, what remains. Answer in the user's language (Russian "
-    "unless the user writes in another language)."
+    "Never claim success without verification. Finish with a short report: "
+    "what was done, what was verified, what remains. Answer in the user's "
+    "language (Russian unless the user writes in another language)."
+)
+
+VERIFY_SYSTEM_PROMPT = (
+    "You are a strict reviewer verifying another agent's work on the user's "
+    "goal. Use only read-only tools: re-read the changed files, re-run cheap "
+    "checks, compare against the goal. Report precisely: (a) what is correct, "
+    "(b) any defects, regressions or unverified claims, (c) a verdict: "
+    "PASSED or FAILED with reasons. Be picky and concrete. Answer in the "
+    "user's language (Russian unless the user writes in another language)."
 )
 
 MAX_TOOL_STEPS = 8
-AGENT_GOAL_STEPS = 14
+AGENT_GOAL_STEPS = 20
+VERIFY_STEPS = 4
+SUBAGENT_STEPS = 6
 
 # Fallback instruction protocol for providers without native function calling.
 # The model can emit a fenced block:
@@ -88,6 +105,110 @@ TRAINING_CONTEXT_TOOL_SCHEMAS: list[dict[str, Any]] = [
 ]
 
 
+# Model & training introspection / hot-control tools. The UI supplies the
+# implementations; schemas are pure data shared with the agent loop.
+MODEL_TOOLS_SCHEMAS: list[dict[str, Any]] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_model_info",
+            "description": "Полная информация о текущей ЛЛМ: запись каталога, конфиг проекта, "
+                           "состояние обучения, метрики, аномалии, горячие параметры (control.json).",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_model_catalog",
+            "description": "Все модели в каталоге пользователя: id, название, тип, путь/URI, notes.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_metrics_history",
+            "description": "История метрик обучения: серии loss/acc по эпохам, лучшие значения, "
+                           "тренд, аномалии.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "keys": {"type": "array", "items": {"type": "string"},
+                             "description": "Какие метрики вернуть (пусто — все)"},
+                    "limit": {"type": "integer", "description": "Максимум точек", "default": 200},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_training_control",
+            "description": "Прочитать горячие параметры обучения (control.json): lr, max_epochs, "
+                           "early_stop_patience, grad_clip, stop, note.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_training_control",
+            "description": "Скорректировать обучение на лету: подправить lr, ограничить число эпох, "
+                           "включить раннюю остановку, ограничить градиенты или остановить "
+                           "обучение (stop=true). Обучение применяет изменения со следующей эпохи.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "lr": {"type": "number", "description": "Новый learning rate"},
+                    "max_epochs": {"type": "integer", "description": "Предел эпох"},
+                    "early_stop_patience": {"type": "integer",
+                                            "description": "Эпох без улучшения до остановки (0 — выкл.)"},
+                    "grad_clip": {"type": "number", "description": "Ограничение градиентов (0 — выкл.)"},
+                    "stop": {"type": "boolean", "description": "Остановить обучение"},
+                    "note": {"type": "string", "description": "Почему применяется корректировка"},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_plan",
+            "description": "Опубликовать рабочий план (список шагов) — пользователь видит его в "
+                           "активности. Обновляйте план по мере продвижения.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "steps": {"type": "array", "items": {"type": "string"},
+                              "description": "Шаги плана (короткие, проверяемые)"},
+                },
+                "required": ["steps"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "spawn_subagent",
+            "description": "Запустить вспомогательного агента на одну узкую подзадачу (только чтение) "
+                           "и получить его отчёт. Полезно для параллельных проверок и разведки.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "goal": {"type": "string", "description": "Чёткая подзадача для подагента"},
+                    "max_steps": {"type": "integer", "description": "Бюджет шагов (по умолчанию 6)",
+                                  "default": 6},
+                },
+                "required": ["goal"],
+            },
+        },
+    },
+]
+
+
 def extract_text_tool_calls(text: str) -> tuple[str, list[ToolCall]]:
     """Parse fallback tool blocks out of plain text replies."""
     calls: list[ToolCall] = []
@@ -106,6 +227,51 @@ def extract_text_tool_calls(text: str) -> tuple[str, list[ToolCall]]:
 
     cleaned = TOOL_BLOCK_RE.sub(replace_block, text)
     return re.sub(r"\n{3,}", "\n\n", cleaned).strip(), calls
+
+
+CLIP_TOOL_CHARS = 1500
+KEEP_RECENT_MESSAGES = 6
+
+
+def compress_messages(messages: list[dict[str, Any]], *,
+                      tool_budget: int = CLIP_TOOL_CHARS,
+                      total_budget: int = 60_000) -> list[dict[str, Any]]:
+    """Keep the conversation compact and precise as the agent works.
+
+    (1) Tool outputs older than the recent window are clipped to
+    ``tool_budget`` characters. (2) If the total size still exceeds
+    ``total_budget``, the oldest tool payloads are folded into placeholders
+    (the last two messages are never touched). System messages stay intact.
+    """
+    out = [dict(message) for message in messages]
+    if not out:
+        return out
+    start = 1 if out[0].get("role") == "system" else 0
+    for index, message in enumerate(out):
+        if index < start or index >= len(out) - KEEP_RECENT_MESSAGES:
+            continue
+        if message.get("role") == "tool":
+            content = str(message.get("content") or "")
+            if len(content) > tool_budget:
+                message["content"] = content[:tool_budget] + " …[обрезано]"
+    total = sum(len(str(message.get("content") or "")) for message in out)
+    index = start
+    while total > total_budget and index < len(out) - 2:
+        message = out[index]
+        if message.get("role") == "tool":
+            content = str(message.get("content") or "")
+            if content and not content.startswith("…[результат обрезан"):
+                total -= len(content)
+                message["content"] = f"…[результат обрезан: {message.get('name', 'tool')}]"
+                total += len(message["content"])
+        elif message.get("role") in {"user", "assistant"}:
+            content = str(message.get("content") or "")
+            if len(content) > tool_budget and total > total_budget:
+                total -= len(content)
+                message["content"] = content[:tool_budget] + " …[обрезано]"
+                total += len(message["content"])
+        index += 1
+    return out
 
 
 class MentorAgent:
@@ -134,6 +300,13 @@ class MentorAgent:
             workspace is not None or bool(self.extra_tools)
         )
         self.known_tools = TOOL_NAMES | frozenset(self.extra_tools)
+        self._used_mutation = False
+
+    def _readonly_tool_names(self) -> frozenset[str]:
+        names = {name for name in TOOL_NAMES if WorkspaceTools.is_readonly(name)}
+        names |= {name for name in self.extra_tools
+                  if name not in self.extra_mutations}
+        return frozenset(names)
 
     def needs_confirmation(self, name: str) -> bool:
         """In agent autonomy mode actions run freely (still backed up/logged)."""
@@ -153,25 +326,39 @@ class MentorAgent:
         temperature: float = 0.2,
         system_prompt: str = DEFAULT_AGENT_SYSTEM_PROMPT,
         transcript: list[dict[str, Any]] | None = None,
+        readonly: bool = False,
+        system_extra: str = "",
     ) -> MentorReply:
         """Run one agent turn.
 
         ``history`` is an OpenAI-style message list (not modified). When a
         ``transcript`` list is provided, every assistant/tool message produced
         during the turn is appended to it for persistence in a chat session.
+        In ``readonly`` mode only inspection tools are offered and mutations
+        are rejected — used by verification passes and subagents.
+        ``system_extra`` appends user-configured instructions to the system
+        prompt.
         """
+        if system_extra:
+            system_prompt = system_prompt + "\n\nAdditional user instructions:\n" + str(system_extra)[:2000]
         messages = [{"role": "system", "content": system_prompt}, *history]
         emit = on_event or (lambda _kind, _payload: None)
         ask_confirm = confirm or (lambda _name, _args, _desc: False)
         last_reply: MentorReply | None = None
+        readonly_names = self._readonly_tool_names() if readonly else None
 
         for step in range(self.max_steps):
-            tool_schemas = (
-                WORKSPACE_TOOL_SCHEMAS + self.extra_schemas
-                if self.enable_tools else None
-            )
+            if self.enable_tools:
+                tool_schemas = WORKSPACE_TOOL_SCHEMAS + self.extra_schemas
+                if readonly_names is not None:
+                    tool_schemas = [
+                        schema for schema in tool_schemas
+                        if schema.get("function", {}).get("name") in readonly_names
+                    ]
+            else:
+                tool_schemas = None
             reply = self.mentor.respond(
-                messages,
+                compress_messages(messages),
                 tools=tool_schemas,
                 max_tokens=max_tokens,
                 temperature=temperature,
@@ -193,7 +380,8 @@ class MentorAgent:
             if transcript is not None:
                 transcript.append(assistant_payload)
             for index, call in enumerate(calls):
-                result = self._execute_call(call, index, ask_confirm, emit)
+                result = self._execute_call(call, index, ask_confirm, emit,
+                                            readonly=readonly)
                 tool_payload = {
                     "role": "tool",
                     "tool_call_id": call.id or f"call-{step}-{index}",
@@ -223,11 +411,19 @@ class MentorAgent:
         max_tokens: int = 1600,
         temperature: float = 0.2,
         transcript: list[dict[str, Any]] | None = None,
+        verify: bool = True,
+        system_extra: str = "",
     ) -> MentorReply:
-        """Autonomous turn: the agent plans and acts until the goal is done."""
+        """Autonomous turn: the agent plans, acts, then verifies its own work.
+
+        When ``verify`` is on and the agent mutated anything, one extra
+        read-only verification pass reviews the result and its verdict is
+        appended to the final report.
+        """
         if not isinstance(goal, str) or not goal.strip():
             raise ValueError("goal must not be empty")
-        return self.run_turn(
+        self._used_mutation = False
+        reply = self.run_turn(
             [{"role": "user", "content": goal}],
             confirm=confirm,
             on_event=on_event,
@@ -235,6 +431,38 @@ class MentorAgent:
             temperature=temperature,
             system_prompt=AGENT_GOAL_SYSTEM_PROMPT,
             transcript=transcript,
+            system_extra=system_extra,
+        )
+        if not verify or not self._used_mutation:
+            return reply
+        emit = on_event or (lambda _kind, _payload: None)
+        emit("info", {"text": "Самопроверка результата…"})
+        verification = self.run_turn(
+            [{
+                "role": "user",
+                "content": (
+                    f"Цель пользователя: {goal}\n\n"
+                    f"Отчёт исполнителя:\n{reply.text or '(без текста)'}\n\n"
+                    "Проверь результат по цели и инструментам и вынеси вердикт."
+                ),
+            }],
+            on_event=on_event,
+            max_tokens=min(max_tokens, 900),
+            temperature=0.0,
+            system_prompt=VERIFY_SYSTEM_PROMPT,
+            readonly=True,
+        )
+        final_text = (
+            (reply.text or "").rstrip()
+            + "\n\n--- Самопроверка ---\n"
+            + (verification.text or "").strip()
+        ).strip()
+        emit("finished", {"text": final_text})
+        return MentorReply(
+            text=final_text,
+            model=reply.model,
+            usage=reply.usage,
+            request_id=reply.request_id,
         )
 
     def _execute_call(
@@ -243,10 +471,22 @@ class MentorAgent:
         index: int,
         confirm: ConfirmFn,
         emit: EventFn,
+        *,
+        readonly: bool = False,
     ) -> dict[str, Any]:
         description = _describe(call)
         emit("tool_start", {"name": call.name, "arguments": call.arguments,
                             "description": description, "index": index})
+        if readonly and (call.name in self.extra_mutations
+                         or (call.name in TOOL_NAMES
+                             and not WorkspaceTools.is_readonly(call.name))):
+            result = {
+                "ok": False,
+                "error": "Инструмент недоступен: режим только для чтения.",
+            }
+            emit("tool_result", {"name": call.name, "ok": False,
+                                 "summary": _summarize(result), "index": index})
+            return result
         if call.name in self.extra_tools:
             # Context tools: read-only run freely; mutations respect autonomy.
             try:
@@ -283,6 +523,11 @@ class MentorAgent:
             result = self.workspace.execute(call.name, call.arguments)
         emit("tool_result", {"name": call.name, "ok": bool(result.get("ok")),
                              "summary": _summarize(result), "index": index})
+        if result.get("ok") and (
+            call.name in self.extra_mutations
+            or (call.name in TOOL_NAMES and not WorkspaceTools.is_readonly(call.name))
+        ):
+            self._used_mutation = True
         return result
 
 
@@ -321,6 +566,13 @@ def _describe(call: ToolCall) -> str:
         "list_servers": "Список серверов",
         "server_info": "Информация о сервере",
         "run_on_server": "Команда на сервере",
+        "get_model_info": "Полная информация о текущей ЛЛМ",
+        "list_model_catalog": "Каталог моделей",
+        "get_metrics_history": "История метрик обучения",
+        "get_training_control": "Горячие параметры обучения",
+        "set_training_control": "Скорректировать обучение на лету",
+        "set_plan": "Опубликовать рабочий план",
+        "spawn_subagent": "Запустить подагента на подзадачу",
     }
     base = descriptions.get(call.name, call.name)
     if call.name == "send_email":

@@ -6,6 +6,7 @@ read the log and propose fixes through the chat panel.
 """
 from __future__ import annotations
 
+import json
 import shlex
 import subprocess
 import threading
@@ -18,6 +19,56 @@ from .config import app_data_dir
 
 class TrainingError(RuntimeError):
     """Training configuration or state error safe to display."""
+
+
+# ------------------------------------------------------------- hot control
+# ``control.json`` in the workspace root lets the user and the mentor agent
+# adjust a running training between epochs. The generated train.py reads it
+# every epoch and applies the recognised keys; ``stop`` is consumed once.
+CONTROL_FILENAME = "control.json"
+CONTROL_KEYS = ("lr", "max_epochs", "early_stop_patience", "grad_clip",
+                "stop", "note")
+
+
+def control_path(root: str | Path) -> Path:
+    return Path(root).expanduser() / CONTROL_FILENAME
+
+
+def read_control(root: str | Path) -> dict:
+    path = control_path(root)
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def write_control(root: str | Path, params: dict[str, object]) -> dict:
+    """Merge recognised control parameters into ``control.json`` atomically."""
+    if not isinstance(params, dict):
+        raise TrainingError("Параметры управления должны быть объектом.")
+    current = read_control(root)
+    updates: dict[str, object] = {}
+    for key, value in params.items():
+        if key not in CONTROL_KEYS:
+            raise TrainingError(f"Неизвестный параметр управления: {key}")
+        if key == "note":
+            updates[key] = str(value)[:200]
+        elif key == "stop":
+            updates[key] = bool(value)
+        elif key in {"max_epochs", "early_stop_patience"}:
+            updates[key] = max(0, int(value))
+        else:
+            updates[key] = float(value)
+    current.update(updates)
+    path = control_path(root)
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(current, ensure_ascii=False, indent=2),
+                   encoding="utf-8")
+    tmp.replace(path)
+    return current
 
 
 @dataclass(frozen=True)

@@ -1,4 +1,4 @@
-"""Explicit API mentor calls for OpenAI-compatible providers."""
+"""Explicit API mentor calls for OpenAI-compatible, Anthropic and Gemini providers."""
 from __future__ import annotations
 
 import json
@@ -7,6 +7,9 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from typing import Any
+
+from . import llm_providers
+from .llm_providers import ProviderError, provider_info
 
 
 class MentorError(RuntimeError):
@@ -31,34 +34,24 @@ class MentorReply:
     tool_calls: tuple[ToolCall, ...] = ()
 
 
-def _validate_https_url(base_url: str, what: str) -> urllib.parse.SplitResult:
+def _as_mentor_error(exc: ProviderError) -> MentorError:
+    return MentorError(str(exc))
+
+
+def chat_endpoint(base_url: str, api_style: str = "openai", model: str = "") -> str:
     try:
-        parsed = urllib.parse.urlsplit(str(base_url).strip())
-    except ValueError:
-        raise MentorError(f"{what} URL is invalid.") from None
-    if parsed.scheme != "https" or not parsed.hostname:
-        raise MentorError(f"{what} must use an absolute HTTPS URL.")
-    if parsed.username or parsed.password or parsed.query or parsed.fragment:
-        raise MentorError(f"{what} URL must not contain credentials, query, or fragment.")
-    return parsed
+        llm_providers.validate_base_url(base_url)
+        return llm_providers.chat_endpoint(base_url, api_style, model)
+    except ProviderError as exc:
+        raise _as_mentor_error(exc) from None
 
 
-def chat_endpoint(base_url: str) -> str:
-    parsed = _validate_https_url(base_url, "Mentor API")
-    path = parsed.path.rstrip("/")
-    if not path.endswith("/chat/completions"):
-        path += "/chat/completions"
-    return urllib.parse.urlunsplit(("https", parsed.netloc, path, "", ""))
-
-
-def models_endpoint(base_url: str) -> str:
-    parsed = _validate_https_url(base_url, "Mentor API")
-    path = parsed.path.rstrip("/")
-    if path.endswith("/chat/completions"):
-        path = path[: -len("/chat/completions")]
-    if not path.endswith("/models"):
-        path += "/models"
-    return urllib.parse.urlunsplit(("https", parsed.netloc, path, "", ""))
+def models_endpoint(base_url: str, api_style: str = "openai") -> str:
+    try:
+        llm_providers.validate_base_url(base_url)
+        return llm_providers.models_endpoint(base_url, api_style)
+    except ProviderError as exc:
+        raise _as_mentor_error(exc) from None
 
 
 DEFAULT_SYSTEM_PROMPT = (
@@ -68,9 +61,29 @@ DEFAULT_SYSTEM_PROMPT = (
 
 
 class ApiMentor:
-    def __init__(self, base_url: str, model: str, api_key: str, timeout_seconds: float = 60):
+    """Unified client for all supported LLM providers.
+
+    ``api_style`` selects the wire format (``openai``, ``anthropic``,
+    ``gemini``); ``provider`` is the registry id used for defaults
+    (e.g. ``ollama`` allows ``http://localhost``).
+    """
+
+    def __init__(self, base_url: str, model: str, api_key: str,
+                 timeout_seconds: float = 60, *, api_style: str = "openai",
+                 provider: str = "", reasoning_effort: str = ""):
+        info = provider_info(provider) if provider else None
+        self.provider = (provider or "custom").strip().lower()
+        if api_style in {"openai", "anthropic", "gemini"}:
+            self.api_style = api_style
+        elif info is not None:
+            self.api_style = info.api_style
+        else:
+            self.api_style = "openai"
+        self.allow_http_localhost = bool(info.allow_http_localhost) if info else False
+        self.reasoning_effort = str(reasoning_effort or "").strip().lower()
+        if self.reasoning_effort not in {"", "off", "low", "medium", "high"}:
+            self.reasoning_effort = ""
         self.base_url = str(base_url).strip()
-        self.endpoint = chat_endpoint(base_url)
         self.model = model.strip()
         self.api_key = api_key.strip()
         self.timeout_seconds = float(timeout_seconds)
@@ -78,17 +91,20 @@ class ApiMentor:
             raise MentorError("Choose a model and store its API key before testing the mentor.")
         if not 1 <= self.timeout_seconds <= 300:
             raise MentorError("Timeout must be between 1 and 300 seconds.")
+        try:
+            llm_providers.validate_base_url(
+                self.base_url, allow_http_localhost=self.allow_http_localhost)
+        except ProviderError as exc:
+            raise _as_mentor_error(exc) from None
+        self.endpoint = chat_endpoint(self.base_url, self.api_style, self.model)
 
     # -- shared transport ------------------------------------------------
     def _post_chat(self, payload: dict[str, Any]) -> tuple[bytes, str | None]:
+        headers = llm_providers.chat_headers(self.api_style, self.api_key)
         request = urllib.request.Request(
             self.endpoint,
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-            headers={
-                "Authorization": "Bearer " + self.api_key,
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            },
+            headers=headers,
             method="POST",
         )
         try:
@@ -102,7 +118,7 @@ class ApiMentor:
                 detail = exc.read(2500).decode("utf-8", errors="replace")
             except Exception:
                 detail = ""
-            detail = detail.replace(self.api_key, "[REDACTED]")[:900]
+            detail = llm_providers.redact(detail, self.api_key)[:900]
             raise MentorError(f"Mentor API returned HTTP {exc.code}. {detail}".strip()) from None
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             raise MentorError(f"Could not connect to mentor API ({type(exc).__name__}).") from None
@@ -110,49 +126,20 @@ class ApiMentor:
 
     def _parse_reply(self, raw: bytes, request_id: str | None) -> MentorReply:
         try:
-            data = json.loads(raw.decode("utf-8"))
-            message = data["choices"][0]["message"]
-            text = message.get("content") or ""
-            if isinstance(text, list):
-                text = "".join(
-                    part.get("text", "")
-                    for part in text
-                    if isinstance(part, dict) and part.get("type") == "text"
-                )
-            if not isinstance(text, str):
-                raise ValueError("invalid content")
-        except (UnicodeError, json.JSONDecodeError, KeyError, IndexError, TypeError, ValueError):
-            raise MentorError("Mentor API returned an invalid or empty response.") from None
-
-        tool_calls: list[ToolCall] = []
-        for raw_call in message.get("tool_calls") or []:
-            if not isinstance(raw_call, dict):
-                continue
-            function = raw_call.get("function") or {}
-            try:
-                arguments = json.loads(function.get("arguments") or "{}")
-            except json.JSONDecodeError:
-                raise MentorError("Mentor API returned invalid tool arguments.") from None
-            if not isinstance(arguments, dict):
-                raise MentorError("Mentor API returned invalid tool arguments.")
-            tool_calls.append(
-                ToolCall(
-                    id=str(raw_call.get("id") or f"call-{len(tool_calls) + 1}"),
-                    name=str(function.get("name") or ""),
-                    arguments=arguments,
-                )
-            )
-
-        if not text.strip() and not tool_calls:
-            raise MentorError("Mentor API returned an invalid or empty response.")
-
-        usage = data.get("usage", {})
+            parsed = llm_providers.parse_chat_response(self.api_style, raw,
+                                                       self.model)
+        except ProviderError as exc:
+            raise _as_mentor_error(exc) from None
+        tool_calls = tuple(
+            ToolCall(id=call_id, name=name, arguments=arguments)
+            for call_id, name, arguments in parsed["tool_calls"]
+        )
         return MentorReply(
-            text=text.strip(),
-            model=str(data.get("model") or self.model),
-            usage=usage if isinstance(usage, dict) else {},
+            text=parsed["text"],
+            model=parsed["model"],
+            usage=parsed["usage"],
             request_id=request_id,
-            tool_calls=tuple(tool_calls),
+            tool_calls=tool_calls,
         )
 
     # -- public API ------------------------------------------------------
@@ -179,15 +166,16 @@ class ApiMentor:
             raise MentorError("Max response tokens must be between 1 and 8000.")
         if not 0.0 <= temperature <= 2.0:
             raise MentorError("Temperature must be between 0 and 2.")
-        payload: dict[str, Any] = {
-            "model": self.model,
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-        }
-        if tools:
-            payload["tools"] = tools
-            payload["tool_choice"] = "auto"
+        effort = self.reasoning_effort if self.reasoning_effort != "off" else ""
+        payload = llm_providers.build_chat_payload(
+            self.api_style,
+            model=self.model,
+            messages=messages,
+            tools=tools or None,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            reasoning_effort=effort,
+        )
         raw, request_id = self._post_chat(payload)
         return self._parse_reply(raw, request_id)
 
@@ -211,16 +199,10 @@ class ApiMentor:
         )
 
     def list_models(self) -> list[str]:
-        """Return model IDs advertised by the provider's /models endpoint."""
-        url = models_endpoint(self.base_url)
-        request = urllib.request.Request(
-            url,
-            headers={
-                "Authorization": "Bearer " + self.api_key,
-                "Accept": "application/json",
-            },
-            method="GET",
-        )
+        """Return model IDs advertised by the provider's models endpoint."""
+        url = models_endpoint(self.base_url, self.api_style)
+        headers = llm_providers.models_headers(self.api_style, self.api_key)
+        request = urllib.request.Request(url, headers=headers, method="GET")
         try:
             with urllib.request.urlopen(request, timeout=min(self.timeout_seconds, 30.0)) as response:
                 raw = response.read(2 * 1024 * 1024 + 1)
@@ -231,15 +213,21 @@ class ApiMentor:
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             raise MentorError(f"Could not fetch the model list ({type(exc).__name__}).") from None
         try:
-            data = json.loads(raw.decode("utf-8"))
-            items = data["data"]
-            if not isinstance(items, list):
-                raise TypeError("model list")
-        except (UnicodeError, json.JSONDecodeError, KeyError, TypeError):
-            raise MentorError("Provider returned an invalid model list.") from None
-        models = sorted({
-            str(item.get("id"))
-            for item in items
-            if isinstance(item, dict) and item.get("id")
-        })
-        return models
+            return llm_providers.parse_model_list(self.api_style, raw)
+        except ProviderError as exc:
+            raise _as_mentor_error(exc) from None
+
+
+def build_mentor(*, provider: str, base_url: str, model: str, api_key: str,
+                 timeout_seconds: float = 60,
+                 reasoning_effort: str = "") -> ApiMentor:
+    """Construct an :class:`ApiMentor` using provider defaults from the registry."""
+    info = provider_info(provider)
+    url = (base_url or "").strip() or info.base_url
+    return ApiMentor(
+        url, model, api_key,
+        timeout_seconds=timeout_seconds,
+        api_style=info.api_style,
+        provider=info.id,
+        reasoning_effort=reasoning_effort,
+    )

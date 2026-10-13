@@ -30,6 +30,7 @@ Mockups are rendered from the app's real design tokens by `scripts/render_ui_moc
 | `Ctrl+F2` | Toggle bookmark |
 | `F2` / `Shift+F2` | Next / previous bookmark |
 | `Ctrl+G` | Go to line |
+| `Ctrl+\` | Toggle split editor view |
 | `Ctrl+=` / `Ctrl+-` | Zoom the editor font in / out |
 | `F5` | Refresh the current page |
 | `F1` | Shortcut help |
@@ -38,7 +39,7 @@ Mockups are rendered from the app's real design tokens by `scripts/render_ui_moc
 
 ## Editor, palette, search
 
-The editor opens files in **IDE-style tabs** (each tab keeps its buffer, `•` marks unsaved changes, `Ctrl+W` closes, `Ctrl+Tab` cycles) with a cursor position readout and **syntax highlighting** (Python, YAML/JSON, plain text) on a dark code canvas. A **line-number gutter** marks problem lines (● from the Problems tab) and bookmarks (★; click a line number to toggle). **Brackets and quotes auto-close** (typing `)` steps over the pair, Backspace between an empty pair removes both) and the matching bracket is highlighted; **Ctrl+G** jumps to a line. **Ctrl+F** / **Ctrl+H** open find & replace with all matches highlighted, an «1 of N» counter (`F3` / `Shift+F3` cycle matches, `Aa` toggles case sensitivity); **bookmarks** jump with `F2` / `Shift+F2` and toggle with `Ctrl+F2`. The file tree can **create, rename and delete files** (names are validated to stay inside the workspace). A **minimap** on the right edge shows a coloured outline of the file (functions, keywords, comments) and clicking it jumps to that line. The built-in **Python linter** (`Проверить`, also on save) reports syntax errors and style warnings into the Problems tab and the gutter; the built-in **formatter** (`Формат`, optional on save) normalizes line endings, trailing whitespace, blank-line runs and the final newline, counting every fix. **Ctrl+=** / **Ctrl+-** zoom the editor font. **Autocomplete** suggests words from the file and the Python vocabulary (`Tab`/`Enter` accepts, `Esc` closes, `↑`/`↓` navigates). **Ctrl+P** opens any workspace file by fuzzy name; **Ctrl+Shift+P** runs commands from one palette (navigation, training, diagnostics). **Ctrl+Shift+F** searches the workspace by regex and jumps straight to the matching line in the editor.
+The editor opens files in **IDE-style tabs** (each tab keeps its buffer, `•` marks unsaved changes, `Ctrl+W` closes, `Ctrl+Tab` cycles) with a cursor position readout and **syntax highlighting** (Python, YAML/JSON, plain text) on a dark code canvas. A **line-number gutter** marks problem lines (● from the Problems tab) and bookmarks (★; click a line number to toggle). **Brackets and quotes auto-close** (typing `)` steps over the pair, Backspace between an empty pair removes both) and the matching bracket is highlighted; **Ctrl+G** jumps to a line. **Ctrl+F** / **Ctrl+H** open find & replace with all matches highlighted, an «1 of N» counter (`F3` / `Shift+F3` cycle matches, `Aa` toggles case sensitivity); **bookmarks** jump with `F2` / `Shift+F2` and toggle with `Ctrl+F2`. The file tree can **create, rename and delete files** (names are validated to stay inside the workspace). A **minimap** on the right edge shows a coloured outline of the file (functions, keywords, comments) and clicking it jumps to that line; **Ctrl+\\** opens a **split editor** with two synchronized panes of the same file. The built-in **Python linter** (`Проверить`, also on save) reports syntax errors and style warnings into the Problems tab and the gutter; the built-in **formatter** (`Формат`, optional on save) normalizes line endings, trailing whitespace, blank-line runs and the final newline, counting every fix. **Ctrl+=** / **Ctrl+-** zoom the editor font. **Autocomplete** suggests words from the file and the Python vocabulary (`Tab`/`Enter` accepts, `Esc` closes, `↑`/`↓` navigates). The UI has **light and dark themes** (Settings → Внешний вид, or the command palette) that switch live and persist. **Ctrl+P** opens any workspace file by fuzzy name; **Ctrl+Shift+P** runs commands from one palette (navigation, training, diagnostics). **Ctrl+Shift+F** searches the workspace by regex and jumps straight to the matching line in the editor.
 
 The bottom panel behaves like VS Code's: **ТЕРМИНАЛ**, **ПРОБЛЕМЫ** and **ГИТ** tabs (`Ctrl+Shift+M`, `Ctrl+Shift+G`, `Ctrl+J` collapses the panel). The Problems tab collects errors from training logs (tracebacks, `FAILED` tests, metric anomalies) and a double-click opens the exact file and line in the editor; the list can be sent to the mentor in one click. The Git tab is a full source-control view: changed files with status and +/− counts, a coloured diff preview, stage/unstage/discard actions, commit with a message, and Push / Pull (fast-forward only). The status bar shows the current **Git branch** with a dirty marker.
 
@@ -140,7 +141,7 @@ In PowerShell:
 .\scripts\build_windows.ps1
 ```
 
-The build script creates `dist\AlterEgoTrainingHub.exe`. Build and test it on Windows before distributing it. A Windows executable should be built on Windows; the source checkout itself is cross-platform only where Tkinter and an appropriate credential-store backend are available.
+The build script creates `dist\AlterEgoTrainingHub.exe`. Build and test it on Windows before distributing it. A Windows executable should be built on Windows; the source checkout itself is cross-platform only where Tkinter and an appropriate credential-store backend are available. On Linux/macOS the same PyInstaller pipeline is available as `python scripts/build_desktop.py`. The `Windows Desktop Build` GitHub Actions workflow produces the `.exe` artifact automatically on pushes and pull requests.
 
 ## Connect a mentor
 
@@ -173,4 +174,4 @@ python -m compileall -q src run_app.py tests
 python -m pytest -q
 ```
 
-GitHub Actions runs compilation and unit tests on pushes and pull requests.
+GitHub Actions (`CI` workflow) runs lint, compilation and unit tests on Python 3.11/3.12 for every push and pull request, and uploads the wheel/sdist artifacts; the `Windows Desktop Build` workflow packages the `.exe`.

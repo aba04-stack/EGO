@@ -60,6 +60,9 @@ class EditorPage(tk.Frame):
         self._matches: list[tuple[int, int]] = []
         self._match_index: int | None = None
         self._zoom: int = 0
+        self.split_visible: bool = False
+        self._last_edited: int = 1
+        self._sync_guard: bool = False
         self._build()
         self.completion = CompletionPopup(self)
 
@@ -209,34 +212,54 @@ class EditorPage(tk.Frame):
                    command=self.reload_file).pack(side="right", padx=6)
         ttk.Button(bar, text="Формат",
                    command=self.format_file).pack(side="right", padx=6)
+        ttk.Button(bar, text="Разделить",
+                   command=self.toggle_split).pack(side="right", padx=6)
         ttk.Button(bar, text="Проверить",
                    command=self.run_lint).pack(side="right", padx=6)
         ttk.Button(bar, text="Обсудить с наставником",
                    command=self.send_to_mentor).pack(side="right", padx=6)
 
-        # Code area: gutter + editor + minimap + scrollbar
+        # Code area: primary pane (+ optional synchronized split pane)
         code_wrap = tk.Frame(right, bg=C["code_bg"])
         code_wrap.pack(fill="both", expand=True)
-        self.gutter = tk.Text(code_wrap, width=7, wrap="none", font=F_MONO,
+        self.pane1 = tk.Frame(code_wrap, bg=C["code_bg"])
+        self.pane1.pack(side="left", fill="both", expand=True)
+        self.gutter = tk.Text(self.pane1, width=7, wrap="none", font=F_MONO,
                               bd=0, padx=2, pady=6, state="disabled",
                               bg=C["panel_alt"], fg=C["muted"],
                               selectbackground=C["panel_alt"], cursor="hand2")
         self.gutter.pack(side="left", fill="y")
         self.gutter.bind("<Button-1>", self._on_gutter_click)
-        self.editor = tk.Text(code_wrap, wrap="none", font=F_MONO, bd=0,
+        self.editor = tk.Text(self.pane1, wrap="none", font=F_MONO, bd=0,
                               undo=True, padx=8, pady=6,
                               bg=C["code_bg"], fg=C["code_fg"],
                               insertbackground=C["code_fg"],
                               selectbackground=C["accent"],
                               selectforeground="#ffffff")
         self.editor.pack(side="left", fill="both", expand=True)
-        self.minimap = tk.Canvas(code_wrap, width=64, bd=0,
+        self.minimap = tk.Canvas(self.pane1, width=64, bd=0,
                                  highlightthickness=0, bg=C["panel_alt"],
                                  cursor="hand2")
         self.minimap.pack(side="right", fill="y")
         self.minimap.bind("<Button-1>", self._on_minimap_click)
-        scroll = ttk.Scrollbar(code_wrap, command=self.editor.yview)
+        scroll = ttk.Scrollbar(self.pane1, command=self.editor.yview)
         scroll.pack(side="right", fill="y")
+        self.pane2 = tk.Frame(code_wrap, bg=C["code_bg"])
+        self.gutter2 = tk.Text(self.pane2, width=7, wrap="none", font=F_MONO,
+                               bd=0, padx=2, pady=6, state="disabled",
+                               bg=C["panel_alt"], fg=C["muted"],
+                               selectbackground=C["panel_alt"], cursor="hand2")
+        self.gutter2.pack(side="left", fill="y")
+        self.editor2 = tk.Text(self.pane2, wrap="none", font=F_MONO, bd=0,
+                               undo=True, padx=8, pady=6,
+                               bg=C["code_bg"], fg=C["code_fg"],
+                               insertbackground=C["code_fg"],
+                               selectbackground=C["accent"],
+                               selectforeground="#ffffff")
+        self.editor2.pack(side="left", fill="both", expand=True)
+        scroll2 = ttk.Scrollbar(self.pane2, command=self.editor2.yview)
+        scroll2.pack(side="right", fill="y")
+        self.editor2.configure(yscrollcommand=scroll2.set)
         self.editor.configure(yscrollcommand=lambda a, b: self._sync_scroll(a, b))
         configure_tags(self.editor)
         self.editor.tag_configure("find_match", background="#8a6d1f")
@@ -259,10 +282,27 @@ class EditorPage(tk.Frame):
                          lambda _e: (self.zoom_out(), "break")[1])
         self.editor.bind("<Control-KP_Subtract>",
                          lambda _e: (self.zoom_out(), "break")[1])
+        self.editor.bind("<Control-BackSlash>",
+                         lambda _e: (self.toggle_split(), "break")[1])
+        self.editor2.bind("<Control-BackSlash>",
+                          lambda _e: (self.toggle_split(), "break")[1])
         for char in ("(", "[", "{", '"', "'", ")", "]", "}"):
             self.editor.bind(
                 char, lambda _e, ch=char: self._on_auto_char(ch, _e))
         self.editor.bind("<BackSpace>", self._on_backspace)
+        configure_tags(self.editor2)
+        for char in ("(", "[", "{", '"', "'", ")", "]", "}"):
+            self.editor2.bind(
+                char, lambda _e, ch=char: self._on_auto_char(ch, _e,
+                                                             self.editor2))
+        self.editor2.bind("<BackSpace>",
+                          lambda _e: self._on_backspace(_e, self.editor2))
+        self.editor2.bind("<KeyRelease>",
+                          lambda _e: self._on_split_key(2, _e))
+        self.editor2.bind("<ButtonRelease-1>",
+                          lambda _e: self._mark_edited(2))
+        self.editor2.bind("<Control-s>",
+                          lambda _e: (self.save_file(), "break")[1])
         self.editor.bind("<<Modified>>", self._on_modified)
         self.editor.bind("<KeyRelease>", self._on_key_release)
         self.editor.bind("<ButtonRelease-1>", self._on_click)
@@ -457,6 +497,7 @@ class EditorPage(tk.Frame):
         self._language = detect_language(tab["path"])
         self.editor.delete("1.0", "end")
         self.editor.insert("1.0", tab.get("text", ""))
+        self._last_edited = 1
         root = self.app.workspace_root()
         try:
             shown = tab["path"].relative_to(root) if root else tab["path"]
@@ -530,38 +571,41 @@ class EditorPage(tk.Frame):
         self.close_goto_line()
 
     # ------------------------------------------------- brackets & pairing
-    def _cursor_line_col(self) -> tuple[str, int]:
+    def _cursor_line_col(self, widget=None) -> tuple[str, int]:
+        text = widget if widget is not None else self.editor
         try:
-            index = self.editor.index("insert")
+            index = text.index("insert")
             line, col = str(index).split(".")
-            return self.editor.get(f"{line}.0", f"{line}.end"), int(col)
+            return text.get(f"{line}.0", f"{line}.end"), int(col)
         except Exception:  # noqa: BLE001 - widget may be gone / fake
             return "", 0
 
-    def _on_auto_char(self, char: str, _event=None):
-        line, col = self._cursor_line_col()
+    def _on_auto_char(self, char: str, _event=None, widget=None):
+        text = widget if widget is not None else self.editor
+        line, col = self._cursor_line_col(text)
         decision = auto_close_decision(line, col, char)
         if decision == "pair":
             try:
-                self.editor.insert("insert", char + PAIRS[char])
-                self.editor.mark_set("insert", "insert-1c")
+                text.insert("insert", char + PAIRS[char])
+                text.mark_set("insert", "insert-1c")
                 self._on_modified_force()
             except Exception:  # noqa: BLE001
                 return None
             return "break"
         if decision == "skip":
             try:
-                self.editor.mark_set("insert", "insert+1c")
+                text.mark_set("insert", "insert+1c")
             except Exception:  # noqa: BLE001
                 return None
             return "break"
         return None
 
-    def _on_backspace(self, _event=None):
-        line, col = self._cursor_line_col()
+    def _on_backspace(self, _event=None, widget=None):
+        text = widget if widget is not None else self.editor
+        line, col = self._cursor_line_col(text)
         if backspace_decision(line, col) == 2:
             try:
-                self.editor.delete("insert-2c", "insert")
+                text.delete("insert-2c", "insert")
                 self._on_modified_force()
             except Exception:  # noqa: BLE001
                 return None
@@ -598,12 +642,62 @@ class EditorPage(tk.Frame):
         self._zoom = max(-4, min(12, getattr(self, "_zoom", 0) + step))
         size = max(6, F_MONO[1] + self._zoom)
         font = (F_MONO[0], size)
-        for widget in (self.editor, self.gutter):
+        for widget in (self.editor, self.gutter, self.editor2, self.gutter2):
             try:
                 widget.configure(font=font)
             except Exception:  # noqa: BLE001
                 pass
         self.status_var.set(f"масштаб шрифта: {size} пт")
+
+    # ------------------------------------------------------- split editor
+    def toggle_split(self):
+        if self._active is None or not self._tabs:
+            messagebox.showinfo("Редактор", "Сначала откройте файл.",
+                                parent=self)
+            return
+        if self.split_visible:
+            self._sync_split_buffers()
+            self.pane2.pack_forget()
+            self.split_visible = False
+            self.status_var.set("разделённый вид выключен")
+            return
+        try:
+            self.editor2.delete("1.0", "end")
+            self.editor2.insert("1.0", self.editor.get("1.0", "end-1c"))
+        except Exception:  # noqa: BLE001
+            pass
+        self.pane2.pack(side="left", fill="both", expand=True)
+        self.split_visible = True
+        self._last_edited = 1
+        self._regen_gutter()
+        self._schedule_highlight()
+        self.status_var.set("разделённый вид: панели синхронизированы")
+
+    def _mark_edited(self, pane: int):
+        self._last_edited = pane
+
+    def _on_split_key(self, pane: int, event=None):
+        self._mark_edited(pane)
+        self._update_cursor()
+        self._schedule_highlight()
+
+    def _sync_split_buffers(self):
+        """Copy the last edited split pane into the other one."""
+        if not self.split_visible or self._sync_guard:
+            return
+        try:
+            if self._last_edited == 2:
+                source, target = self.editor2, self.editor
+            else:
+                source, target = self.editor, self.editor2
+            text = source.get("1.0", "end-1c")
+            if target.get("1.0", "end-1c") != text:
+                self._sync_guard = True
+                target.delete("1.0", "end")
+                target.insert("1.0", text)
+                self._sync_guard = False
+        except Exception:  # noqa: BLE001
+            self._sync_guard = False
 
     # ----------------------------------------------------------- minimap
     def _redraw_minimap(self):
@@ -650,6 +744,7 @@ class EditorPage(tk.Frame):
             messagebox.showinfo("Редактор", "Сначала откройте файл.",
                                 parent=self)
             return
+        self._sync_split_buffers()
         text = self.editor.get("1.0", "end-1c")
         new_text, fixes = format_source(text)
         if not fixes:
@@ -666,6 +761,7 @@ class EditorPage(tk.Frame):
             messagebox.showinfo("Редактор", "Сначала откройте файл.",
                                 parent=self)
             return
+        self._sync_split_buffers()
         path = self._tabs[self._active]["path"]
         text = self.editor.get("1.0", "end-1c")
         rows = check_source(text, path=path.name,
@@ -753,22 +849,27 @@ class EditorPage(tk.Frame):
         return lines
 
     def _regen_gutter(self):
+        self._fill_gutter(self.gutter)
+        if self.split_visible:
+            self._fill_gutter(self.gutter2)
+
+    def _fill_gutter(self, gutter):
         total = self._line_count()
         bookmarks: set[int] = set()
         if self._active is not None and 0 <= self._active < len(self._tabs):
             bookmarks = self._tabs[self._active].get("bookmarks", set())
         problems = self._problem_lines()
         try:
-            self.gutter.configure(state="normal")
-            self.gutter.delete("1.0", "end")
+            gutter.configure(state="normal")
+            gutter.delete("1.0", "end")
             for number in range(1, total + 1):
                 mark = (MARK_PROBLEM if number in problems else
                         MARK_BOOKMARK if number in bookmarks else " ")
-                self.gutter.insert("end", f"{number:>4} {mark}\n")
+                gutter.insert("end", f"{number:>4} {mark}\n")
                 if number in problems:
-                    self.gutter.tag_add("line_problem",
-                                        f"{number}.0", f"{number}.end")
-            self.gutter.configure(state="disabled")
+                    gutter.tag_add("line_problem",
+                                   f"{number}.0", f"{number}.end")
+            gutter.configure(state="disabled")
         except Exception:  # noqa: BLE001 - fake widgets
             pass
 
@@ -938,8 +1039,11 @@ class EditorPage(tk.Frame):
     # --------------------------------------------------- highlight + typing
     def _apply_highlight(self):
         self._highlight_after = None
+        self._sync_split_buffers()
         try:
             highlight(self.editor, self._language)
+            if self.split_visible:
+                highlight(self.editor2, self._language)
         except Exception:  # noqa: BLE001 - cosmetic only
             pass
         self._regen_gutter()
@@ -1039,6 +1143,7 @@ class EditorPage(tk.Frame):
         if self._active is None or not self._tabs:
             messagebox.showinfo("Редактор", "Сначала откройте файл.", parent=self)
             return
+        self._sync_split_buffers()
         tab = self._tabs[self._active]
         content = self.editor.get("1.0", "end-1c")
         note = ""

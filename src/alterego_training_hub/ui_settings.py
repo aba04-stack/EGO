@@ -133,6 +133,27 @@ class SettingsPage(tk.Frame):
                    command=self.save_folders).grid(row=2, column=1, sticky="w", pady=8)
 
         # Diagnostics
+        appearance_section = Collapsible(self, "Внешний вид")
+        appearance_section.pack(fill="x", padx=24, pady=(0, 12))
+        appearance_section.set_hint("свернуть/развернуть")
+        appearance = appearance_section.body
+        self.theme_status = tk.StringVar(
+            value="Текущая тема: светлая.")
+        tk.Label(appearance, textvariable=self.theme_status, bg=C["panel"],
+                 fg=C["muted"], font=F_SMALL).pack(anchor="w")
+        theme_btns = tk.Frame(appearance, bg=C["panel"])
+        theme_btns.pack(fill="x", pady=(6, 0))
+        ttk.Button(theme_btns, text="Светлая тема",
+                   command=lambda: self.app.toggle_theme("light")).pack(
+            side="left")
+        ttk.Button(theme_btns, text="Тёмная тема",
+                   command=lambda: self.app.toggle_theme("dark")).pack(
+            side="left", padx=8)
+        tk.Label(appearance,
+                 text="Тема применяется сразу и сохраняется при перезапуске.",
+                 bg=C["panel"], fg=C["muted"], font=F_SMALL).pack(
+            anchor="w", pady=(4, 0))
+
         diag_section = Collapsible(self, "Диагностика и логи")
         diag_section.pack(fill="x", padx=24, pady=(0, 12))
         diag_section.set_hint("свернуть/развернуть")
@@ -200,6 +221,10 @@ class SettingsPage(tk.Frame):
     def on_show(self):
         self.mentor_secret_status.set(self._secret_status("mentor_api_key"))
         self.runpod_secret_status.set(self._secret_status("runpod_api_key"))
+        from .theme import current_theme
+
+        self.theme_status.set("Текущая тема: " + ("тёмная"
+                              if current_theme() == "dark" else "светлая") + ".")
 
     # ------------------------------------------------------------- handlers
     def _collect_mentor(self):

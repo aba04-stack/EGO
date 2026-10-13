@@ -36,6 +36,7 @@ class AppSettings:
     model_library_path: str = ""
     active_model_id: str = ""
     chat_autonomy: str = "assist"  # "assist" | "agent"
+    ui_theme: str = "light"  # "light" | "dark"
     gmail_from: str = ""
     training_command: str = "python -m pytest -q"
     runpod_cloud: str = "SECURE"

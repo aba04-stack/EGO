@@ -1009,3 +1009,42 @@ def test_editor_format_lint_zoom_minimap(fake_ui, tmp_path):
     editor.save_file()
     saved = (workspace / "code.py").read_text(encoding="utf-8")
     assert saved == "z = 3\n"
+
+
+def test_theme_toggle_and_split_editor(fake_ui, tmp_path):
+    from alterego_training_hub import theme as theme_module
+
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    try:
+        # Theme switch mutates the live palette and is crash-free on fakes.
+        app.toggle_theme("dark")
+        assert theme_module.C["bg"] == theme_module.PALETTES["dark"]["bg"]
+        assert app.settings.ui_theme == "dark"
+        app.toggle_theme("light")
+        assert theme_module.C["bg"] == theme_module.PALETTES["light"]["bg"]
+    finally:
+        theme_module.set_palette("light")
+
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    (workspace / "a.py").write_text("x = 1\n", encoding="utf-8")
+    app.settings.workspace_path = str(workspace)
+    app.save_settings()
+
+    editor = app.pages["editor"]
+    app.show_page("editor")
+    editor.open_file(workspace / "a.py")
+
+    # Split: second pane mirrors the buffer; edits sync both ways.
+    editor.toggle_split()
+    assert editor.split_visible is True
+    assert "x = 1" in editor.editor2.get("1.0", "end")
+    editor._mark_edited(2)
+    editor.editor2.insert("end", "y = 2\n")
+    editor._sync_split_buffers()
+    assert "y = 2" in editor.editor.get("1.0", "end")
+    editor._regen_gutter()
+    editor._apply_highlight()
+    editor.toggle_split()
+    assert editor.split_visible is False

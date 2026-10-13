@@ -36,6 +36,10 @@ class TrainingHubApp(tk.Tk):
         self.minsize(1180, 720)
 
         self.settings = AppSettings.load()
+        from .theme import PALETTES, set_palette
+
+        set_palette(self.settings.ui_theme
+                    if self.settings.ui_theme in PALETTES else "light")
         self.secrets = SecretStore()
         self.git = GitRepositoryManager(timeout_seconds=600)
         self.training = TrainingRun()
@@ -57,17 +61,18 @@ class TrainingHubApp(tk.Tk):
 
     # ------------------------------------------------------------------ layout
     def _build_layout(self):
-        self.status_bar = tk.Frame(self, bg="#e8edf5")
+        self.status_bar = tk.Frame(self, bg=C["statusbar"])
         self.status_bar.pack(side="bottom", fill="x")
         self.status_text = tk.StringVar(value="Готово")
-        tk.Label(self.status_bar, textvariable=self.status_text, bg="#e8edf5",
+        tk.Label(self.status_bar, textvariable=self.status_text, bg=C["statusbar"],
                  fg=C["muted"], font=ui_common.F_SMALL, anchor="w",
                  padx=12).pack(side="left", fill="x", expand=True)
         self.workspace_badge = tk.StringVar(value="папка не выбрана")
-        tk.Label(self.status_bar, textvariable=self.workspace_badge, bg="#e8edf5",
+        tk.Label(self.status_bar, textvariable=self.workspace_badge,
+                 bg=C["statusbar"],
                  fg=C["muted"], font=ui_common.F_SMALL, padx=12).pack(side="right")
         self.git_badge = tk.StringVar(value="")
-        tk.Label(self.status_bar, textvariable=self.git_badge, bg="#e8edf5",
+        tk.Label(self.status_bar, textvariable=self.git_badge, bg=C["statusbar"],
                  fg=C["muted"], font=ui_common.F_SMALL, padx=12).pack(side="right")
 
         container = tk.Frame(self, bg=C["bg"])
@@ -275,6 +280,28 @@ class TrainingHubApp(tk.Tk):
             on_show()
             self.set_status("Обновлено: " + self._current_page)
 
+    def toggle_theme(self, name: str | None = None):
+        """Switch between the light and dark palettes live."""
+        from .theme import C as live_colors
+        from .theme import PALETTES, current_theme, set_palette
+
+        old = dict(live_colors)
+        target = name or ("dark" if current_theme() == "light" else "light")
+        if target not in PALETTES:
+            target = "light"
+        set_palette(target)
+        self.settings.ui_theme = target
+        self.save_settings()
+        ui_common.apply_theme(self)
+        ui_common.recolor_widgets(self, old, live_colors)
+        page = self.pages.get("settings")
+        status = getattr(page, "theme_status", None) if page is not None else None
+        if status is not None:
+            status.set("Текущая тема: " + ("тёмная" if target == "dark"
+                                           else "светлая") + ".")
+        self.set_status("Тема: " + ("тёмная" if target == "dark" else "светлая")
+                        + " · переключение сохранено")
+
     def show_shortcuts_help(self):
         messagebox.showinfo(
             "Горячие клавиши",
@@ -293,7 +320,7 @@ class TrainingHubApp(tk.Tk):
             "F3 / Shift+F3 — следующее/предыдущее совпадение\n"
             "Ctrl+F2 — закладка, F2 / Shift+F2 — между закладками\n"
             "Ctrl+G — перейти к строке; Ctrl+Shift+G — панель Git\n"
-            "Ctrl++ / Ctrl+- — масштаб шрифта редактора\n"
+            "Ctrl+\\ — разделённый вид; Ctrl++ / Ctrl+- — масштаб шрифта\n"
             "F5 — обновить текущую страницу\n"
             "F1 — эта справка\n"
             "Ctrl+Enter — отправить сообщение в чате\n"

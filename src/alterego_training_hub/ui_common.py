@@ -41,12 +41,12 @@ def apply_theme(root: tk.Tk) -> ttk.Style:
     style.configure("Muted.TLabel", background=C["bg"], foreground=C["muted"], font=F_SMALL)
     style.configure("Muted.Panel.TLabel", background=C["panel"], foreground=C["muted"], font=F_SMALL)
     style.configure("Bold.TLabel", background=C["bg"], foreground=C["text"], font=F_BOLD)
-    style.configure("Status.TLabel", background="#e8edf5", foreground=C["muted"], font=F_SMALL,
+    style.configure("Status.TLabel", background=C["statusbar"], foreground=C["muted"], font=F_SMALL,
                      padding=(10, 4))
 
     style.configure("TButton", font=F_BASE, padding=(12, 6), background=C["panel"])
     style.map("TButton",
-              background=[("active", "#e7edf7")],
+              background=[("active", C["hover"])],
               foreground=[("disabled", "#9aa7b8")])
     style.configure("Accent.TButton", background=C["accent"], foreground="#ffffff", font=F_BOLD,
                      padding=(14, 7))
@@ -55,7 +55,7 @@ def apply_theme(root: tk.Tk) -> ttk.Style:
               foreground=[("disabled", "#eef4ff")])
     style.configure("Danger.TButton", background=C["panel"], foreground=C["danger"],
                      padding=(12, 6))
-    style.map("Danger.TButton", background=[("active", "#fde8e8")])
+    style.map("Danger.TButton", background=[("active", C["danger_soft"])])
 
     style.configure("TEntry", padding=5)
     style.configure("TCombobox", padding=4)
@@ -72,6 +72,68 @@ def apply_theme(root: tk.Tk) -> ttk.Style:
     style.configure("Vertical.TScrollbar", background=C["border"], troughcolor=C["bg"],
                      borderwidth=0)
     return style
+
+
+_RECOLOR_OPTIONS = (
+    "bg", "fg", "activebackground", "activeforeground", "selectbackground",
+    "selectforeground", "insertbackground", "disabledforeground",
+    "highlightbackground", "highlightcolor", "readonlybackground",
+    "troughcolor",
+)
+_TAG_OPTIONS = ("background", "foreground", "selectbackground",
+                "selectforeground")
+
+
+def recolor_widgets(root, old: dict[str, str], new: dict[str, str]) -> None:
+    """Rewrite already-built widgets from one palette to another (theme switch).
+
+    Walks every descendant of ``root`` and swaps any colour value that came
+    from the old palette, including text-widget tags. Widgets that reject an
+    option (ttk ones) are skipped silently.
+    """
+    from .theme import color_map
+
+    mapping = color_map(old, new)
+    if not mapping:
+        return
+
+    def swap(value):
+        if isinstance(value, str):
+            return mapping.get(value.lower(), value)
+        return value
+
+    try:
+        widgets = list(root.winfo_all() or ())
+    except Exception:  # noqa: BLE001 - fake widgets / destroyed root
+        return
+    for widget in widgets:
+        for option in _RECOLOR_OPTIONS:
+            try:
+                current = widget.cget(option)
+            except Exception:  # noqa: BLE001 - option not supported
+                continue
+            replacement = swap(current)
+            if replacement != current:
+                try:
+                    widget.configure(**{option: replacement})
+                except Exception:  # noqa: BLE001 - ttk rejects colour options
+                    pass
+        try:
+            tag_names = widget.tag_names()
+        except Exception:  # noqa: BLE001 - no tags (plain widgets / fakes)
+            tag_names = ()
+        for tag in tag_names:
+            for option in _TAG_OPTIONS:
+                try:
+                    current = widget.tag_cget(tag, option)
+                except Exception:  # noqa: BLE001
+                    continue
+                replacement = swap(current)
+                if replacement != current:
+                    try:
+                        widget.tag_configure(tag, **{option: replacement})
+                    except Exception:  # noqa: BLE001
+                        pass
 
 
 def page_header(parent, title: str, subtitle: str = "") -> tk.Frame:

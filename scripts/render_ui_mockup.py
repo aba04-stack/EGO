@@ -151,7 +151,7 @@ def draw_shell(c: Canvas, active: str, status: str, badge: str):
     c.rect(SIDE, term_y, cxp - SIDE, 1, C["border"])
 
     # Status bar
-    c.rect(0, VH - 26, VW, 26, "#e8edf5")
+    c.rect(0, VH - 26, VW, 26, C["statusbar"])
     c.text(12, VH - 19, status, 8.5, fill=C["muted"])
     c.text(VW - 14, VH - 19, badge, 8.5, fill=C["muted"], anchor="ra")
 
@@ -260,7 +260,7 @@ def card(c: Canvas, x, y, w, h, title=None):
     return y + (34 if title else 12)
 
 
-def render_chat() -> Path:
+def render_chat(name: str = "ui-chat.png") -> Path:
     """IDE view: code editor in the center, terminal below, agent chat at right."""
     c = Canvas()
     draw_shell(c, "Редактор кода", "Готово: ответ наставника", "папка: alterego-train")
@@ -369,7 +369,7 @@ def render_chat() -> Path:
 
     draw_terminal(c)
     draw_chat_panel(c, agent_mode=True)
-    return c.save("ui-chat.png")
+    return c.save(name)
 
 
 def render_dashboard() -> Path:
@@ -564,5 +564,12 @@ def render_servers() -> Path:
 
 
 if __name__ == "__main__":
-    for path in (render_chat(), render_dashboard(), render_servers()):
-        print(f"written: {path}")
+    if "--dark" in sys.argv:
+        from alterego_training_hub.theme import set_palette
+
+        set_palette("dark")
+        for path in (render_chat("ui-dark.png"),):
+            print(f"written: {path}")
+    else:
+        for path in (render_chat(), render_dashboard(), render_servers()):
+            print(f"written: {path}")

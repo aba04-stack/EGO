@@ -68,9 +68,14 @@ class ModelDashboardPage(tk.Frame):
         tk.Label(progress, textvariable=self.anomaly_var, bg=C["panel"],
                  fg=C["warning"], font=F_SMALL, wraplength=520, justify="left").pack(
             anchor="w")
+        self.watchdog_var = tk.StringVar(value="")
+        tk.Label(progress, textvariable=self.watchdog_var, bg=C["panel"],
+                 fg=C["muted"], font=F_SMALL, wraplength=520, justify="left").pack(
+            anchor="w")
         self.chart = tk.Canvas(progress, width=520, height=190, bg=C["panel"],
                                highlightthickness=0)
         self.chart.pack(fill="both", expand=True, pady=(6, 0))
+        self._poll_running = False
 
         # Assessment card
         assess = card(body, "Оценка наставника")
@@ -116,6 +121,7 @@ class ModelDashboardPage(tk.Frame):
     # -------------------------------------------------------------- refresh
     def on_show(self):
         self.refresh()
+        self._schedule_poll()
 
     def _load_model_entries(self):
         try:
@@ -204,6 +210,34 @@ class ModelDashboardPage(tk.Frame):
             if key in summary.last and key not in series:
                 series[key] = summary.series(key)
         draw_line_chart(self.chart, series)
+
+        # Watchdog: same detectors the mentor sees, right under the chart.
+        try:
+            from .watchdog import detect_issues
+
+            report_lines = [
+                issue.line() for issue in detect_issues(
+                    summary, running=status.running)]
+            self.watchdog_var.set("\n".join(report_lines[:4]))
+        except Exception:  # noqa: BLE001 - watchdog must never break the page
+            self.watchdog_var.set("")
+
+    def _schedule_poll(self):
+        """Refresh the chart while the page is open (live training view)."""
+        if self._poll_running:
+            return
+        self._poll_running = True
+        self._poll_once()
+
+    def _poll_once(self):
+        try:
+            self.refresh()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            self.after(5000, self._poll_once)
+        except Exception:  # noqa: BLE001 - no display server in tests
+            self._poll_running = False
 
     def _render_assessment(self):
         from .report import ModelReport

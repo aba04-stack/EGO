@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import queue
+import time
 import tkinter as tk
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -50,6 +51,12 @@ class TrainingHubApp(tk.Tk):
         self.servers = ServerStore()
         self.events: queue.Queue = queue.Queue()
         self.agent_plan: list[str] = []
+        self.agent_tasks: list[dict] = []
+        from .watchdog import TrainingWatchdog
+
+        self.watchdog = TrainingWatchdog()
+        self._watchdog_tail: tuple[int, float] = (0, 0.0)
+        self._watchdog_started = False
         self.executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="alterego-hub")
         self._closing = False
         self._nav_buttons: dict[str, tk.Label] = {}
@@ -213,6 +220,7 @@ class TrainingHubApp(tk.Tk):
         self.show_page("editor")
         self._refresh_workspace_badge()
         self._bind_shortcuts()
+        self._start_watchdog()
         self.set_status("Готово · F1 — горячие клавиши")
 
     def show_bottom(self, which: str):
@@ -468,6 +476,51 @@ class TrainingHubApp(tk.Tk):
         self.settings.save()
         self._refresh_workspace_badge()
 
+    # ----------------------------------------------------------- watchdog
+    def _start_watchdog(self):
+        """Poll training health in the background; log fresh issues once."""
+        if self._watchdog_started:
+            return
+        self._watchdog_started = True
+        try:
+            self.after(15_000, self._watchdog_tick)
+        except Exception:  # noqa: BLE001 - no display server (tests)
+            pass
+
+    def _watchdog_tick(self):
+        try:
+            status = self.training.status()
+            if status.running:
+                tail = self.training.tail()
+                now = time.time()
+                last_len, last_time = self._watchdog_tail
+                quiet = 0.0
+                if len(tail) == last_len and last_time:
+                    quiet = now - last_time
+                self._watchdog_tail = (len(tail), now if len(tail) != last_len
+                                       else last_time or now)
+                from .metrics import parse_log
+                from .watchdog import DEFAULT_QUIET_SECONDS
+
+                summary = parse_log(tail)
+                report = self.watchdog.evaluate(
+                    summary, running=True,
+                    quiet_seconds=quiet if quiet >= DEFAULT_QUIET_SECONDS else 0.0)
+                for issue in report.issues:
+                    self.activity.log("watchdog", issue.line(),
+                                      ok=issue.severity == "info")
+                if any(issue.severity == "crit" for issue in report.issues):
+                    self.set_status("⚠ Watchdog: критическая проблема обучения")
+            else:
+                self._watchdog_tail = (0, 0.0)
+                self.watchdog.reset()
+        except Exception:  # noqa: BLE001 - watchdog must never crash the app
+            pass
+        try:
+            self.after(15_000, self._watchdog_tick)
+        except Exception:  # noqa: BLE001
+            pass
+
     def _refresh_workspace_badge(self):
         path = (self.settings.workspace_path or "").strip()
         self.workspace_badge.set(f"папка: {Path(path).name}" if path else "папка не выбрана")
@@ -594,6 +647,7 @@ class TrainingHubApp(tk.Tk):
             except Exception as exc:
                 return {"ok": False, "error": str(exc)}
             record = self.runs.start(command, str(root), log_path)
+            self.watchdog.reset()
             self.activity.log("training", f"Агент запустил обучение: {command}",
                               run_id=record.id)
             return {"ok": True, "log_path": log_path, "run_id": record.id}
@@ -726,8 +780,39 @@ class TrainingHubApp(tk.Tk):
                 return {"ok": False, "error": "План должен содержать шаги."}
             clean = [str(step).strip()[:200] for step in steps if str(step).strip()][:12]
             self.agent_plan = clean
+            self.agent_tasks = [{"title": step, "status": "pending"} for step in clean]
             self.activity.log("plan", "План агента:\n- " + "\n- ".join(clean))
             return {"ok": True, "steps": clean}
+
+        def update_plan(args):
+            raw_steps = args.get("steps") or []
+            if not isinstance(raw_steps, list) or not raw_steps:
+                return {"ok": False, "error": "План должен содержать шаги."}
+            allowed = {"pending", "in_progress", "done", "failed"}
+            tasks: list[dict] = []
+            for item in raw_steps[:12]:
+                if isinstance(item, dict):
+                    title = str(item.get("title") or "").strip()[:200]
+                    status = str(item.get("status") or "pending")
+                else:
+                    title, status = str(item).strip()[:200], "pending"
+                if title:
+                    tasks.append({"title": title,
+                                  "status": status if status in allowed
+                                  else "pending"})
+            if not tasks:
+                return {"ok": False, "error": "План должен содержать шаги."}
+            self.agent_tasks = tasks
+            self.agent_plan = [task["title"] for task in tasks]
+            marks = {"done": "✓", "failed": "✗", "in_progress": "▶", "pending": "○"}
+            self.activity.log("plan", "План агента:\n" + "\n".join(
+                f"{marks.get(task['status'], '○')} {task['title']}"
+                for task in tasks))
+            chat_panel = getattr(self, "chat_panel", None)
+            handler = getattr(chat_panel, "on_agent_event", None)
+            if callable(handler):
+                handler("plan", {"tasks": tasks})
+            return {"ok": True, "tasks": tasks}
 
         def spawn_subagent(args):
             if not self.settings.agent_subagents:
@@ -783,6 +868,7 @@ class TrainingHubApp(tk.Tk):
             "get_training_control": get_training_control,
             "set_training_control": set_training_control,
             "set_plan": set_plan,
+            "update_plan": update_plan,
             "spawn_subagent": spawn_subagent,
         }
         schemas = list(TRAINING_CONTEXT_TOOL_SCHEMAS) + list(MODEL_TOOLS_SCHEMAS) + [

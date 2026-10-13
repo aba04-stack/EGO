@@ -108,6 +108,20 @@ class SettingsPage(tk.Frame):
         agent_card = agent_section.body
         agent_card.columnconfigure(1, weight=1)
 
+        profile_row = tk.Frame(agent_card, bg=C["panel"])
+        profile_row.pack(fill="x")
+        tk.Label(profile_row, text="Профиль агента", bg=C["panel"],
+                 font=F_BASE).pack(side="left", padx=(0, 6))
+        from .agent_profiles import profile_info, profile_labels
+
+        current_profile = profile_info(self.app.settings.agent_profile)
+        self.agent_profile_var = tk.StringVar(value=current_profile.label)
+        ttk.Combobox(profile_row, textvariable=self.agent_profile_var,
+                     values=profile_labels(), state="readonly",
+                     width=24).pack(side="left", padx=(0, 8))
+        ttk.Button(profile_row, text="Применить профиль",
+                   command=self.apply_agent_profile).pack(side="left")
+
         agent_row = tk.Frame(agent_card, bg=C["panel"])
         agent_row.pack(fill="x")
         tk.Label(agent_row, text="Максимум шагов", bg=C["panel"],
@@ -340,6 +354,23 @@ class SettingsPage(tk.Frame):
         except Exception as exc:
             messagebox.showerror("ИИ-наставник", str(exc), parent=self)
 
+    def apply_agent_profile(self):
+        from .agent_profiles import apply_profile, profile_id_by_label
+
+        profile = apply_profile(self.app.settings,
+                                profile_id_by_label(self.agent_profile_var.get()))
+        self.agent_steps_var.set(str(self.app.settings.agent_max_steps))
+        self.agent_reasoning_var.set(self.app.settings.agent_reasoning)
+        self.agent_verify_var.set(bool(self.app.settings.agent_verify))
+        self.agent_subagents_var.set(bool(self.app.settings.agent_subagents))
+        self.agent_extra_text.delete("1.0", "end")
+        self.agent_extra_text.insert("1.0", self.app.settings.agent_system_extra)
+        self.app.save_settings()
+        messagebox.showinfo(
+            "ИИ-агент",
+            f"Профиль «{profile.label}» применён и сохранён.",
+            parent=self)
+
     def save_agent(self):
         try:
             steps = int(self.agent_steps_var.get())
@@ -352,6 +383,10 @@ class SettingsPage(tk.Frame):
         reasoning = self.agent_reasoning_var.get().strip().lower()
         if reasoning not in {"off", "low", "medium", "high"}:
             reasoning = "medium"
+        from .agent_profiles import profile_id_by_label
+
+        self.app.settings.agent_profile = profile_id_by_label(
+            self.agent_profile_var.get())
         self.app.settings.agent_max_steps = steps
         self.app.settings.agent_reasoning = reasoning
         self.app.settings.agent_verify = bool(self.agent_verify_var.get())

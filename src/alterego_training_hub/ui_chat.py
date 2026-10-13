@@ -76,6 +76,13 @@ class ChatPage(tk.Frame):
 
         quick = tk.Frame(self, bg=C["panel"])
         quick.pack(fill="x", padx=8, pady=(4, 0))
+
+        # Live plan checklist published by the agent via update_plan.
+        self.tasks_var = tk.StringVar(value="")
+        self.tasks_label = tk.Label(
+            self, textvariable=self.tasks_var, bg=C["panel"], fg=C["muted"],
+            font=F_SMALL, wraplength=340, justify="left", anchor="w")
+        self.tasks_label.pack(fill="x", padx=8, pady=(2, 0))
         for label, builder in [
             ("Оценка", lambda: self.app.assessment_prompt()),
             ("Прогресс", lambda: (
@@ -240,6 +247,15 @@ class ChatPage(tk.Frame):
                 self.log_activity(f"инструментов к вызову: {count}")
             elif payload.get("text"):
                 self.log_activity("наставник формирует ответ")
+        elif kind == "plan":
+            tasks = payload.get("tasks") or []
+            marks = {"done": "✓", "failed": "✗", "in_progress": "▶", "pending": "○"}
+            self.tasks_var.set("   ".join(
+                f"{marks.get(task.get('status', 'pending'), '○')} "
+                f"{str(task.get('title', ''))[:40]}"
+                for task in tasks[:6]))
+            done = sum(1 for task in tasks if task.get("status") == "done")
+            self.log_activity(f"план обновлён: {done}/{len(tasks)} шагов готово")
 
     # ----------------------------------------------------------------- send
     def send(self):

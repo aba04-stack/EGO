@@ -265,31 +265,43 @@ CHART_COLORS = ["#3b82f6", "#16a34a", "#d97706", "#dc2626", "#8b5cf6"]
 
 def draw_line_chart(canvas: tk.Canvas, series: dict[str, list[float]],
                     *, width: int = 520, height: int = 200) -> None:
-    """Draw a small multi-line chart on a tk.Canvas (metrics history)."""
+    """Draw a multi-line metrics chart on a tk.Canvas (history + live update)."""
+    from .chart import SeriesView, chart_points, format_tick, nice_ticks, value_range
+
     canvas.delete("all")
-    valid = {key: values for key, values in series.items() if len(values) >= 2}
+    valid = {key: values for key, values in series.items() if len(values) >= 1}
     if not valid:
         canvas.create_text(width / 2, height / 2, text="Нет данных для графика",
                            fill=C["muted"], font=F_SMALL)
         return
-    all_values = [value for values in valid.values() for value in values]
-    vmin, vmax = min(all_values), max(all_values)
-    if vmax - vmin < 1e-12:
-        vmax = vmin + 1.0
+    vmin, vmax = value_range(
+        [SeriesView(name=key, values=list(values)) for key, values in valid.items()])
     pad_x, pad_y = 46, 26
 
-    def xy(index: int, count: int, value: float):
-        x = pad_x + (width - 2 * pad_x) * index / max(1, count - 1)
-        y = height - pad_y - (height - 2 * pad_y) * (value - vmin) / (vmax - vmin)
-        return x, y
+    # Grid + ticks from the shared scale.
+    for tick in nice_ticks(vmin, vmax, 5):
+        points = chart_points([tick, tick], width, height, vmin=vmin, vmax=vmax,
+                              pad=pad_y)
+        if not points:
+            continue
+        y = points[0][1]
+        if 10 <= y <= height - pad_y:
+            canvas.create_line(pad_x, y, width - 10, y, fill=C["border"],
+                               dash=(2, 4))
+            canvas.create_text(pad_x - 6, y, text=format_tick(tick), anchor="e",
+                               fill=C["muted"], font=F_SMALL)
 
     canvas.create_line(pad_x, height - pad_y, width - 10, height - pad_y,
                        fill=C["border"])
     canvas.create_line(pad_x, 10, pad_x, height - pad_y, fill=C["border"])
-    canvas.create_text(pad_x - 6, 14, text=f"{vmax:.3g}", anchor="e",
-                       fill=C["muted"], font=F_SMALL)
-    canvas.create_text(pad_x - 6, height - pad_y, text=f"{vmin:.3g}", anchor="e",
-                       fill=C["muted"], font=F_SMALL)
+
+    def xy(index: int, count: int, value: float):
+        points = chart_points([value], width, height, vmin=vmin, vmax=vmax,
+                              pad=pad_y)
+        if count <= 1:
+            return pad_x + (width - 2 * pad_x) / 2, points[0][1] if points else height / 2
+        x = pad_x + (width - 2 * pad_x) * index / max(1, count - 1)
+        return x, points[0][1] if points else height / 2
 
     for idx, (key, values) in enumerate(valid.items()):
         color = CHART_COLORS[idx % len(CHART_COLORS)]
@@ -297,7 +309,8 @@ def draw_line_chart(canvas: tk.Canvas, series: dict[str, list[float]],
         for i, value in enumerate(values):
             x, y = xy(i, len(values), value)
             coords.extend((x, y))
-        canvas.create_line(*coords, fill=color, width=2, smooth=True)
+        if len(coords) >= 4:
+            canvas.create_line(*coords, fill=color, width=2, smooth=True)
         last_x, last_y = xy(len(values) - 1, len(values), values[-1])
         canvas.create_oval(last_x - 3, last_y - 3, last_x + 3, last_y + 3,
                            fill=color, outline=color)

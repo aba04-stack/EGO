@@ -206,6 +206,31 @@ MODEL_TOOLS_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_plan",
+            "description": "Опубликовать/обновить рабочий план с прогрессом: шаги со "
+                           "статусами pending, in_progress, done, failed. "
+                           "Обновляй статусы по мере работы.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "steps": {"type": "array", "items": {
+                        "type": "object",
+                        "properties": {
+                            "title": {"type": "string"},
+                            "status": {"type": "string",
+                                       "enum": ["pending", "in_progress",
+                                                "done", "failed"]},
+                        },
+                        "required": ["title"],
+                    }},
+                },
+                "required": ["steps"],
+            },
+        },
+    },
 ]
 
 
@@ -475,6 +500,10 @@ class MentorAgent:
         readonly: bool = False,
     ) -> dict[str, Any]:
         description = _describe(call)
+        if (self.workspace is not None and self.needs_confirmation(call.name)):
+            diff = self.workspace.preview_change(call.name, call.arguments)
+            if diff and diff != "(без изменений)":
+                description += "\n\nПредпросмотр изменений:\n" + diff
         emit("tool_start", {"name": call.name, "arguments": call.arguments,
                             "description": description, "index": index})
         if readonly and (call.name in self.extra_mutations
@@ -572,6 +601,7 @@ def _describe(call: ToolCall) -> str:
         "get_training_control": "Горячие параметры обучения",
         "set_training_control": "Скорректировать обучение на лету",
         "set_plan": "Опубликовать рабочий план",
+        "update_plan": "Обновить план и статусы шагов",
         "spawn_subagent": "Запустить подагента на подзадачу",
     }
     base = descriptions.get(call.name, call.name)
@@ -579,6 +609,9 @@ def _describe(call: ToolCall) -> str:
         return f"{base}: → {call.arguments.get('to', '')} «{call.arguments.get('subject', '')}»"
     if call.name in {"search_github", "search_huggingface"}:
         return f"{base}: {call.arguments.get('query', '')}"
+    if call.name == "update_plan":
+        steps = call.arguments.get("steps") or []
+        return f"{base}: шагов — {len(steps)}"
     return base
 
 

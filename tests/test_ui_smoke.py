@@ -1105,3 +1105,64 @@ def test_agent_settings_and_model_tools(fake_ui, tmp_path):
     # Subagents are disabled in settings → tool refuses politely.
     result = tools["spawn_subagent"]({"goal": "проверка"})
     assert result["ok"] is False
+
+
+def test_update_plan_profiles_watchdog_and_chart(fake_ui, tmp_path):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+
+    # update_plan stores tasks and notifies the chat panel.
+    tools, schemas, mutations = app.agent_extra_tools()
+    assert any(schema["function"]["name"] == "update_plan" for schema in schemas)
+    result = tools["update_plan"]({"steps": [
+        {"title": "прочитать метрики", "status": "done"},
+        {"title": "скорректировать lr", "status": "in_progress"},
+        {"title": "проверить результат", "status": "pending"},
+    ]})
+    assert result["ok"] is True
+    assert app.agent_tasks[0]["status"] == "done"
+    assert app.chat_panel.tasks_var.get()  # checklist rendered
+    result = tools["update_plan"]({"steps": []})
+    assert result["ok"] is False
+
+    # Agent profiles apply and persist.
+    settings_page = app.pages["settings"]
+    settings_page.agent_profile_var.set("Ревьюер кода")
+    settings_page.apply_agent_profile()
+    assert app.settings.agent_profile == "reviewer"
+    assert app.settings.agent_verify is True
+    assert app.settings.agent_reasoning == "high"
+    assert "ревью" in app.settings.agent_system_extra.lower()
+
+    # Watchdog tick is safe to run headless and resets when idle.
+    app._watchdog_tick()
+    assert app.watchdog.last_report is None  # nothing running → reset
+
+    # Chart maths work through the shared drawing helper.
+    from alterego_training_hub.ui_common import draw_line_chart
+
+    class FakeCanvas:
+        def __init__(self):
+            self.items = []
+
+        def delete(self, *a):
+            self.items.clear()
+
+        def create_line(self, *coords, **kw):
+            self.items.append(("line", coords))
+
+        def create_text(self, *a, **kw):
+            self.items.append(("text", a))
+
+        def create_oval(self, *a, **kw):
+            self.items.append(("oval", a))
+
+    canvas = FakeCanvas()
+    draw_line_chart(canvas, {"loss": [2.0, 1.5, 1.1, 0.9]})
+    kinds = {kind for kind, _ in canvas.items}
+    assert {"line", "text", "oval"} <= kinds
+
+    # Model dashboard renders the live chart + watchdog lines.
+    model_page = app.pages["model"]
+    model_page._render_progress()
+    assert model_page.watchdog_var.get() is not None

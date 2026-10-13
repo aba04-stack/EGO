@@ -6,6 +6,7 @@ Mutating tools are marked so the UI can require explicit confirmation.
 """
 from __future__ import annotations
 
+import difflib
 import json
 import re
 import shlex
@@ -13,7 +14,9 @@ import subprocess
 from pathlib import Path
 from typing import Any, Callable
 
-READONLY_TOOLS: frozenset[str] = frozenset({"list_files", "read_file", "search_files"})
+READONLY_TOOLS: frozenset[str] = frozenset(
+    {"list_files", "read_file", "search_files", "diff_files"})
+MAX_DIFF_LINES = 40
 
 # Human-readable descriptions shown in confirmation dialogs (Russian UI).
 TOOL_DESCRIPTIONS_RU: dict[str, str] = {
@@ -23,7 +26,22 @@ TOOL_DESCRIPTIONS_RU: dict[str, str] = {
     "write_file": "Записать/создать файл",
     "replace_in_file": "Заменить текст в файле",
     "run_command": "Выполнить команду",
+    "diff_files": "Сравнить два файла",
 }
+
+
+def preview_diff(old: str, new: str, path: str = "file", *,
+                 max_lines: int = MAX_DIFF_LINES) -> str:
+    """Unified diff between two texts, clipped to a dialog-friendly size."""
+    diff = list(difflib.unified_diff(
+        old.splitlines(keepends=True), new.splitlines(keepends=True),
+        fromfile=f"a/{path}", tofile=f"b/{path}"))
+    if not diff:
+        return "(без изменений)"
+    clipped = diff[:max_lines]
+    if len(diff) > max_lines:
+        clipped.append(f"…[ещё {len(diff) - max_lines} строк диффа]\n")
+    return "".join(clipped)
 
 MAX_FILE_READ_BYTES = 200_000
 MAX_TOOL_OUTPUT_CHARS = 20_000
@@ -133,6 +151,22 @@ WORKSPACE_TOOL_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "diff_files",
+            "description": "Сравнить два файла рабочей папки (unified diff). "
+                           "Полезно для самопроверки изменений.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path_a": {"type": "string", "description": "Первый файл"},
+                    "path_b": {"type": "string", "description": "Второй файл"},
+                },
+                "required": ["path_a", "path_b"],
+            },
+        },
+    },
 ]
 
 TOOL_NAMES: frozenset[str] = frozenset(
@@ -195,6 +229,7 @@ class WorkspaceTools:
             "write_file": self.write_file,
             "replace_in_file": self.replace_in_file,
             "run_command": self.run_command,
+            "diff_files": self.diff_files,
         }.get(str(name))
         if handler is None:
             return {"ok": False, "error": f"Неизвестный инструмент: {name}"}
@@ -229,7 +264,56 @@ class WorkspaceTools:
             return f"{base}: {args.get('command', '')}"
         if name == "search_files":
             return f"{base}: {args.get('pattern', '')}"
+        if name == "diff_files":
+            return f"{base}: {args.get('path_a', '')} ↔ {args.get('path_b', '')}"
         return base
+
+    def preview_change(self, name: str,
+                       arguments: dict[str, Any] | None = None) -> str:
+        """Unified diff a mutation *would* produce — shown before confirmation.
+
+        Returns an empty string when the preview is not applicable or the
+        file cannot be read (never raises: preview must not break the gate).
+        """
+        try:
+            args = dict(arguments or {})
+            path = str(args.get("path") or "")
+            if not path:
+                return ""
+            if name == "write_file":
+                target = self._resolve(path)
+                old = ""
+                if target.is_file():
+                    old = target.read_text(encoding="utf-8", errors="replace")
+                return preview_diff(old, str(args.get("content") or ""), path)
+            if name == "replace_in_file":
+                target = self._resolve(path, must_exist=True)
+                old = target.read_text(encoding="utf-8", errors="replace")
+                find = str(args.get("find") or "")
+                if not find:
+                    return ""
+                replace = str(args.get("replace") or "")
+                count = int(args.get("count") or 0)
+                new = old.replace(find, replace) if count <= 0 else \
+                    old.replace(find, replace, count)
+                return preview_diff(old, new, path)
+        except Exception:  # noqa: BLE001 - preview is advisory only
+            return ""
+        return ""
+
+    def diff_files(self, path_a: str, path_b: str) -> dict[str, Any]:
+        first = self._resolve(path_a, must_exist=True)
+        second = self._resolve(path_b, must_exist=True)
+        for label, target in ((path_a, first), (path_b, second)):
+            if not target.is_file():
+                raise ToolError(f"Это не файл: {label}")
+        old = first.read_text(encoding="utf-8", errors="replace")
+        new = second.read_text(encoding="utf-8", errors="replace")
+        diff = preview_diff(old, new, path_a)
+        same = old == new
+        return {"ok": True, "same": same,
+                "diff": "" if same else diff,
+                "summary": "файлы идентичны" if same else diff.splitlines()[0]}
 
     # -- tools -----------------------------------------------------------
     def list_files(self, path: str = "", recursive: bool = False,

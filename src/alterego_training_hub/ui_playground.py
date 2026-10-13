@@ -7,7 +7,7 @@ from tkinter import messagebox, ttk
 
 from .mentor import MentorError
 from .playground import PlaygroundClient, PlaygroundStore
-from .ui_common import C, F_BASE, F_SMALL, card, page_header, set_text
+from .ui_common import C, F_BASE, F_SMALL, Collapsible, card, page_header, set_text
 
 
 class PlaygroundPage(tk.Frame):
@@ -27,8 +27,10 @@ class PlaygroundPage(tk.Frame):
         )
         header.pack(fill="x", padx=24, pady=(20, 12))
 
-        setup = card(self, "Модели и параметры")
-        setup.pack(fill="x", padx=24, pady=(0, 12))
+        setup_section = Collapsible(self, "Модели и параметры")
+        setup_section.pack(fill="x", padx=24, pady=(0, 12))
+        setup_section.set_hint("свернуть/развернуть")
+        setup = setup_section.body
         row1 = tk.Frame(setup, bg=C["panel"])
         row1.pack(fill="x", pady=(2, 4))
         tk.Label(row1, text="Модель A", bg=C["panel"], font=F_BASE).pack(

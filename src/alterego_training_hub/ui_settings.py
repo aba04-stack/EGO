@@ -6,7 +6,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from .mentor import MentorError
-from .ui_common import C, F_BASE, F_SMALL, card, page_header
+from .ui_common import C, F_BASE, F_SMALL, Collapsible, page_header
 
 
 class SettingsPage(tk.Frame):
@@ -25,8 +25,10 @@ class SettingsPage(tk.Frame):
         header.pack(fill="x", padx=24, pady=(20, 12))
 
         # Mentor provider
-        mentor_card = card(self, "ИИ-наставник (OpenAI-совместимый API)")
-        mentor_card.pack(fill="x", padx=24, pady=(0, 12))
+        mentor_section = Collapsible(self, "ИИ-наставник (OpenAI-совместимый API)")
+        mentor_section.pack(fill="x", padx=24, pady=(0, 12))
+        mentor_section.set_hint("свернуть/развернуть")
+        mentor_card = mentor_section.body
         mentor_card.columnconfigure(1, weight=1)
 
         self.mentor_vars: dict[str, tk.StringVar] = {}
@@ -87,8 +89,9 @@ class SettingsPage(tk.Frame):
                                                                                 padx=8)
 
         # Keys for cloud
-        keys_card = card(self, "Ключи облачных сервисов")
-        keys_card.pack(fill="x", padx=24, pady=(0, 12))
+        keys_section = Collapsible(self, "Ключи облачных сервисов")
+        keys_section.pack(fill="x", padx=24, pady=(0, 12))
+        keys_card = keys_section.body
         row = tk.Frame(keys_card, bg=C["panel"])
         row.pack(fill="x")
         tk.Label(row, text="RunPod API-ключ", bg=C["panel"], font=F_BASE).pack(
@@ -106,8 +109,9 @@ class SettingsPage(tk.Frame):
                    command=self.delete_runpod_key).pack(side="left", padx=8)
 
         # Folders
-        folders_card = card(self, "Папки")
-        folders_card.pack(fill="x", padx=24, pady=(0, 12))
+        folders_section = Collapsible(self, "Папки")
+        folders_section.pack(fill="x", padx=24, pady=(0, 12))
+        folders_card = folders_section.body
         folders_card.columnconfigure(1, weight=1)
 
         self.workspace_var = tk.StringVar(value=self.app.settings.workspace_path)

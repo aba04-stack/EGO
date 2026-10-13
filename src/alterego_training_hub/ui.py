@@ -19,6 +19,7 @@ from .metrics import brief as metrics_brief, parse_log
 from .models_registry import ModelRegistry, default_library_dir
 from .report import REPORT_PROMPT_TEMPLATE, ReportStore
 from .runs import RunStore
+from .servers import ServerManager, ServerStore
 from .training import TrainingRun
 from .ui_common import C, F_NAV, F_NAV_SMALL, confirm_from_worker
 
@@ -37,6 +38,7 @@ class TrainingHubApp(tk.Tk):
         self.runs = RunStore()
         self.activity = ActivityLog()
         self.reports = ReportStore()
+        self.servers = ServerStore()
         self.events: queue.Queue = queue.Queue()
         self.executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="alterego-hub")
         self._closing = False
@@ -91,6 +93,7 @@ class TrainingHubApp(tk.Tk):
                 ("gpu", "Внешние GPU"),
             ]),
             ("СИСТЕМА", [
+                ("servers", "Серверы"),
                 ("connectors", "Коннекторы"),
                 ("settings", "Настройки"),
             ]),
@@ -125,6 +128,7 @@ class TrainingHubApp(tk.Tk):
         from .ui_model import ModelDashboardPage
         from .ui_models import ModelsPage
         from .ui_playground import PlaygroundPage
+        from .ui_servers import ServersPage
         from .ui_settings import SettingsPage
         from .ui_terminal import TerminalPanel
         from .ui_training import TrainingPage
@@ -140,6 +144,7 @@ class TrainingHubApp(tk.Tk):
             ("playground", PlaygroundPage),
             ("training", TrainingPage),
             ("gpu", GpuPage),
+            ("servers", ServersPage),
             ("connectors", ConnectorsPage),
             ("settings", SettingsPage),
         ]
@@ -305,6 +310,14 @@ class TrainingHubApp(tk.Tk):
         path.mkdir(parents=True, exist_ok=True)
         return path
 
+    def server_manager(self) -> ServerManager:
+        return ServerManager(self.servers, self.secrets)
+
+    def refresh_terminal_targets(self):
+        terminal = getattr(self, "terminal", None)
+        if terminal is not None:
+            terminal.refresh_targets()
+
     def mentor_client(self) -> ApiMentor:
         base_url = (self.settings.mentor_base_url or "").strip()
         model = (self.settings.mentor_model or "").strip()
@@ -428,6 +441,15 @@ class TrainingHubApp(tk.Tk):
             schemas.extend(conn_schemas)
             mutations |= set(conn_mutations)
         except Exception:  # noqa: BLE001 - connectors must not break the agent
+            pass
+
+        try:
+            srv_handlers, srv_schemas, srv_mutations = \
+                self.server_manager().agent_tools()
+            handlers.update(srv_handlers)
+            schemas.extend(srv_schemas)
+            mutations |= set(srv_mutations)
+        except Exception:  # noqa: BLE001 - servers must not break the agent
             pass
 
         return handlers, schemas, frozenset(mutations)

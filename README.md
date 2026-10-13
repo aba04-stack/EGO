@@ -4,18 +4,18 @@ A desktop development environment for LLM research with an IDE layout: code edit
 
 ## Interface
 
-| Editor + terminal + agent chat | Model dashboard |
-| --- | --- |
-| ![IDE with agent chat](docs/ui-chat.png) | ![Dashboard](docs/ui-dashboard.png) |
+| Editor + terminal + agent chat | Model dashboard | Servers (SSH) |
+| --- | --- | --- |
+| ![IDE with agent chat](docs/ui-chat.png) | ![Dashboard](docs/ui-dashboard.png) | ![Servers](docs/ui-servers.png) |
 
-Mockups are rendered from the app's real design tokens by `scripts/render_ui_mockup.py`.
+Mockups are rendered from the app's real design tokens by `scripts/render_ui_mockup.py`. Settings panels at the top of pages collapse/expand (▼/▶) so the workspace stays clean.
 
 ## Studio features
 
 **Разработка**
 - **Редактор кода** — file tree of the workspace, built-in editor (Ctrl+S), "обсудить с наставником" for any file, and **project scaffolding from templates**: a ready-to-run `train.py` + `config.json` + `eval.py` (stdlib-only) whose metrics are parsed by the dashboard out of the box.
 - **Рабочая папка** — pick one folder on your PC; all tools and training are confined to it. Git connect/clone/fetch/pull-ff/branch flows included.
-- **Терминал** — a bottom panel to run any command in the workspace and watch the output, with one-click re-run from history.
+- **Терминал** — a bottom panel to run any command in the workspace **or on a connected server** and watch the output, with one-click re-run from history; the panel itself can be collapsed.
 - **Наставник-агент** (right panel) — a chat mentor that works as an **autonomous agent**: it can inspect and edit code, run commands, query training state, use connectors and even start/stop training to reach your goal. Two modes: *Ассистент* (every mutating action asks for confirmation) and *Режим агента* (acts freely toward the goal; everything is still backed up and logged).
 
 **Библиотека**
@@ -29,7 +29,9 @@ Mockups are rendered from the app's real design tokens by `scripts/render_ui_moc
 - **Внешние GPU** — live RunPod catalog, GPU-rate budget gate (not a total-bill cap), confirmed pod lifecycle.
 
 **Система**
+- **Серверы** — подключение удалённых серверов по SSH: проверка связи, состояние системы (GPU/диск/нагрузка), выполнение команд вручную, из терминала или агентом. Пароли — только в системном хранилище.
 - **Коннекторы** — GitHub repository search, Hugging Face model search and model cards, Gmail notifications (SMTP with App Password). Tokens live only in the OS credential store; the same actions are exposed to the mentor-agent as tools.
+- Settings panels at the top of pages are **collapsible** (hide/show) so the workspace stays clean.
 - API keys only in the OS credential store (`keyring`); settings files contain no secrets.
 - Automatic timestamped backups before mentor file edits; JSONL audit trail outside the repository.
 - Package as a Windows executable using PyInstaller.
@@ -43,6 +45,11 @@ Mockups are rendered from the app's real design tokens by `scripts/render_ui_moc
 - Works with any OpenAI-compatible provider that supports `tools`; a plain-text ` ```tool ` fallback protocol is used when function calling is unavailable.
 - Quick commands: model assessment, training progress, log error triage. Structured assessments are saved to the model dashboard automatically.
 - The mentor participates in training: send it a training log (or let the app do it automatically on failure) and it will find errors, read the code, and propose fixes. Every edit is backed up before it is applied.
+
+**Remote servers (SSH)**
+- Register any SSH-reachable machine (name, host, port, user, key or password auth) on the **Серверы** page; passwords live in the OS credential store, never in files.
+- Test the connection, view system info (kernel, GPU, disk, load), and run arbitrary commands — from the page, from the terminal panel (target selector: Локально / server), or through the mentor-agent (`list_servers`, `server_info`, `run_on_server`).
+- The transport is paramiko (installed with the app); the registry is a plain JSON file you can edit or sync.
 
 **Training progress and metrics**
 - Parses logs for loss/accuracy/lr series, epoch progress, and draws a live chart.
@@ -71,6 +78,7 @@ Mockups are rendered from the app's real design tokens by `scripts/render_ui_moc
 - Git for Windows and a working credential helper for private repositories.
 - A RunPod API key only if using RunPod features.
 - An API key and model ID for an OpenAI-compatible mentor provider.
+- An SSH-reachable server is optional (the `paramiko` package is installed with the app).
 
 ## Run from source
 

@@ -49,9 +49,10 @@ class _Var:
 class _Treeview(_Widget):
     def __init__(self, *args, **kwargs):
         self._items = []
+        self._selection = ()
 
-    def insert(self, parent, index, **kwargs):
-        item_id = f"item-{len(self._items)}"
+    def insert(self, parent, index, iid=None, **kwargs):
+        item_id = iid or f"item-{len(self._items)}"
         self._items.append((item_id, kwargs))
         return item_id
 
@@ -60,10 +61,14 @@ class _Treeview(_Widget):
 
     def delete(self, *items):
         if items:
-            self._items = []
+            self._items = [it for it in self._items if it[0] not in items]
+            self._selection = tuple(s for s in self._selection if s not in items)
 
-    def selection(self):
-        return ()
+    def selection(self, *args):
+        return self._selection
+
+    def selection_set(self, *items):
+        self._selection = tuple(items)
 
     def heading(self, *args, **kwargs):
         pass
@@ -91,6 +96,28 @@ class _Entry(_Widget):
 
     def get(self, *args, **kwargs):
         return self._value
+
+
+class _Combobox(_Widget):
+    """Stateful combobox fake: set/get keep a value, configure keeps values."""
+
+    def __init__(self, *args, **kwargs):
+        self._value = str(kwargs.get("value") or "")
+        self._values = tuple(kwargs.get("values") or ())
+
+    def set(self, value):
+        self._value = str(value)
+
+    def get(self, *args, **kwargs):
+        return self._value
+
+    def configure(self, **kwargs):
+        if "values" in kwargs:
+            self._values = tuple(kwargs["values"])
+        return None
+
+    def config(self, **kwargs):
+        return self.configure(**kwargs)
 
 
 class _Text(_Widget):
@@ -147,7 +174,7 @@ def _fake_tkinter():
     ttk_mod.Label = _Widget
     ttk_mod.Button = _Widget
     ttk_mod.Entry = _Entry
-    ttk_mod.Combobox = _Widget
+    ttk_mod.Combobox = _Combobox
     ttk_mod.Treeview = _Treeview
     ttk_mod.Scrollbar = _Widget
     ttk_mod.LabelFrame = _Widget
@@ -221,9 +248,10 @@ def test_app_builds_and_pages_switch(fake_ui):
 
     assert set(app.pages) == {"chat", "editor", "workspace", "models", "datasets",
                               "model", "playground", "training", "gpu",
-                              "connectors", "settings"}
+                              "servers", "connectors", "settings"}
     for key in ["editor", "workspace", "models", "datasets", "model",
-                "playground", "training", "gpu", "connectors", "settings"]:
+                "playground", "training", "gpu", "servers", "connectors",
+                "settings"]:
         app.show_page(key)
     assert app._current_page == "settings"
     # "chat" is the docked right panel: show_page only focuses it.
@@ -294,13 +322,15 @@ def test_dashboard_training_and_agent_context(fake_ui):
             "start_training", "stop_training"} <= set(tools)
     assert {"search_github", "search_huggingface", "huggingface_model_card",
             "send_email"} <= set(tools)
+    assert {"list_servers", "server_info", "run_on_server"} <= set(tools)
     assert tools["get_training_status"]({})["ok"] is True
     assert tools["read_training_log"]({"max_bytes": 1000})["ok"] is True
     assert tools["get_run_history"]({"limit": 3})["ok"] is True
     assert tools["start_training"]({})["ok"] is False  # no workspace -> error dict
     assert tools["stop_training"]({})["ok"] is True
-    assert {"start_training", "stop_training", "send_email"} <= set(mutations)
-    assert len(schemas) >= 8
+    assert {"start_training", "stop_training", "send_email", "run_on_server"} \
+        <= set(mutations)
+    assert len(schemas) >= 11
 
     context = app.assessment_context()
     assert "Обучение" in context
@@ -486,3 +516,112 @@ def test_chat_send_and_reset(fake_ui, monkeypatch):
     # Reset: new session is empty again.
     chat.new_session()
     assert chat.session.messages == []
+
+
+def test_servers_page_collapsible_and_terminal(fake_ui, monkeypatch, tmp_path):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    ui_common_module = fake_ui["alterego_training_hub.ui_common"]
+    app = app_module.TrainingHubApp()
+
+    # Collapsible sections: toggle hides/shows the body.
+    section = ui_common_module.Collapsible(app.pages_host, "Настройки")
+    assert section.is_open is True
+    section.toggle()
+    assert section.is_open is False
+    section.toggle()
+    assert section.is_open is True
+    section.set_hint("свернуть/развернуть")
+
+    # Terminal: collapsible panel + target selector.
+    term = app.terminal
+    assert term.is_open is True
+    term.toggle()
+    assert term.is_open is False
+    term.toggle()
+    assert term.is_open is True
+    term.refresh_targets()  # no servers -> just "Локально", no crash
+
+    # Servers page: save via a fake manager (no keyring / network).
+    from alterego_training_hub.servers import (
+        ServerManager,
+        ServerStore,
+    )
+
+    class FakeSecrets:
+        def __init__(self):
+            self.data = {}
+
+        def set(self, key, value):
+            self.data[key] = value
+
+        def get(self, key):
+            if key not in self.data:
+                raise RuntimeError("нет ключа")
+            return self.data[key]
+
+        def delete(self, key):
+            self.data.pop(key, None)
+
+    class FakeRunner:
+        def __init__(self, entry, secret):
+            self.entry, self.secret = entry, secret
+
+        def connect(self):
+            pass
+
+        def run(self, command, timeout=60.0):
+            return {"ok": True, "exit_code": 0, "command": command,
+                    "output": "hello"}
+
+        def close(self):
+            pass
+
+    manager = ServerManager(ServerStore(tmp_path / "servers.json"), FakeSecrets(),
+                            runner_factory=lambda e, s: FakeRunner(e, s))
+    monkeypatch.setattr(app, "server_manager", lambda: manager)
+
+    page = app.pages["servers"]
+    app.show_page("servers")
+    page.refresh_list()
+    page.var_name.set("gpu-box")
+    page.var_host.set("10.0.0.5")
+    page.var_port.set("22")
+    page.var_user.set("dev")
+    page.var_auth.set("key")
+    page.save_server()
+    assert [e.name for e in manager.list()] == ["gpu-box"]
+
+    page.refresh_list()
+    page.tree.selection_set(manager.list()[0].id)
+    page._load_selected()
+    assert page.var_host.get() == "10.0.0.5"
+
+    ran = {}
+
+    def sync_start(label, task, on_success=None, on_error=None):
+        try:
+            value = task()
+        except Exception as exc:  # noqa: BLE001
+            if on_error:
+                on_error(str(exc))
+            return
+        ran["value"] = value
+        if on_success:
+            on_success(value)
+
+    monkeypatch.setattr(app, "start_async", sync_start)
+    page.cmd_var.set("uname -a")
+    page.run_remote()
+    assert ran["value"]["output"] == "hello"
+    assert "uname -a" in page.results.get("1.0", "end")
+
+    page.test_connection()
+    assert ran["value"]["ok"] is True
+
+    # The terminal now targets the saved server and can run remotely.
+    term.refresh_targets()
+    term.target.set("gpu-box")
+    term.cmd_entry.insert(0, "nvidia-smi")
+    term.run_command()
+    assert ran["value"]["command"] == "nvidia-smi"
+    assert "nvidia-smi" in term.output.get("1.0", "end")

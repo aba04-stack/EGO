@@ -7,7 +7,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 from .templates import TemplateError, create_project, list_templates
-from .ui_common import C, F_BASE, F_MONO, F_SMALL, card, page_header
+from .ui_common import C, F_BASE, F_MONO, F_SMALL, Collapsible, card, page_header
 
 IGNORED_DIRS = {".git", ".venv", "venv", "__pycache__", "node_modules",
                 ".mypy_cache", ".pytest_cache", "checkpoints"}
@@ -31,9 +31,10 @@ class EditorPage(tk.Frame):
         )
         header.pack(fill="x", padx=24, pady=(20, 10))
 
-        # Project scaffolding bar
-        scaffold = card(self)
-        scaffold.pack(fill="x", padx=24, pady=(0, 10))
+        # Project scaffolding bar (collapsible)
+        scaffold_section = Collapsible(self, "Новый проект из шаблона")
+        scaffold_section.pack(fill="x", padx=24, pady=(0, 10))
+        scaffold = scaffold_section.body
         row = tk.Frame(scaffold, bg=C["panel"])
         row.pack(fill="x")
         tk.Label(row, text="Новый проект", bg=C["panel"], font=F_BASE).pack(

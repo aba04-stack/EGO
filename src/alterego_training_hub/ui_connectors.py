@@ -6,7 +6,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from .connectors import ConnectorManager
-from .ui_common import C, F_BASE, F_MONO, F_SMALL, card, page_header, set_text
+from .ui_common import C, F_BASE, F_MONO, F_SMALL, Collapsible, card, page_header, set_text
 
 
 class ConnectorsPage(tk.Frame):
@@ -54,8 +54,9 @@ class ConnectorsPage(tk.Frame):
             self.cards[spec.id] = {"status": status_var, "secret": secret_var}
 
         # Actions
-        actions = card(self, "Действия")
-        actions.pack(fill="x", padx=24, pady=(0, 10))
+        actions_section = Collapsible(self, "Действия")
+        actions_section.pack(fill="x", padx=24, pady=(0, 10))
+        actions = actions_section.body
         row1 = tk.Frame(actions, bg=C["panel"])
         row1.pack(fill="x", pady=2)
         tk.Label(row1, text="GitHub / HF поиск", bg=C["panel"], font=F_BASE).pack(

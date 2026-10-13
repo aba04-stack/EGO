@@ -75,8 +75,18 @@ NAV_GROUPS = [
     ("РАЗРАБОТКА", ["Редактор кода", "Рабочая папка"]),
     ("БИБЛИОТЕКА", ["Модели", "Датасеты", "Модель и прогресс"]),
     ("ЭКСПЕРИМЕНТЫ", ["Playground", "Обучение", "Внешние GPU"]),
-    ("СИСТЕМА", ["Коннекторы", "Настройки"]),
+    ("СИСТЕМА", ["Серверы", "Коннекторы", "Настройки"]),
 ]
+
+
+def collapsible_header(c: Canvas, x, y, w, title, *, open_=True, hint=""):
+    """A settings-section header with a collapse chevron (as in the app)."""
+    c.rect(x, y, w, 30, C["panel"], radius=6)
+    c.text(x + 12, y + 9, "v" if open_ else ">", 9, bold=True, fill=C["muted"])
+    c.text(x + 30, y + 9, title, 9.5, bold=True, fill=C["text"])
+    if hint:
+        c.text(x + w - 12, y + 10, hint, 7.6, fill=C["muted"], anchor="ra")
+    return y + 30
 
 
 def draw_shell(c: Canvas, active: str, status: str, badge: str):
@@ -116,25 +126,28 @@ def draw_shell(c: Canvas, active: str, status: str, badge: str):
     c.text(VW - 14, VH - 19, badge, 8.5, fill=C["muted"], anchor="ra")
 
 
-def draw_terminal(c: Canvas):
+def draw_terminal(c: Canvas, *, target: str = "Локально", lines=None):
     cxp = VW - CHAT_W
     y0 = VH - 26 - TERM_H
     c.text(SIDE + 12, y0 + 10, "ТЕРМИНАЛ", 8, bold=True, fill=C["muted"])
-    c.rect(SIDE + 90, y0 + 8, 240, 20, C["panel_alt"], outline=C["border"], radius=4)
-    c.text(SIDE + 98, y0 + 13, "python -m pytest -q", 8.2, mono=True, fill=C["muted"])
-    c.rect(SIDE + 338, y0 + 8, 84, 20, C["accent"], radius=4)
-    c.text(SIDE + 350, y0 + 13, "▶ Выполнить", 8, bold=True, fill="#ffffff")
-    c.rect(SIDE + 430, y0 + 8, 64, 20, C["panel_alt"], outline=C["border"], radius=4)
-    c.text(SIDE + 442, y0 + 13, "Очистить", 8, fill=C["text"])
+    c.text(SIDE + 74, y0 + 13, "v", 8, bold=True, fill=C["muted"])
+    c.text(SIDE + 92, y0 + 10, "Цель", 8, fill=C["muted"])
+    c.rect(SIDE + 122, y0 + 8, 110, 20, C["panel_alt"], outline=C["border"], radius=4)
+    c.text(SIDE + 130, y0 + 13, target, 8, fill=C["text"])
+    c.rect(SIDE + 242, y0 + 8, 240, 20, C["panel_alt"], outline=C["border"], radius=4)
+    c.text(SIDE + 250, y0 + 13, "python -m pytest -q", 8.2, mono=True, fill=C["muted"])
+    c.rect(SIDE + 490, y0 + 8, 84, 20, C["accent"], radius=4)
+    c.text(SIDE + 502, y0 + 13, "▶ Выполнить", 8, bold=True, fill="#ffffff")
 
     c.rect(SIDE + 1, y0 + 34, cxp - SIDE - 2, TERM_H - 35, C["code_bg"])
-    lines = [
-        ("$ python -m pytest -q", C["code_fg"]),
-        ("....F..........", C["code_fg"]),
-        ("FAILED tests/test_loss.py::test_val_loss_finite", C["danger"]),
-        ("1 failed, 93 passed in 4.2s", C["code_fg"]),
-        ("[код 1 · 14:41]", C["muted"]),
-    ]
+    if lines is None:
+        lines = [
+            ("$ python -m pytest -q", C["code_fg"]),
+            ("....F..........", C["code_fg"]),
+            ("FAILED tests/test_loss.py::test_val_loss_finite", C["danger"]),
+            ("1 failed, 93 passed in 4.2s", C["code_fg"]),
+            ("[код 1 · 14:41]", C["muted"]),
+        ]
     for idx, (line, color) in enumerate(lines):
         c.text(SIDE + 14, y0 + 44 + idx * 17, line, 8.6, mono=True, fill=color)
 
@@ -219,24 +232,26 @@ def render_chat() -> Path:
     c.text(CX0, 58, "Сборка проекта, шаблоны обучения и правка файлов в рабочей "
                     "папке.", 9, fill=C["muted"])
 
-    # Scaffolding bar
-    c.text(CX0, 86, "Новый проект", 9, bold=True)
-    c.rect(CX0 + 90, 80, 120, 22, C["panel"], outline=C["border"], radius=4)
-    c.text(CX0 + 98, 86, "demo", 8.8, fill=C["muted"])
-    for idx, (label, primary) in enumerate([("Новый проект", False),
-                                            ("Шаблон обучения", False),
+    # Scaffolding bar (collapsible settings section)
+    y = collapsible_header(c, CX0, 78, CX1 - CX0, "Новый проект из шаблона",
+                           open_=True, hint="свернуть/развернуть")
+    c.rect(CX0, y, CX1 - CX0, 34, C["panel"], radius=6)
+    c.text(CX0 + 14, y + 10, "Имя", 8.6, bold=True, fill=C["muted"])
+    c.rect(CX0 + 44, y + 6, 110, 22, C["panel_alt"], outline=C["border"], radius=4)
+    c.text(CX0 + 52, y + 11, "demo", 8.6, fill=C["muted"])
+    for idx, (label, primary) in enumerate([("Создать проект", False),
                                             ("Базовый fine-tune", True)]):
-        bx = CX0 + 224 + idx * 116
-        c.rect(bx, 80, 108, 22, C["accent"] if primary else C["panel_alt"],
+        bx = CX0 + 172 + idx * 130
+        c.rect(bx, y + 6, 122, 22, C["accent"] if primary else C["panel_alt"],
                outline=None if primary else C["border"], radius=4)
-        c.text(bx + 10, 86, label, 8, bold=primary,
+        c.text(bx + 12, y + 11, label, 8, bold=primary,
                fill="#ffffff" if primary else C["text"])
 
     # File tree
     tw = 180
-    c.rect(CX0, 112, tw, 380, C["border"], radius=6)
-    c.rect(CX0 + 1, 113, tw - 2, 378, C["panel"], radius=6)
-    c.text(CX0 + 12, 122, "ФАЙЛЫ ПРОЕКТА", 7.8, bold=True, fill=C["muted"])
+    c.rect(CX0, 150, tw, 342, C["border"], radius=6)
+    c.rect(CX0 + 1, 151, tw - 2, 340, C["panel"], radius=6)
+    c.text(CX0 + 12, 160, "ФАЙЛЫ ПРОЕКТА", 7.8, bold=True, fill=C["muted"])
     tree = [
         ("> alterego-train", C["muted"], True),
         ("  v src", C["muted"], True),
@@ -249,7 +264,7 @@ def render_chat() -> Path:
         ("  README.md", C["text"], False),
     ]
     for idx, (label, color, dim) in enumerate(tree):
-        y = 142 + idx * 18
+        y = 180 + idx * 18
         if label.strip() == "train.py":
             c.rect(CX0 + 6, y - 3, tw - 12, 18, C["sidebar_active"], radius=3)
         c.text(CX0 + 12, y, label, 8.4, mono=True, fill=color, bold=not dim)
@@ -257,10 +272,10 @@ def render_chat() -> Path:
     # Editor
     ex = CX0 + tw + 12
     ew = CX1 - ex
-    c.rect(ex, 112, ew, 380, C["border"], radius=6)
-    c.rect(ex + 1, 113, ew - 2, 378, C["code_bg"], radius=6)
-    c.rect(ex + 1, 113, ew - 2, 26, C["panel"], radius=6)
-    c.text(ex + 12, 120, "src/train.py", 8.6, mono=True, fill=C["text"])
+    c.rect(ex, 150, ew, 342, C["border"], radius=6)
+    c.rect(ex + 1, 151, ew - 2, 340, C["code_bg"], radius=6)
+    c.rect(ex + 1, 151, ew - 2, 26, C["panel"], radius=6)
+    c.text(ex + 12, 158, "src/train.py", 8.6, mono=True, fill=C["text"])
     code = [
         "def train(model, loader, *, epochs=10, lr=3e-4):",
         "    opt = torch.optim.AdamW(model.parameters(), lr=lr)",
@@ -275,7 +290,7 @@ def render_chat() -> Path:
         "    return model",
     ]
     for idx, line in enumerate(code):
-        y = 150 + idx * 17
+        y = 188 + idx * 17
         c.text(ex + 12, y, f"{idx + 1:>3}", 7.6, mono=True, fill=C["muted"])
         c.text(ex + 36, y, line, 8.6, mono=True, fill=C["code_fg"])
 
@@ -392,6 +407,89 @@ def render_dashboard() -> Path:
     return c.save("ui-dashboard.png")
 
 
+def render_servers() -> Path:
+    """Servers page: collapsible connection settings, list, remote command."""
+    c = Canvas()
+    draw_shell(c, "Серверы", "Готово: команда на gpu-box", "папка: alterego-train")
+    c.text(CX0, 32, "Серверы", 15, bold=True)
+    c.text(CX0, 58, "Подключение удалённых серверов по SSH: проверка связи, состояние "
+                    "системы и команды — вручную или через агента.", 9, fill=C["muted"])
+
+    # Collapsible: connection settings (expanded)
+    y = collapsible_header(c, CX0, 84, CX1 - CX0, "Настройки подключения",
+                           open_=True, hint="свернуть/развернуть")
+    c.rect(CX0, y, CX1 - CX0, 156, C["panel"], radius=6)
+    fields = [
+        ("Имя", "gpu-box"), ("Хост (IP / домен)", "10.0.0.5"),
+        ("Порт", "22"), ("SSH-пользователь", "dev"),
+        ("Авторизация", "key"), ("Файл ключа", "~/.ssh/id_ed25519"),
+    ]
+    for idx, (label, value) in enumerate(fields):
+        fx = CX0 + 16 + (idx % 2) * 330
+        fy = y + 10 + (idx // 2) * 34
+        c.text(fx, fy + 6, label, 8.4, bold=True, fill=C["muted"])
+        c.rect(fx + 130, fy, 170, 22, C["panel_alt"], outline=C["border"], radius=4)
+        c.text(fx + 138, fy + 5, value, 8.4, fill=C["text"])
+    for idx, (label, primary) in enumerate([("Сохранить сервер", True),
+                                            ("Удалить", False),
+                                            ("Проверить подключение", False),
+                                            ("Информация о сервере", False)]):
+        bx = CX0 + 16 + idx * 150
+        c.rect(bx, y + 122, 140, 22,
+               C["danger"] if label == "Удалить" else
+               (C["accent"] if primary else C["panel_alt"]),
+               outline=None if (primary or label == "Удалить") else C["border"],
+               radius=4)
+        c.text(bx + 12, y + 127, label, 8, bold=primary or label == "Удалить",
+               fill="#ffffff" if (primary or label == "Удалить") else C["text"])
+
+    # Collapsible: server list (expanded)
+    y = collapsible_header(c, CX0, y + 166, CX1 - CX0, "Подключённые серверы",
+                           open_=True)
+    c.rect(CX0, y, CX1 - CX0, 86, C["panel"], radius=6)
+    headers = [("Имя", 16), ("Адрес", 130), ("Вход", 340), ("Состояние", 430)]
+    for title, dx in headers:
+        c.text(CX0 + dx, y + 8, title, 8, bold=True, fill=C["muted"])
+    rows = [
+        ("gpu-box", "dev@10.0.0.5:22", "key", "ok — 12 мс", C["success"]),
+        ("lab", "dev@192.168.1.10:22", "password", "ok — 3 мс", C["success"]),
+        ("old-box", "root@10.0.0.9:22", "key", "нет связи", C["danger"]),
+    ]
+    for idx, (name, addr, auth, status, color) in enumerate(rows):
+        ry = y + 28 + idx * 18
+        if idx == 0:
+            c.rect(CX0 + 6, ry - 3, CX1 - CX0 - 12, 18, C["sidebar_active"], radius=3)
+        c.text(CX0 + 16, ry, name, 8.4, bold=idx == 0)
+        c.text(CX0 + 130, ry, addr, 8.2, mono=True, fill=C["muted"])
+        c.text(CX0 + 340, ry, auth, 8.2, fill=C["muted"])
+        c.text(CX0 + 430, ry, status, 8.2, fill=color)
+
+    # Collapsible: remote command (collapsed example + expanded below)
+    y = collapsible_header(c, CX0, y + 96, CX1 - CX0, "Команда на сервере",
+                           open_=True)
+    c.rect(CX0, y, CX1 - CX0, 118, C["panel"], radius=6)
+    c.rect(CX0 + 14, y + 10, CX1 - CX0 - 130, 24, C["panel_alt"], outline=C["border"],
+           radius=4)
+    c.text(CX0 + 24, y + 16, "nvidia-smi --query-gpu=name,utilization.gpu "
+                             "--format=csv,noheader", 8, mono=True, fill=C["muted"])
+    c.rect(CX1 - 108, y + 10, 92, 24, C["accent"], radius=4)
+    c.text(CX1 - 92, y + 16, "▶ Выполнить", 8, bold=True, fill="#ffffff")
+    c.rect(CX0 + 14, y + 42, CX1 - CX0 - 28, 62, C["code_bg"], radius=4)
+    c.text(CX0 + 26, y + 50, "$ nvidia-smi --query-gpu=name,utilization.gpu "
+                             "--format=csv,noheader", 8, mono=True, fill=C["code_fg"])
+    c.text(CX0 + 26, y + 66, "NVIDIA A100-SXM4-40GB, 67 %", 8, mono=True,
+           fill=C["success"])
+    c.text(CX0 + 26, y + 82, "[код 0 · 14:52]", 8, mono=True, fill=C["muted"])
+
+    draw_terminal(c, target="gpu-box", lines=[
+        ("[gpu-box] $ nvidia-smi", C["code_fg"]),
+        ("NVIDIA A100-SXM4-40GB | 40536 MiB | 67 %", C["success"]),
+        ("[код 0 · 14:53]", C["muted"]),
+    ])
+    draw_chat_panel(c, agent_mode=True)
+    return c.save("ui-servers.png")
+
+
 if __name__ == "__main__":
-    for path in (render_chat(), render_dashboard()):
+    for path in (render_chat(), render_dashboard(), render_servers()):
         print(f"written: {path}")

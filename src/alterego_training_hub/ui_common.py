@@ -94,6 +94,63 @@ def card(parent, title: str | None = None) -> tk.Frame:
     return inner
 
 
+class Collapsible(tk.Frame):
+    """A settings section with a clickable header that hides/shows its body.
+
+    The header shows a chevron (▼ expanded / ▶ collapsed) and the title; the
+    body is the white card area where the settings rows are placed.
+    """
+
+    def __init__(self, parent, title: str, *, open: bool = True,
+                 on_change: Callable[[bool], None] | None = None):
+        super().__init__(parent, bg=C["border"], highlightthickness=0)
+        self._open = bool(open)
+        self._on_change = on_change
+
+        self.header = tk.Frame(self, bg=C["panel"], cursor="hand2")
+        self.header.pack(fill="x", padx=1, pady=(1, 0))
+        self.arrow = tk.Label(self.header, text="▼" if self._open else "▶",
+                              bg=C["panel"], fg=C["muted"], font=F_SMALL,
+                              padx=12, pady=7, cursor="hand2")
+        self.arrow.pack(side="left")
+        self.title_label = tk.Label(self.header, text=title, bg=C["panel"],
+                                    fg=C["text"], font=F_BOLD, cursor="hand2",
+                                    padx=0, pady=7)
+        self.title_label.pack(side="left")
+        self.hint_label = tk.Label(self.header, text="", bg=C["panel"],
+                                   fg=C["muted"], font=F_SMALL, padx=12, pady=7)
+        self.hint_label.pack(side="right")
+
+        self.body = tk.Frame(self, bg=C["panel"], padx=14, pady=10)
+        for widget in (self.header, self.arrow, self.title_label):
+            widget.bind("<Button-1>", lambda _event: self.toggle())
+        if self._open:
+            self.body.pack(fill="both", expand=True, padx=1, pady=1)
+
+    def set_hint(self, text: str):
+        self.hint_label.configure(text=text)
+
+    @property
+    def is_open(self) -> bool:
+        return self._open
+
+    def set_open(self, open_: bool) -> None:
+        open_ = bool(open_)
+        if open_ == self._open:
+            return
+        self._open = open_
+        self.arrow.configure(text="▼" if open_ else "▶")
+        if open_:
+            self.body.pack(fill="both", expand=True, padx=1, pady=1)
+        else:
+            self.body.pack_forget()
+        if self._on_change:
+            self._on_change(open_)
+
+    def toggle(self) -> None:
+        self.set_open(not self._open)
+
+
 def set_text(widget: tk.Text, value: str, *, autoscroll: bool = False) -> None:
     widget.configure(state="normal")
     widget.delete("1.0", "end")

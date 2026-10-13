@@ -7,7 +7,7 @@ from tkinter import messagebox, ttk
 
 from .metrics import brief as metrics_brief, parse_log
 from .training import TrainingError
-from .ui_common import C, F_BASE, F_BOLD, F_MONO, F_SMALL, card, draw_line_chart, page_header, set_text
+from .ui_common import C, F_BASE, F_BOLD, F_MONO, F_SMALL, Collapsible, card, draw_line_chart, page_header, set_text
 
 
 class TrainingPage(tk.Frame):
@@ -27,8 +27,10 @@ class TrainingPage(tk.Frame):
         )
         header.pack(fill="x", padx=24, pady=(20, 12))
 
-        run_card = card(self, "Команда обучения")
-        run_card.pack(fill="x", padx=24, pady=(0, 12))
+        run_section = Collapsible(self, "Команда обучения")
+        run_section.pack(fill="x", padx=24, pady=(0, 12))
+        run_section.set_hint("свернуть/развернуть")
+        run_card = run_section.body
         row = tk.Frame(run_card, bg=C["panel"])
         row.pack(fill="x", pady=(8, 0))
         tk.Label(row, text="Команда", bg=C["panel"], font=F_BASE).pack(side="left",

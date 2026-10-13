@@ -6,7 +6,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from .cloud_gpu import CloudGpuError
-from .ui_common import C, F_BASE, F_SMALL, card, page_header
+from .ui_common import C, F_BASE, F_SMALL, Collapsible, card, page_header
 
 
 class GpuPage(tk.Frame):
@@ -26,8 +26,9 @@ class GpuPage(tk.Frame):
         )
         header.pack(fill="x", padx=24, pady=(20, 12))
 
-        auth = card(self, "RunPod API")
-        auth.pack(fill="x", padx=24, pady=(0, 12))
+        auth_section = Collapsible(self, "RunPod API")
+        auth_section.pack(fill="x", padx=24, pady=(0, 12))
+        auth = auth_section.body
         row = tk.Frame(auth, bg=C["panel"])
         row.pack(fill="x")
         tk.Label(row, text="API-ключ", bg=C["panel"], font=F_BASE).pack(side="left",

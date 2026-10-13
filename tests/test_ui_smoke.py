@@ -256,6 +256,8 @@ def fake_ui(monkeypatch, tmp_path):
         "alterego_training_hub.ui_workspace",
         "alterego_training_hub.ui_search",
         "alterego_training_hub.ui_palette",
+        "alterego_training_hub.ui_problems",
+        "alterego_training_hub.ui_completion",
         "alterego_training_hub.ui_models",
         "alterego_training_hub.ui_model",
         "alterego_training_hub.ui_editor",
@@ -782,3 +784,55 @@ def test_editor_tabs_palette_and_search(fake_ui, monkeypatch, tmp_path):
     search.open_selected()
     assert editor._current_path == workspace / "b.py"
     assert search.status_var.get().startswith("Совпадений")
+
+
+def test_bottom_panel_problems_and_git_badge(fake_ui, monkeypatch, tmp_path):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+
+    # Bottom panel switches between terminal and problems, and hides (Ctrl+J).
+    assert app._bottom_view == "terminal"
+    app.show_bottom("problems")
+    assert app._bottom_view == "problems"
+    app.toggle_bottom()
+    assert app._bottom_visible is False
+    app.toggle_bottom()
+    assert app._bottom_visible is True
+
+    # Problems panel parses the training log into file/line markers.
+    app.training.tail = lambda *a, **k: (
+        'Traceback (most recent call last):\n'
+        '  File "train.py", line 42, in <module>\n'
+        'ValueError: bad\n')
+    problems = app.problems
+    problems.refresh()
+    assert len(problems._items) >= 2
+    assert problems.count_var.get().startswith("ПРОБЛЕМЫ (")
+
+    # Jump to code opens the file in the editor.
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    (workspace / "train.py").write_text("x = 1\n", encoding="utf-8")
+    app.settings.workspace_path = str(workspace)
+    app.save_settings()
+    index = next(i for i, p in enumerate(problems._items) if p["path"] == "train.py")
+    problems.tree.selection_set(problems.tree.get_children()[index])
+    problems.open_selected()
+    assert app.pages["editor"]._current_path == workspace / "train.py"
+
+    # Git badge handles a non-repo workspace gracefully.
+    assert app.git_badge.get().startswith("git:")
+
+    # Completion + highlighting wiring is inert-safe with fake widgets.
+    editor = app.pages["editor"]
+    editor.editor.insert("1.0", "import torch\ntra")
+    editor.completion.update()
+    assert editor.completion.visible is False
+    editor._apply_highlight()
+    editor._on_key_release(type("E", (), {"keysym": "a"})())
+    editor._on_tab_key()
+    editor._on_escape()
+    editor._on_return_key()
+    editor._on_up_key()
+    editor._on_down_key()
+    editor._on_click()

@@ -6,8 +6,10 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, ttk
 
+from .syntax import configure_tags, detect_language, highlight
 from .templates import TemplateError, create_project, list_templates
 from .ui_common import C, F_BASE, F_MONO, F_SMALL, Collapsible, card, page_header
+from .ui_completion import CompletionPopup
 
 IGNORED_DIRS = {".git", ".venv", "venv", "__pycache__", "node_modules",
                 ".mypy_cache", ".pytest_cache", "checkpoints"}
@@ -39,7 +41,10 @@ class EditorPage(tk.Frame):
         self._active: int | None = None
         self._tab_widgets: list[tk.Label] = []
         self._current_path: Path | None = None
+        self._language = "generic"
+        self._highlight_after: str | None = None
         self._build()
+        self.completion = CompletionPopup(self)
 
     def _build(self):
         header = page_header(
@@ -106,14 +111,24 @@ class EditorPage(tk.Frame):
                    command=self.send_to_mentor).pack(side="right", padx=6)
 
         self.editor = tk.Text(right, wrap="none", font=F_MONO, bd=1,
-                              relief="solid", undo=True)
+                              relief="solid", undo=True,
+                              bg=C["code_bg"], fg=C["code_fg"],
+                              insertbackground=C["code_fg"],
+                              selectbackground=C["accent"],
+                              selectforeground="#ffffff", padx=8, pady=6)
         self.editor.pack(fill="both", expand=True)
+        configure_tags(self.editor)
         self.editor.bind("<Control-s>", lambda _e: (self.save_file(), "break")[1])
         self.editor.bind("<Control-w>", lambda _e: (self.close_tab(), "break")[1])
         self.editor.bind("<Control-Tab>", lambda _e: (self.next_tab(), "break")[1])
         self.editor.bind("<<Modified>>", self._on_modified)
-        self.editor.bind("<KeyRelease>", lambda _e: self._update_cursor())
-        self.editor.bind("<ButtonRelease-1>", lambda _e: self._update_cursor())
+        self.editor.bind("<KeyRelease>", self._on_key_release)
+        self.editor.bind("<ButtonRelease-1>", self._on_click)
+        self.editor.bind("<Tab>", self._on_tab_key)
+        self.editor.bind("<Escape>", self._on_escape)
+        self.editor.bind("<Return>", self._on_return_key)
+        self.editor.bind("<Up>", self._on_up_key)
+        self.editor.bind("<Down>", self._on_down_key)
         self.status_var = tk.StringVar(value="")
         bottom = tk.Frame(right, bg=C["panel"])
         bottom.pack(fill="x", pady=(4, 0))
@@ -196,6 +211,7 @@ class EditorPage(tk.Frame):
         tab = self._tabs[index]
         self._active = index
         self._current_path = tab["path"]
+        self._language = detect_language(tab["path"])
         self.editor.delete("1.0", "end")
         self.editor.insert("1.0", tab.get("text", ""))
         root = self.app.workspace_root()
@@ -206,6 +222,7 @@ class EditorPage(tk.Frame):
         self.file_var.set(str(shown))
         self._render_tabs()
         self._update_cursor()
+        self._apply_highlight()
 
     def open_file(self, path: Path, line: int | None = None):
         path = Path(path)
@@ -283,6 +300,80 @@ class EditorPage(tk.Frame):
             self.cursor_var.set(f"Стр {line}, кол {int(col) + 1}")
         except Exception:  # noqa: BLE001 - cosmetic only
             pass
+
+    # --------------------------------------------------- highlight + typing
+    def _apply_highlight(self):
+        self._highlight_after = None
+        try:
+            highlight(self.editor, self._language)
+        except Exception:  # noqa: BLE001 - cosmetic only
+            pass
+
+    def _schedule_highlight(self):
+        if self._highlight_after is not None:
+            try:
+                self.after_cancel(self._highlight_after)
+            except Exception:  # noqa: BLE001
+                pass
+        try:
+            self._highlight_after = self.after(400, self._apply_highlight)
+        except Exception:  # noqa: BLE001 - fake widgets
+            self._apply_highlight()
+
+    def _on_key_release(self, event=None):
+        self._update_cursor()
+        self._schedule_highlight()
+        if self.completion is None:
+            return
+        try:
+            keysym = str(getattr(event, "keysym", "") or "")
+        except Exception:  # noqa: BLE001
+            keysym = ""
+        if keysym in {"Up", "Down", "Return", "Tab", "Escape"}:
+            return
+        if keysym.isalnum() or keysym in {"underscore", "BackSpace", "period"}:
+            self.completion.update()
+        else:
+            self.completion.hide()
+
+    def _on_click(self, _event=None):
+        self._update_cursor()
+        if self.completion is not None:
+            self.completion.hide()
+
+    def _on_tab_key(self, _event=None):
+        if self.completion is not None and self.completion.visible:
+            self.completion.accept()
+            return "break"
+        try:
+            self.editor.insert("insert", "    ")
+        except Exception:  # noqa: BLE001
+            pass
+        return "break"
+
+    def _on_escape(self, _event=None):
+        if self.completion is not None and self.completion.visible:
+            self.completion.hide()
+            return "break"
+        return None
+
+    def _on_return_key(self, _event=None):
+        if self.completion is not None and self.completion.visible:
+            self.completion.accept()
+            return "break"
+        return None
+
+    def _on_up_key(self, _event=None):
+        if self.completion is not None and self.completion.visible:
+            self.completion.move(-1)
+            return "break"
+        return None
+
+    def _on_down_key(self, _event=None):
+        if self.completion is not None and self.completion.visible:
+            self.completion.move(1)
+            return "break"
+        return None
 
     def reload_file(self):
         if self._current_path is None:

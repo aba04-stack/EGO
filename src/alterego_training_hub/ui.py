@@ -66,6 +66,9 @@ class TrainingHubApp(tk.Tk):
         self.workspace_badge = tk.StringVar(value="папка не выбрана")
         tk.Label(self.status_bar, textvariable=self.workspace_badge, bg="#e8edf5",
                  fg=C["muted"], font=ui_common.F_SMALL, padx=12).pack(side="right")
+        self.git_badge = tk.StringVar(value="")
+        tk.Label(self.status_bar, textvariable=self.git_badge, bg="#e8edf5",
+                 fg=C["muted"], font=ui_common.F_SMALL, padx=12).pack(side="right")
 
         container = tk.Frame(self, bg=C["bg"])
         container.pack(fill="both", expand=True)
@@ -161,15 +164,62 @@ class TrainingHubApp(tk.Tk):
             self.pages[key] = page
         self.pages["chat"] = self.chat_panel
 
-        self.terminal = TerminalPanel(center, self)
-        self.terminal.pack(side="bottom", fill="x", pady=(0, 2))
-        self.terminal.configure(height=190)
-        self.terminal.pack_propagate(False)
+        # Bottom panel: ТЕРМИНАЛ / ПРОБЛЕМЫ tabs (VS Code style)
+        from .ui_problems import ProblemsPanel
+
+        self.bottom = tk.Frame(center, bg=C["panel"])
+        self.bottom.pack(side="bottom", fill="x", pady=(0, 2))
+        self.bottom.configure(height=210)
+        self.bottom.pack_propagate(False)
+        bottom_bar = tk.Frame(self.bottom, bg=C["panel"])
+        bottom_bar.pack(fill="x")
+        self._bottom_view = "terminal"
+        self._bottom_visible = True
+        self.terminal_tab = tk.Label(bottom_bar, text="ТЕРМИНАЛ", bg=C["panel"],
+                                     fg=C["accent"], font=F_NAV_SMALL, padx=12,
+                                     pady=6, cursor="hand2")
+        self.terminal_tab.pack(side="left")
+        self.terminal_tab.bind("<Button-1>",
+                               lambda _e: self.show_bottom("terminal"))
+        self.problems_tab = tk.Label(bottom_bar, text="ПРОБЛЕМЫ", bg=C["panel"],
+                                     fg=C["muted"], font=F_NAV_SMALL, padx=12,
+                                     pady=6, cursor="hand2")
+        self.problems_tab.pack(side="left")
+        self.problems_tab.bind("<Button-1>",
+                               lambda _e: self.show_bottom("problems"))
+        tk.Label(bottom_bar, text="Ctrl+J — свернуть панель", bg=C["panel"],
+                 fg=C["muted"], font=F_NAV_SMALL, padx=12).pack(side="right")
+
+        self.terminal = TerminalPanel(self.bottom, self)
+        self.problems = ProblemsPanel(self.bottom, self)
+        self.problems_tab.configure(textvariable=self.problems.count_var)
+        self.show_bottom("terminal")
 
         self.show_page("editor")
         self._refresh_workspace_badge()
         self._bind_shortcuts()
         self.set_status("Готово · F1 — горячие клавиши")
+
+    def show_bottom(self, which: str):
+        self._bottom_view = which
+        self.terminal.pack_forget()
+        self.problems.pack_forget()
+        (self.terminal if which == "terminal" else self.problems).pack(
+            fill="both", expand=True)
+        self.terminal_tab.configure(
+            fg=C["accent"] if which == "terminal" else C["muted"])
+        self.problems_tab.configure(
+            fg=C["accent"] if which == "problems" else C["muted"])
+        if which == "problems":
+            self.problems.refresh()
+
+    def toggle_bottom(self):
+        self._bottom_visible = not self._bottom_visible
+        if self._bottom_visible:
+            self.bottom.pack(side="bottom", fill="x", pady=(0, 2))
+            self.show_bottom(self._bottom_view or "terminal")
+        else:
+            self.bottom.pack_forget()
 
     def _bind_shortcuts(self):
         page_keys = ["editor", "workspace", "models", "datasets", "model",
@@ -179,7 +229,11 @@ class TrainingHubApp(tk.Tk):
                           lambda _e, k=key: self.show_page(k))
         self.bind_all("<Control-Key-0>", lambda _e: self.show_page("settings"))
         self.bind_all("<Control-k>", lambda _e: self.show_page("chat"))
-        self.bind_all("<Control-j>", lambda _e: self.terminal.toggle())
+        self.bind_all("<Control-j>", lambda _e: self.toggle_bottom())
+        self.bind_all("<Control-Shift-M>",
+                      lambda _e: self.show_bottom("problems"))
+        self.bind_all("<Control-Shift-m>",
+                      lambda _e: self.show_bottom("problems"))
         self.bind_all("<Control-p>", lambda _e: self.open_command_palette("files"))
         self.bind_all("<Control-Shift-P>",
                       lambda _e: self.open_command_palette("commands"))
@@ -214,7 +268,8 @@ class TrainingHubApp(tk.Tk):
             "Ctrl+Shift+P — палитра команд\n"
             "Ctrl+Shift+F — поиск по проекту\n"
             "Ctrl+K — фокус в чат наставника\n"
-            "Ctrl+J — свернуть/развернуть терминал\n"
+            "Ctrl+J — свернуть/развернуть нижнюю панель\n"
+            "Ctrl+Shift+M — панель «Проблемы»\n"
             "Ctrl+W — закрыть вкладку редактора\n"
             "Ctrl+Tab — следующая вкладка редактора\n"
             "F5 — обновить текущую страницу\n"
@@ -270,6 +325,7 @@ class TrainingHubApp(tk.Tk):
             on_show = getattr(page, "on_show", None)
             if callable(on_show):
                 on_show()
+        self._refresh_git_badge()
 
     # ------------------------------------------------------------- services
     def post_event(self, kind: str, payload: dict):
@@ -364,6 +420,20 @@ class TrainingHubApp(tk.Tk):
     def _refresh_workspace_badge(self):
         path = (self.settings.workspace_path or "").strip()
         self.workspace_badge.set(f"папка: {Path(path).name}" if path else "папка не выбрана")
+        self._refresh_git_badge()
+
+    def _refresh_git_badge(self):
+        root = self.workspace_root()
+        value = ""
+        if root is not None:
+            try:
+                status = self.git.status(root)
+                mark = "*" if status.changes else ""
+                extra = f" {status.ahead_behind}" if status.ahead_behind else ""
+                value = f"git: {status.branch}{mark}{extra}"
+            except Exception:  # noqa: BLE001 - not a repo / git missing
+                value = "git: —"
+        self.git_badge.set(value)
 
     def workspace_root(self) -> Path | None:
         raw = (self.settings.workspace_path or "").strip()

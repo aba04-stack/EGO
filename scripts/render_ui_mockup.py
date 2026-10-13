@@ -15,7 +15,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from alterego_training_hub.theme import C  # noqa: E402
+from alterego_training_hub.theme import C, SYNTAX  # noqa: E402
 
 S = 1.5
 VW, VH = 1480, 860
@@ -89,6 +89,36 @@ def collapsible_header(c: Canvas, x, y, w, title, *, open_=True, hint=""):
     return y + 30
 
 
+import re  # noqa: E402
+
+_TOKEN_RE = re.compile(
+    r"(?P<comment>#[^\n]*)|(?P<string>\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*')"
+    r"|(?P<keyword>\b(?:def|class|return|for|in|if|else|import|from|as|with|"
+    r"while|not|and|or|None|True|False|try|except|raise|pass|lambda|yield|"
+    r"global|async|await|assert|del|break|continue)\b)"
+    r"|(?P<defname>(?<=def )[A-Za-z_]\w*|(?<=class )[A-Za-z_]\w*)"
+    r"|(?P<number>\b\d+(?:\.\d+)?\b)"
+)
+
+
+def draw_code_line(c: Canvas, x, y, line: str, size=8.6):
+    """Paint one source line with the app's syntax palette."""
+    mono = font(size, mono=True)
+    position = 0
+    for match in _TOKEN_RE.finditer(line):
+        if match.start() > position:
+            chunk = line[position:match.start()]
+            c.text(x, y, chunk, size, mono=True, fill=C["code_fg"])
+            x += mono.getlength(chunk) / S
+        token = match.group(0)
+        color = SYNTAX.get(match.lastgroup or "", C["code_fg"])
+        c.text(x, y, token, size, mono=True, fill=color)
+        x += mono.getlength(token) / S
+        position = match.end()
+    if position < len(line):
+        c.text(x, y, line[position:], size, mono=True, fill=C["code_fg"])
+
+
 def draw_shell(c: Canvas, active: str, status: str, badge: str):
     c.rect(0, 0, VW, VH, C["bg"])
     # Sidebar
@@ -129,17 +159,22 @@ def draw_shell(c: Canvas, active: str, status: str, badge: str):
 def draw_terminal(c: Canvas, *, target: str = "Локально", lines=None):
     cxp = VW - CHAT_W
     y0 = VH - 26 - TERM_H
-    c.text(SIDE + 12, y0 + 10, "ТЕРМИНАЛ", 8, bold=True, fill=C["muted"])
-    c.text(SIDE + 74, y0 + 13, "v", 8, bold=True, fill=C["muted"])
-    c.text(SIDE + 92, y0 + 10, "Цель", 8, fill=C["muted"])
-    c.rect(SIDE + 122, y0 + 8, 110, 20, C["panel_alt"], outline=C["border"], radius=4)
-    c.text(SIDE + 130, y0 + 13, target, 8, fill=C["text"])
-    c.rect(SIDE + 242, y0 + 8, 240, 20, C["panel_alt"], outline=C["border"], radius=4)
-    c.text(SIDE + 250, y0 + 13, "python -m pytest -q", 8.2, mono=True, fill=C["muted"])
-    c.rect(SIDE + 490, y0 + 8, 84, 20, C["accent"], radius=4)
-    c.text(SIDE + 502, y0 + 13, "▶ Выполнить", 8, bold=True, fill="#ffffff")
+    # Panel tabs (terminal / problems) — like VS Code's bottom panel
+    c.text(SIDE + 12, y0 + 8, "ТЕРМИНАЛ", 8, bold=True, fill=C["accent"])
+    c.rect(SIDE + 12, y0 + 22, 62, 2, C["accent"])
+    c.text(SIDE + 86, y0 + 8, "ПРОБЛЕМЫ (2)", 8, fill=C["muted"])
+    c.text(cxp - 24, y0 + 8, "Ctrl+J — свернуть панель", 7.4, fill=C["muted"],
+           anchor="ra")
+    c.text(SIDE + 14, y0 + 33, "v", 8, bold=True, fill=C["muted"])
+    c.text(SIDE + 30, y0 + 31, "Цель", 8, fill=C["muted"])
+    c.rect(SIDE + 60, y0 + 28, 110, 20, C["panel_alt"], outline=C["border"], radius=4)
+    c.text(SIDE + 68, y0 + 33, target, 8, fill=C["text"])
+    c.rect(SIDE + 180, y0 + 28, 240, 20, C["panel_alt"], outline=C["border"], radius=4)
+    c.text(SIDE + 188, y0 + 33, "python -m pytest -q", 8.2, mono=True, fill=C["muted"])
+    c.rect(SIDE + 428, y0 + 28, 84, 20, C["accent"], radius=4)
+    c.text(SIDE + 440, y0 + 33, "▶ Выполнить", 8, bold=True, fill="#ffffff")
 
-    c.rect(SIDE + 1, y0 + 34, cxp - SIDE - 2, TERM_H - 35, C["code_bg"])
+    c.rect(SIDE + 1, y0 + 54, cxp - SIDE - 2, TERM_H - 55, C["code_bg"])
     if lines is None:
         lines = [
             ("$ python -m pytest -q", C["code_fg"]),
@@ -149,7 +184,7 @@ def draw_terminal(c: Canvas, *, target: str = "Локально", lines=None):
             ("[код 1 · 14:41]", C["muted"]),
         ]
     for idx, (line, color) in enumerate(lines):
-        c.text(SIDE + 14, y0 + 44 + idx * 17, line, 8.6, mono=True, fill=color)
+        c.text(SIDE + 14, y0 + 64 + idx * 17, line, 8.6, mono=True, fill=color)
 
 
 def draw_chat_panel(c: Canvas, *, agent_mode: bool = True):
@@ -302,7 +337,7 @@ def render_chat() -> Path:
     for idx, line in enumerate(code):
         y = 188 + idx * 17
         c.text(ex + 12, y, f"{idx + 1:>3}", 7.6, mono=True, fill=C["muted"])
-        c.text(ex + 36, y, line, 8.6, mono=True, fill=C["code_fg"])
+        draw_code_line(c, ex + 36, y, line)
 
     draw_terminal(c)
     draw_chat_panel(c, agent_mode=True)

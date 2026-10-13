@@ -33,3 +33,14 @@ F_SMALL = ("Segoe UI", 9)
 F_MONO = ("Consolas", 9)
 F_NAV = ("Segoe UI", 10, "bold")
 F_NAV_SMALL = ("Segoe UI", 9)
+
+# Syntax-highlighting palette for the dark code area (editor + mockups).
+SYNTAX = {
+    "keyword": "#7dd3fc",
+    "builtin": "#c4b5fd",
+    "string": "#86efac",
+    "comment": "#6b7f99",
+    "number": "#fdba74",
+    "defname": "#fde68a",
+    "key": "#93c5fd",
+}

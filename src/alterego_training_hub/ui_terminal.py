@@ -25,7 +25,7 @@ class TerminalPanel(tk.Frame):
         self.arrow = tk.Label(bar, text="▼", bg=C["panel"], fg=C["muted"],
                               font=F_SMALL, cursor="hand2")
         self.arrow.pack(side="left")
-        title = tk.Label(bar, text="ТЕРМИНАЛ", bg=C["panel"], fg=C["muted"],
+        title = tk.Label(bar, text="ввод команды", bg=C["panel"], fg=C["muted"],
                          font=F_SMALL, cursor="hand2")
         title.pack(side="left", padx=(2, 10))
         for widget in (self.arrow, title):

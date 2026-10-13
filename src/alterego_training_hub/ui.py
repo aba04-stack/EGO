@@ -476,6 +476,21 @@ class TrainingHubApp(tk.Tk):
         self.settings.save()
         self._refresh_workspace_badge()
 
+    def catalog_entry(self, model_id: str):
+        """Find a model catalog entry by id or name (None if absent)."""
+        try:
+            entries = self.model_registry().load()
+        except Exception:  # noqa: BLE001
+            return None
+        key = str(model_id or "").strip().lower()
+        if not key:
+            return None
+        for entry in entries:
+            if entry.id == model_id or entry.name.lower() == key \
+                    or entry.model_id.lower() == key:
+                return entry
+        return None
+
     # ----------------------------------------------------------- watchdog
     def _start_watchdog(self):
         """Poll training health in the background; log fresh issues once."""
@@ -905,6 +920,157 @@ class TrainingHubApp(tk.Tk):
                               + ", ".join(f"{k}={v['rows']}" for k, v in written.items()))
             return {"ok": True, "splits": written, "filtered_rows": len(rows)}
 
+        def _endpoint_client(entry):
+            from .playground import PlaygroundClient
+
+            try:
+                key = self.secrets.get("mentor_api_key")
+            except RuntimeError:
+                key = ""
+            return PlaygroundClient(entry.base_url, entry.model_id, key)
+
+        def export_model(args):
+            from .exporting import EXPORT_FORMATS, ExportRequest, run_export
+
+            entry = self.catalog_entry(str(args.get("model_id") or ""))
+            source = str(args.get("source") or (entry.location if entry else ""))
+            if entry and entry.kind == "cloud":
+                return {"ok": False,
+                        "error": "Облачную модель нельзя экспортировать локально."}
+            fmt = str(args.get("format") or "gguf").lower()
+            library = self.model_registry().library_dir
+            request = ExportRequest(
+                source=source, fmt=fmt,
+                output_dir=str(Path(library) / "exports"),
+                out_type=str(args.get("out_type") or "f16"))
+            result = run_export(request)
+            self.activity.log(
+                "model",
+                f"Экспорт {fmt}: " + ("успешно" if result.ok else result.error))
+            return {"ok": result.ok, "format": fmt, "command": result.command,
+                    "output_path": result.output_path,
+                    "size_bytes": result.size_bytes,
+                    "checks": result.checks, "error": result.error,
+                    "hint": EXPORT_FORMATS.get(fmt, {}).get("tool_hint", "")}
+
+        def quantize_model(args):
+            from .quantize import QUANT_RECIPES, recipe_info, run_quantize
+
+            entry = self.catalog_entry(str(args.get("model_id") or ""))
+            source = str(args.get("source") or (entry.location if entry else ""))
+            quant_type = str(args.get("quant_type") or "q4_k_m").lower()
+            try:
+                recipe = recipe_info(quant_type)
+            except Exception as exc:
+                return {"ok": False, "error": str(exc),
+                        "types": sorted(QUANT_RECIPES)}
+            library = self.model_registry().library_dir
+            stem = Path(source).stem or "model"
+            suffix = ".gguf" if recipe.family == "gguf" else ".onnx"
+            destination = str(Path(library) / "exports" /
+                              f"{stem}.{quant_type}{suffix}")
+            Path(destination).parent.mkdir(parents=True, exist_ok=True)
+            result = run_quantize(source, destination, quant_type)
+            self.activity.log(
+                "model",
+                f"Квантизация {quant_type}: "
+                + ("успешно" if result.ok else result.error))
+            return {"ok": result.ok, "recipe": quant_type,
+                    "command": result.command, "output_path": result.output_path,
+                    "checks": result.checks, "error": result.error}
+
+        def benchmark_model(args):
+            from .bench import BenchResult, BenchStore, format_bench_table, \
+                rank_benchmarks, run_benchmark
+
+            entry = self.catalog_entry(str(args.get("model_id") or ""))
+            command = str(args.get("command") or "").strip()
+            try:
+                iterations = max(1, min(int(args.get("iterations") or 3), 10))
+            except (TypeError, ValueError):
+                iterations = 3
+            if command:
+                result = run_benchmark("команда", command, iterations=iterations)
+            elif entry and entry.base_url:
+                client = _endpoint_client(entry)
+                durations: list[int] = []
+                tokens_chars = 0
+                error = ""
+                for _ in range(iterations):
+                    try:
+                        probe = client.generate("Скажи «ок».", max_tokens=8,
+                                                temperature=0.0)
+                        if probe.error:
+                            error = probe.error
+                            break
+                        durations.append(probe.latency_ms)
+                        tokens_chars = max(tokens_chars, len(probe.output))
+                    except Exception as exc:
+                        error = f"{type(exc).__name__}: {exc}"
+                        break
+                if error:
+                    result = BenchResult(model=entry.name, command="endpoint probe",
+                                         error=error)
+                else:
+                    mean = int(sum(durations) / max(1, len(durations)))
+                    result = BenchResult(model=entry.name, command="endpoint probe",
+                                         iterations=len(durations),
+                                         duration_ms=mean,
+                                         output_chars=tokens_chars)
+            else:
+                return {"ok": False,
+                        "error": "Укажите model_id (модель с endpoint) или command."}
+            library = self.model_registry().library_dir
+            BenchStore(library).add(result)
+            self.activity.log("bench", result.line())
+            return {"ok": result.ok(), "line": result.line(),
+                    "table": format_bench_table([result]),
+                    "rank": rank_benchmarks([result]),
+                    "error": result.error}
+
+        def run_prompt_suite(args):
+            from .prompt_suite import default_suite, format_suite_report, \
+                load_suite, run_suite
+
+            entry = self.catalog_entry(str(args.get("model_id") or ""))
+            if entry and entry.base_url:
+                client = _endpoint_client(entry)
+                model_name = entry.name
+            else:
+                settings = self.settings
+                if not (settings.mentor_base_url and settings.mentor_model):
+                    return {"ok": False,
+                            "error": "Нужна модель с endpoint (model_id) "
+                                     "или настроенный провайдер."}
+                client = _endpoint_client(type("E", (), {
+                    "base_url": settings.mentor_base_url,
+                    "model_id": settings.mentor_model,
+                    "name": settings.mentor_model})())
+                model_name = settings.mentor_model
+            suite_rel = str(args.get("suite_path") or "").strip()
+            try:
+                if suite_rel and suite_rel.lower() != "default":
+                    root = self.workspace_root()
+                    if root is None:
+                        return {"ok": False,
+                                "error": "Рабочая папка не выбрана."}
+                    cases = load_suite(Path(root) / suite_rel)
+                else:
+                    cases = default_suite()
+                try:
+                    max_tokens = max(32, min(int(args.get("max_tokens") or 400), 2000))
+                except (TypeError, ValueError):
+                    max_tokens = 400
+                result = run_suite(client, cases, model=model_name,
+                                   max_tokens=max_tokens)
+            except Exception as exc:
+                return {"ok": False, "error": str(exc)}
+            self.activity.log("suite", f"Промпт-набор: {result.passed}/{result.total}")
+            return {"ok": True, "model": model_name,
+                    "passed": result.passed, "total": result.total,
+                    "mean_latency_ms": result.mean_latency_ms,
+                    "report": format_suite_report(result)}
+
         def spawn_subagent(args):
             if not self.settings.agent_subagents:
                 return {"ok": False, "error": "Подагенты отключены в настройках агента."}
@@ -965,6 +1131,10 @@ class TrainingHubApp(tk.Tk):
             "suggest_training_fixes": suggest_training_fixes,
             "compare_runs": compare_runs,
             "prepare_dataset": prepare_dataset,
+            "export_model": export_model,
+            "quantize_model": quantize_model,
+            "benchmark_model": benchmark_model,
+            "run_prompt_suite": run_prompt_suite,
         }
         schemas = list(TRAINING_CONTEXT_TOOL_SCHEMAS) + list(MODEL_TOOLS_SCHEMAS) + [
             {"type": "function", "function": {
@@ -984,7 +1154,8 @@ class TrainingHubApp(tk.Tk):
                 "parameters": {"type": "object", "properties": {}, "required": []}}},
         ]
         mutations = {"start_training", "stop_training", "set_training_control",
-                     "prepare_dataset"}
+                     "prepare_dataset", "export_model", "quantize_model",
+                     "benchmark_model", "run_prompt_suite"}
 
         try:
             manager = ConnectorManager(self.secrets,

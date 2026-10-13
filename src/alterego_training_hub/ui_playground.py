@@ -75,6 +75,8 @@ class PlaygroundPage(tk.Frame):
                    command=self.run_single).pack(side="left")
         ttk.Button(btns, text="Сравнить A/B",
                    command=self.run_compare).pack(side="left", padx=8)
+        ttk.Button(btns, text="Промпт-набор",
+                   command=self.run_prompt_suite).pack(side="left", padx=8)
         ttk.Button(btns, text="История",
                    command=self.show_history).pack(side="left", padx=8)
 
@@ -205,6 +207,33 @@ class PlaygroundPage(tk.Frame):
                 f"{second.model} {second.latency_ms} мс")
 
         self.app.start_async("Сравнение A/B", work, done)
+
+    def run_prompt_suite(self):
+        """Batch smoke-test: the default prompt suite against model A."""
+        from .prompt_suite import default_suite, format_suite_report, run_suite
+
+        try:
+            client = self._client_for(self.model_a.get())
+        except MentorError as exc:
+            messagebox.showerror("Playground", str(exc), parent=self)
+            return
+        self.out_a[0].set("прогон набора…")
+        set_text(self.out_a[1], "")
+
+        def work():
+            return run_suite(client, default_suite(),
+                             model=self.model_a.get(), temperature=0.2,
+                             max_tokens=300)
+
+        def done(result):
+            self.out_a[0].set(f"набор: {result.passed}/{result.total} · "
+                              f"средняя задержка {result.mean_latency_ms} мс")
+            set_text(self.out_a[1], format_suite_report(result))
+            self.app.activity.log(
+                "system",
+                f"Промпт-набор {result.model}: {result.passed}/{result.total}")
+
+        self.app.start_async("Промпт-набор", work, done)
 
     def _show_result(self, panel, result):
         label, text = panel

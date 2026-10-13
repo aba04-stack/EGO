@@ -1251,3 +1251,58 @@ def test_stage17_tools_eval_tuning_dataset(fake_ui, tmp_path):
     app.runs.start("python train.py", str(workspace), log_path=str(log_a))
     training_page.compare_runs()
     assert "Сравнение" in training_page.metrics_var.get()
+
+
+def test_stage18_model_tools_export_quantize_bench_suite(fake_ui, tmp_path):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    app.settings.workspace_path = str(workspace)
+    app.save_settings()
+
+    tools, schemas, mutations = app.agent_extra_tools()
+    for name in ("export_model", "quantize_model", "benchmark_model",
+                 "run_prompt_suite"):
+        assert name in tools
+        assert any(schema["function"]["name"] == name for schema in schemas)
+    assert {"export_model", "quantize_model", "benchmark_model",
+            "run_prompt_suite"} <= mutations
+
+    # Local model catalog entry drives export/quantize.
+    from alterego_training_hub.models_registry import ModelEntry
+
+    model_file = tmp_path / "weights.gguf"
+    model_file.write_bytes(b"GGUF" + b"\0" * 200_000)
+    entry = ModelEntry(name="demo-model", kind="local", location=str(model_file))
+    app.model_registry().add(entry)
+
+    result = tools["export_model"]({"model_id": entry.id, "format": "gguf"})
+    # No converters in the sandbox → clean, actionable failure (no crash).
+    assert "checks" in result and "hint" in result
+
+    result = tools["quantize_model"]({"model_id": entry.id,
+                                      "quant_type": "nope"})
+    assert result["ok"] is False and "types" in result
+
+    result = tools["benchmark_model"]({"model_id": entry.id})
+    assert result["ok"] is False  # local model has no endpoint/command
+
+    result = tools["benchmark_model"]({
+        "command": "python -c \"print('tokens=50')\""})
+    assert result["ok"] is True and result["line"]
+    assert "tok/s" in result["line"]
+
+    result = tools["run_prompt_suite"]({})
+    assert result["ok"] is False  # no endpoint configured
+
+    # Models page tool buttons respond safely without a selection.
+    models_page = app.pages["models"]
+    models_page.refresh()
+    models_page._run_model_tool("export_model", {}, "Экспорт")  # info dialog
+    models_page.tools_status.set("ok")
+    assert models_page.tools_status.get() == "ok"
+
+    # Playground suite button exists and errors cleanly without models.
+    playground_page = app.pages["playground"]
+    playground_page.run_prompt_suite()  # no models → error dialog, no crash

@@ -288,6 +288,78 @@ MODEL_TOOLS_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "export_model",
+            "description": "Экспорт модели в ONNX или GGUF (конвертация внешним "
+                           "инструментом + проверка артефакта). Мутация.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "model_id": {"type": "string", "description": "id модели из каталога"},
+                    "source": {"type": "string", "description": "Папка/id модели (если нет model_id)"},
+                    "format": {"type": "string", "enum": ["gguf", "onnx"], "default": "gguf"},
+                    "out_type": {"type": "string", "description": "Точность GGUF: f32/f16/bf16/q8_0"},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "quantize_model",
+            "description": "Квантизация GGUF-модели (q8_0/q5_k_m/q4_k_m/q4_0/q3_k_m) "
+                           "или ONNX (int8) с проверкой размера и качества. Мутация.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "model_id": {"type": "string", "description": "id модели из каталога"},
+                    "source": {"type": "string", "description": "Исходный файл (если нет model_id)"},
+                    "quant_type": {"type": "string",
+                                   "enum": ["q8_0", "q5_k_m", "q4_k_m", "q4_0",
+                                            "q3_k_m", "int8"],
+                                   "default": "q4_k_m"},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "benchmark_model",
+            "description": "Бенчмарк модели: замер скорости (мс/запуск, tok/s) "
+                           "несколькими прогонами. Мутация (запускает команду).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "model_id": {"type": "string", "description": "id модели из каталога (с endpoint)"},
+                    "command": {"type": "string", "description": "Или своя команда запуска инференса"},
+                    "iterations": {"type": "integer", "default": 3},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_prompt_suite",
+            "description": "Пакетное тестирование: набор промптов → ответы модели, "
+                           "задержки и проверка ожиданий. Расходует токены API. Мутация.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "model_id": {"type": "string", "description": "id модели из каталога (с endpoint)"},
+                    "suite_path": {"type": "string", "description": "JSON-набор в рабочей папке (или default)"},
+                    "max_tokens": {"type": "integer", "default": 400},
+                },
+                "required": [],
+            },
+        },
+    },
 ]
 
 
@@ -664,6 +736,10 @@ def _describe(call: ToolCall) -> str:
         "suggest_training_fixes": "Предложить правки гиперпараметров",
         "compare_runs": "A/B-сравнение запусков обучения",
         "prepare_dataset": "Фильтр и разбиение датасета на train/val/test",
+        "export_model": "Экспорт модели (ONNX/GGUF)",
+        "quantize_model": "Квантизация модели",
+        "benchmark_model": "Бенчмарк скорости модели",
+        "run_prompt_suite": "Пакетное тестирование промптов",
     }
     base = descriptions.get(call.name, call.name)
     if call.name == "send_email":

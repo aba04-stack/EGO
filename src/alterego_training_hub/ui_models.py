@@ -75,6 +75,33 @@ class ModelsPage(tk.Frame):
         self.tree.configure(yscrollcommand=scroll.set)
         self.tree.bind("<<TreeviewSelect>>", lambda _e: self._load_selected())
 
+        # Model tools: export / quantize / benchmark / prompt suite
+        tools_card = card(self, "Инструменты модели")
+        tools_card.pack(fill="x", padx=24, pady=(0, 12))
+        tools_row = tk.Frame(tools_card, bg=C["panel"])
+        tools_row.pack(fill="x")
+        tk.Label(tools_row, text="Формат/рецепт", bg=C["panel"],
+                 font=F_BASE).pack(side="left", padx=(0, 6))
+        self.tool_option_var = tk.StringVar(value="gguf")
+        ttk.Combobox(tools_row, textvariable=self.tool_option_var, width=10,
+                     values=("gguf", "onnx", "q8_0", "q5_k_m", "q4_k_m",
+                             "q4_0", "q3_k_m", "int8"),
+                     state="readonly").pack(side="left", padx=(0, 12))
+        ttk.Button(tools_row, text="Экспорт",
+                   command=self.export_model).pack(side="left", padx=(0, 6))
+        ttk.Button(tools_row, text="Квантизация",
+                   command=self.quantize_model).pack(side="left", padx=(0, 6))
+        ttk.Button(tools_row, text="Бенчмарк",
+                   command=self.benchmark_model).pack(side="left", padx=(0, 6))
+        ttk.Button(tools_row, text="Промпт-набор",
+                   command=self.run_prompt_suite).pack(side="left")
+        self.tools_status = tk.StringVar(
+            value="Выберите модель и инструмент. Экспорт/квантизация требуют "
+                  "внешних конвертеров (см. подсказку в результате).")
+        tk.Label(tools_card, textvariable=self.tools_status, bg=C["panel"],
+                 fg=C["muted"], font=F_SMALL, wraplength=900,
+                 justify="left").pack(anchor="w", pady=(6, 0))
+
         # Editor
         edit_card = card(self, "Карточка модели")
         edit_card.pack(fill="x", padx=24, pady=(0, 12))
@@ -164,6 +191,82 @@ class ModelsPage(tk.Frame):
         self.var_model_id.set(entry.model_id)
         self.notes.delete("1.0", "end")
         self.notes.insert("1.0", entry.notes)
+
+    def _selected_entry(self):
+        selection = self.tree.selection()
+        return self._entries.get(selection[0]) if selection else None
+
+    def _run_model_tool(self, name: str, args: dict, label: str,
+                        confirm_text: str = ""):
+        entry = self._selected_entry()
+        if entry is None:
+            messagebox.showinfo("Инструменты модели",
+                                "Сначала выберите модель в таблице.",
+                                parent=self)
+            return
+        if confirm_text and not messagebox.askyesno(label, confirm_text,
+                                                    parent=self):
+            return
+        args = dict(args)
+        args.setdefault("model_id", entry.id)
+        tools, _schemas, _mutations = self.app.agent_extra_tools()
+        handler = tools.get(name)
+
+        def work():
+            return handler(args)
+
+        def done(result):
+            parts = []
+            for key in ("checks", "lines", "rank"):
+                value = result.get(key)
+                if isinstance(value, list) and value:
+                    parts.extend(str(item) for item in value)
+            for key in ("report", "table", "line", "hint", "error",
+                        "output_path"):
+                value = result.get(key)
+                if value:
+                    parts.append(str(value))
+            text = "\n".join(parts) or ("Готово." if result.get("ok")
+                                        else "Не удалось.")
+            self.tools_status.set(text[:600])
+            if result.get("ok"):
+                messagebox.showinfo(label, text[:1500], parent=self)
+            else:
+                messagebox.showerror(label, text[:1500], parent=self)
+
+        def failed(error):
+            self.tools_status.set(f"Ошибка: {error}")
+            messagebox.showerror(label, str(error), parent=self)
+
+        self.app.start_async(label, work, done, failed)
+
+    def export_model(self):
+        option = self.tool_option_var.get().strip().lower()
+        fmt = option if option in {"gguf", "onnx"} else "gguf"
+        self._run_model_tool(
+            "export_model", {"format": fmt}, "Экспорт модели",
+            f"Конвертировать модель в {fmt.upper()}? Для этого потребуются "
+            "внешние инструменты (transformers[onnx] или llama.cpp).")
+
+    def quantize_model(self):
+        option = self.tool_option_var.get().strip().lower()
+        quant = option if option in {"q8_0", "q5_k_m", "q4_k_m", "q4_0",
+                                     "q3_k_m", "int8"} else "q4_k_m"
+        self._run_model_tool(
+            "quantize_model", {"quant_type": quant}, "Квантизация модели",
+            f"Квантизовать модель ({quant})? Файл будет создан в папке "
+            "библиотеки (exports).")
+
+    def benchmark_model(self):
+        self._run_model_tool("benchmark_model", {"iterations": 3},
+                             "Бенчмарк модели",
+                             "Выполнить 3 замера скорости модели?")
+
+    def run_prompt_suite(self):
+        self._run_model_tool(
+            "run_prompt_suite", {}, "Промпт-набор",
+            "Прогнать набор из 5 промптов? Это отправит запросы к API "
+            "и может расходовать кредиты провайдера.")
 
     def _entry_from_form(self) -> ModelEntry:
         metrics: dict[str, float] = {}

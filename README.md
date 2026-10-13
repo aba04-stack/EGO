@@ -10,6 +10,23 @@ A desktop development environment for LLM research with an IDE layout: code edit
 
 Mockups are rendered from the app's real design tokens by `scripts/render_ui_mockup.py`. Settings panels at the top of pages collapse/expand (▼/▶) so the workspace stays clean.
 
+## Keyboard shortcuts
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+1`…`Ctrl+9` | Pages: editor, workspace, models, datasets, model, playground, training, GPU, servers |
+| `Ctrl+0` | Settings |
+| `Ctrl+K` | Focus the mentor chat |
+| `Ctrl+J` | Collapse/expand the terminal |
+| `F5` | Refresh the current page |
+| `F1` | Shortcut help |
+| `Ctrl+Enter` | Send a chat message |
+| `Ctrl+S` | Save file in the editor |
+
+## Diagnostics and logs
+
+The **Диагностика** section on the settings page checks the environment (Python, Tk, credential store, paramiko, Git, workspace, disk space, mentor config) and produces a copyable report. Application errors are written to `<app data>/logs/hub.log` (rotated); uncaught crashes show a dialog with the log path.
+
 ## Studio features
 
 **Разработка**
@@ -29,9 +46,10 @@ Mockups are rendered from the app's real design tokens by `scripts/render_ui_moc
 - **Внешние GPU** — live RunPod catalog, GPU-rate budget gate (not a total-bill cap), confirmed pod lifecycle.
 
 **Система**
-- **Серверы** — подключение удалённых серверов по SSH: проверка связи, состояние системы (GPU/диск/нагрузка), выполнение команд вручную, из терминала или агентом. Пароли — только в системном хранилище.
+- **Серверы** — подключение удалённых серверов по SSH: проверка связи, состояние системы (GPU/диск/нагрузка), выполнение команд вручную, из терминала или агентом. Пароли — только в системном хранилище; host-ключи проверяются (TOFU-pinning в `known_hosts`).
 - **Коннекторы** — GitHub repository search, Hugging Face model search and model cards, Gmail notifications (SMTP with App Password). Tokens live only in the OS credential store; the same actions are exposed to the mentor-agent as tools.
-- Settings panels at the top of pages are **collapsible** (hide/show) so the workspace stays clean.
+- **Диагностика** — «Доктор» окружения: Python/Tk, keyring, SSH, Git, папки, диск; копируемый отчёт; лог ошибок `logs/hub.log` с ротацией.
+- Settings panels at the top of pages are **collapsible** (hide/show) so the workspace stays clean; **keyboard shortcuts** (F1) for navigation, chat and the terminal.
 - API keys only in the OS credential store (`keyring`); settings files contain no secrets.
 - Automatic timestamped backups before mentor file edits; JSONL audit trail outside the repository.
 - Package as a Windows executable using PyInstaller.
@@ -49,6 +67,7 @@ Mockups are rendered from the app's real design tokens by `scripts/render_ui_moc
 **Remote servers (SSH)**
 - Register any SSH-reachable machine (name, host, port, user, key or password auth) on the **Серверы** page; passwords live in the OS credential store, never in files.
 - Test the connection, view system info (kernel, GPU, disk, load), and run arbitrary commands — from the page, from the terminal panel (target selector: Локально / server), or through the mentor-agent (`list_servers`, `server_info`, `run_on_server`).
+- Host keys are verified against the system known_hosts plus an app-managed pin file (`known_hosts`, trust-on-first-use, `SHA256:…` fingerprint shown); a changed host key is rejected. Remote output is size-capped.
 - The transport is paramiko (installed with the app); the registry is a plain JSON file you can edit or sync.
 
 **Training progress and metrics**

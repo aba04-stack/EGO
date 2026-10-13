@@ -5,14 +5,17 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
+from .diagnostics import diagnostics_summary, diagnostics_text, run_diagnostics
+from .logging_setup import log_file, tail_log
 from .mentor import MentorError
-from .ui_common import C, F_BASE, F_SMALL, Collapsible, page_header
+from .ui_common import C, F_BASE, F_MONO, F_SMALL, Collapsible, page_header, set_text
 
 
 class SettingsPage(tk.Frame):
     def __init__(self, parent, app):
         super().__init__(parent, bg=C["bg"])
         self.app = app
+        self._last_diag = ""
         self._build()
 
     def _build(self):
@@ -129,6 +132,27 @@ class SettingsPage(tk.Frame):
         ttk.Button(folders_card, text="Сохранить папки",
                    command=self.save_folders).grid(row=2, column=1, sticky="w", pady=8)
 
+        # Diagnostics
+        diag_section = Collapsible(self, "Диагностика и логи")
+        diag_section.pack(fill="x", padx=24, pady=(0, 12))
+        diag_section.set_hint("свернуть/развернуть")
+        diag = diag_section.body
+        self.diag_status = tk.StringVar(value="Проверка окружения: Python, хранилище "
+                                              "ключей, SSH, Git, папки, диск.")
+        tk.Label(diag, textvariable=self.diag_status, bg=C["panel"], fg=C["muted"],
+                 font=F_SMALL, wraplength=860, justify="left").pack(anchor="w")
+        btns = tk.Frame(diag, bg=C["panel"])
+        btns.pack(fill="x", pady=(6, 0))
+        ttk.Button(btns, text="Запустить проверку", style="Accent.TButton",
+                   command=self.run_check).pack(side="left")
+        ttk.Button(btns, text="Скопировать отчёт",
+                   command=self.copy_diag).pack(side="left", padx=8)
+        ttk.Button(btns, text="Показать лог ошибок",
+                   command=self.show_log).pack(side="left", padx=8)
+        self.diag_text = tk.Text(diag, height=8, wrap="word", state="disabled",
+                                 bd=1, relief="solid", font=F_MONO)
+        self.diag_text.pack(fill="x", pady=(8, 2))
+
         tk.Label(
             self,
             text="Ключи хранятся через системный диспетчер учётных данных (keyring). "
@@ -142,6 +166,36 @@ class SettingsPage(tk.Frame):
             return "Ключ сохранён" if self.app.secrets.get(name) else "Ключ не сохранён"
         except Exception:
             return "Хранилище ключей недоступно"
+
+    def run_check(self):
+        self.diag_status.set("Выполняется проверка…")
+
+        def done(results):
+            summary = diagnostics_summary(results)
+            self._last_diag = diagnostics_text(results)
+            set_text(self.diag_text, self._last_diag)
+            self.diag_status.set(
+                f"Проверка завершена: ошибок — {summary['errors']}, "
+                f"предупреждений — {summary['warnings']}.")
+
+        self.app.start_async("Диагностика",
+                             lambda: run_diagnostics(self.app.settings,
+                                                     self.app.secrets),
+                             done)
+
+    def copy_diag(self):
+        text = self._last_diag or self.diag_text.get("1.0", "end")
+        if not text.strip():
+            messagebox.showinfo("Диагностика", "Сначала запустите проверку.",
+                                parent=self)
+            return
+        self.clipboard_clear()
+        self.clipboard_append(text)
+
+    def show_log(self):
+        tail = tail_log(12000)
+        set_text(self.diag_text, tail or "Лог пуст.")
+        self.diag_status.set(f"Файл лога: {log_file()}")
 
     def on_show(self):
         self.mentor_secret_status.set(self._secret_status("mentor_api_key"))

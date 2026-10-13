@@ -11,6 +11,10 @@ sys.path.insert(0, str(ROOT / "src"))
 
 def main() -> int:
     try:
+        from alterego_training_hub.logging_setup import install_excepthook, setup_logging
+
+        setup_logging()
+        install_excepthook()
         from alterego_training_hub.ui import main as run_ui
     except (ImportError, ModuleNotFoundError) as exc:
         missing = getattr(exc, "name", "") or ""

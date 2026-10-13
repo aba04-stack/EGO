@@ -313,10 +313,14 @@ def _describe(call: ToolCall) -> str:
         "get_run_history": "История запусков обучения",
         "start_training": "Запустить обучение",
         "stop_training": "Остановить обучение",
+        "run_diagnostics": "Проверка окружения (диагностика)",
         "search_github": "Поиск репозиториев на GitHub",
         "search_huggingface": "Поиск моделей на Hugging Face",
         "huggingface_model_card": "Карточка модели Hugging Face",
         "send_email": "Отправить письмо (email)",
+        "list_servers": "Список серверов",
+        "server_info": "Информация о сервере",
+        "run_on_server": "Команда на сервере",
     }
     base = descriptions.get(call.name, call.name)
     if call.name == "send_email":

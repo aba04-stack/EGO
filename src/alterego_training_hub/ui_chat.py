@@ -127,6 +127,12 @@ class ChatPage(tk.Frame):
         else:
             self.status_var.set(f"{mode} · рабочая папка не выбрана — инструменты файлов отключены")
 
+    def focus_input(self):
+        try:
+            self.input.focus_set()
+        except Exception:  # noqa: BLE001 - widget may be gone during shutdown
+            pass
+
     def on_show(self):
         self._update_hint()
 

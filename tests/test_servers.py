@@ -178,3 +178,88 @@ def test_agent_tools_bridge(store):
     result = handlers["run_on_server"]({"server": "gpu-box", "command": "ls"})
     assert result["ok"] is True and result["output"] == "out"
     assert handlers["run_on_server"]({"server": "nope", "command": "ls"})["ok"] is False
+
+
+def test_ssh_host_keys_are_pinned_on_first_use(tmp_path, monkeypatch):
+    """Unknown host keys are saved to app known_hosts; saved keys are loaded."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    import sys
+    import types
+
+    from alterego_training_hub.servers import SshRunner, known_hosts_path
+
+    calls = {}
+
+    class FakeKey:
+        def get_name(self):
+            return "ssh-ed25519"
+
+        def get_base64(self):
+            return "AAAA"
+
+        def asbytes(self):
+            return b"\x00\x01\x02"
+
+    class FakeMissingHostKeyPolicy:
+        pass
+
+    class FakeHostKeys:
+        def add(self, hostname, name, key):
+            calls.setdefault("added", []).append(hostname)
+
+    class FakeClient:
+        def load_system_host_keys(self):
+            calls["system_keys"] = True
+
+        def load_host_keys(self, path):
+            calls.setdefault("loaded", []).append(path)
+
+        def set_missing_host_key_policy(self, policy):
+            calls["policy"] = policy
+
+        def get_host_keys(self):
+            return FakeHostKeys()
+
+        def connect(self, **kwargs):
+            calls["connect"] = kwargs
+            transport = types.SimpleNamespace(
+                get_remote_server_key=lambda: FakeKey())
+            self._transport = transport
+
+        def get_transport(self):
+            return self._transport
+
+        def exec_command(self, command, timeout=60.0):
+            raise AssertionError("не должен вызываться в этом тесте")
+
+        def close(self):
+            pass
+
+    fake_paramiko = types.ModuleType("paramiko")
+    fake_paramiko.SSHClient = FakeClient
+    fake_paramiko.MissingHostKeyPolicy = FakeMissingHostKeyPolicy
+    fake_paramiko.AuthenticationException = type(
+        "AuthenticationException", (Exception,), {})
+    fake_paramiko.BadHostKeyException = type("BadHostKeyException", (Exception,), {})
+    fake_paramiko.SSHException = type("SSHException", (Exception,), {})
+    monkeypatch.setitem(sys.modules, "paramiko", fake_paramiko)
+
+    runner = SshRunner("10.0.0.5", 22, "dev", password="pw")
+    runner.connect()
+    assert calls["system_keys"] is True
+    assert isinstance(calls["policy"], FakeMissingHostKeyPolicy)
+
+    # First contact: the policy pins the key to the app known_hosts file.
+    pin_file = known_hosts_path()
+    calls["policy"].missing_host_key(
+        FakeClient(), "[10.0.0.5]:22", FakeKey())
+    content = pin_file.read_text(encoding="utf-8")
+    assert "[10.0.0.5]:22 ssh-ed25519 AAAA" in content
+
+    # Fingerprint is computed after connect.
+    assert runner.host_fingerprint.startswith("SHA256:")
+
+    # A second runner loads the pinned file.
+    runner2 = SshRunner("10.0.0.5", 22, "dev")
+    runner2.connect()
+    assert any(str(pin_file) == p for p in calls.get("loaded", []))

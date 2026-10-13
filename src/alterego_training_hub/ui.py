@@ -13,7 +13,9 @@ from .agent import TRAINING_CONTEXT_TOOL_SCHEMAS
 from .cloud_gpu import RunPodClient
 from .config import AppSettings, SecretStore, app_data_dir
 from .connectors import ConnectorManager
+from .diagnostics import diagnostics_summary, diagnostics_text, run_diagnostics
 from .git_manager import GitRepositoryManager
+from .logging_setup import install_excepthook, log_worker_error, setup_logging
 from .mentor import ApiMentor, MentorError
 from .metrics import brief as metrics_brief, parse_log
 from .models_registry import ModelRegistry, default_library_dir
@@ -27,6 +29,8 @@ from .ui_common import C, F_NAV, F_NAV_SMALL, confirm_from_worker
 class TrainingHubApp(tk.Tk):
     def __init__(self):
         super().__init__()
+        setup_logging()
+        install_excepthook()
         self.title("AlterEgo Training Hub — LLM Studio")
         self.geometry("1480x860")
         self.minsize(1180, 720)
@@ -161,6 +165,41 @@ class TrainingHubApp(tk.Tk):
 
         self.show_page("editor")
         self._refresh_workspace_badge()
+        self._bind_shortcuts()
+        self.set_status("Готово · F1 — горячие клавиши")
+
+    def _bind_shortcuts(self):
+        page_keys = ["editor", "workspace", "models", "datasets", "model",
+                     "playground", "training", "gpu", "servers"]
+        for index, key in enumerate(page_keys, start=1):
+            self.bind_all(f"<Control-Key-{index}>",
+                          lambda _e, k=key: self.show_page(k))
+        self.bind_all("<Control-Key-0>", lambda _e: self.show_page("settings"))
+        self.bind_all("<Control-k>", lambda _e: self.show_page("chat"))
+        self.bind_all("<Control-j>", lambda _e: self.terminal.toggle())
+        self.bind_all("<F5>", lambda _e: self.refresh_current())
+        self.bind_all("<F1>", lambda _e: self.show_shortcuts_help())
+
+    def refresh_current(self):
+        page = self.pages.get(self._current_page)
+        on_show = getattr(page, "on_show", None) if page is not None else None
+        if callable(on_show):
+            on_show()
+            self.set_status("Обновлено: " + self._current_page)
+
+    def show_shortcuts_help(self):
+        messagebox.showinfo(
+            "Горячие клавиши",
+            "Ctrl+1…Ctrl+9 — страницы (редактор, папка, модели, датасеты,\n"
+            "   модель, playground, обучение, GPU, серверы)\n"
+            "Ctrl+0 — настройки\n"
+            "Ctrl+K — фокус в чат наставника\n"
+            "Ctrl+J — свернуть/развернуть терминал\n"
+            "F5 — обновить текущую страницу\n"
+            "F1 — эта справка\n"
+            "Ctrl+Enter — отправить сообщение в чате\n"
+            "Ctrl+S — сохранить файл в редакторе",
+            parent=self)
 
     def _make_nav_item(self, parent, key: str, label: str):
         row = tk.Frame(parent, bg=C["sidebar"])
@@ -189,7 +228,11 @@ class TrainingHubApp(tk.Tk):
 
     def show_page(self, key: str):
         if key == "chat":
-            self.chat_panel.focus_set()
+            focus = getattr(self.chat_panel, "focus_input", None)
+            if callable(focus):
+                focus()
+            else:
+                self.chat_panel.focus_set()
             return
         self._current_page = key
         for name, button in self._nav_buttons.items():
@@ -224,6 +267,7 @@ class TrainingHubApp(tk.Tk):
                 self.post_event("result", {"ok": True, "label": label, "value": result,
                                            "callback": on_success})
             except Exception as exc:  # noqa: BLE001 - shown to the user in a dialog
+                log_worker_error("worker", exc)
                 self.post_event("result", {"ok": False, "label": label, "error": str(exc),
                                            "on_error": on_error})
 
@@ -273,6 +317,7 @@ class TrainingHubApp(tk.Tk):
                     try:
                         callback(payload.get("value"))
                     except Exception as exc:  # noqa: BLE001
+                        log_worker_error("callback", exc)
                         self.set_status("Ошибка обработки результата")
                         messagebox.showerror("AlterEgo Training Hub",
                                              f"Операция завершилась, но интерфейс не смог "
@@ -286,8 +331,8 @@ class TrainingHubApp(tk.Tk):
                 if on_error:
                     try:
                         on_error(payload.get("error", ""))
-                    except Exception:  # noqa: BLE001 - UI recovery must not cascade
-                        pass
+                    except Exception as exc:  # noqa: BLE001 - UI recovery must not cascade
+                        log_worker_error("on_error", exc)
 
     # -------------------------------------------------------------- helpers
     def save_settings(self):
@@ -412,12 +457,21 @@ class TrainingHubApp(tk.Tk):
             self.activity.log("training", "Агент остановил обучение")
             return {"ok": True}
 
+        def diagnostics(_args):
+            try:
+                results = run_diagnostics(self.settings, self.secrets)
+            except Exception as exc:
+                return {"ok": False, "error": str(exc)}
+            return {"ok": True, "summary": diagnostics_summary(results),
+                    "report": diagnostics_text(results), "checks": results}
+
         handlers = {
             "get_training_status": get_training_status,
             "read_training_log": read_training_log,
             "get_run_history": get_run_history,
             "start_training": start_training,
             "stop_training": stop_training,
+            "run_diagnostics": diagnostics,
         }
         schemas = list(TRAINING_CONTEXT_TOOL_SCHEMAS) + [
             {"type": "function", "function": {
@@ -429,6 +483,11 @@ class TrainingHubApp(tk.Tk):
             {"type": "function", "function": {
                 "name": "stop_training",
                 "description": "Остановить текущее обучение.",
+                "parameters": {"type": "object", "properties": {}, "required": []}}},
+            {"type": "function", "function": {
+                "name": "run_diagnostics",
+                "description": "Проверка окружения: Python, хранилище ключей, SSH, Git, "
+                               "рабочая папка, диск, настройки наставника.",
                 "parameters": {"type": "object", "properties": {}, "required": []}}},
         ]
         mutations = {"start_training", "stop_training"}

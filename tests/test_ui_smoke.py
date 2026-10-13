@@ -319,7 +319,7 @@ def test_dashboard_training_and_agent_context(fake_ui):
 
     tools, schemas, mutations = app.agent_extra_tools()
     assert {"get_training_status", "read_training_log", "get_run_history",
-            "start_training", "stop_training"} <= set(tools)
+            "start_training", "stop_training", "run_diagnostics"} <= set(tools)
     assert {"search_github", "search_huggingface", "huggingface_model_card",
             "send_email"} <= set(tools)
     assert {"list_servers", "server_info", "run_on_server"} <= set(tools)
@@ -328,9 +328,11 @@ def test_dashboard_training_and_agent_context(fake_ui):
     assert tools["get_run_history"]({"limit": 3})["ok"] is True
     assert tools["start_training"]({})["ok"] is False  # no workspace -> error dict
     assert tools["stop_training"]({})["ok"] is True
+    diag = tools["run_diagnostics"]({})
+    assert diag["ok"] is True and diag["summary"]["total"] >= 8
     assert {"start_training", "stop_training", "send_email", "run_on_server"} \
         <= set(mutations)
-    assert len(schemas) >= 11
+    assert len(schemas) >= 12
 
     context = app.assessment_context()
     assert "Обучение" in context
@@ -625,3 +627,37 @@ def test_servers_page_collapsible_and_terminal(fake_ui, monkeypatch, tmp_path):
     term.run_command()
     assert ran["value"]["command"] == "nvidia-smi"
     assert "nvidia-smi" in term.output.get("1.0", "end")
+
+
+def test_shortcuts_and_diagnostics_settings(fake_ui, monkeypatch):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+
+    # Shortcuts are bound at startup and the help dialog does not crash.
+    app.refresh_current()
+    app.show_shortcuts_help()
+
+    def sync_start(label, task, on_success=None, on_error=None):
+        try:
+            value = task()
+        except Exception as exc:  # noqa: BLE001
+            if on_error:
+                on_error(str(exc))
+            return
+        if on_success:
+            on_success(value)
+
+    monkeypatch.setattr(app, "start_async", sync_start)
+
+    settings = app.pages["settings"]
+    app.show_page("settings")
+    settings.run_check()
+    assert "Проверка завершена" in settings.diag_status.get()
+    assert settings.diag_text.get("1.0", "end").strip()
+    settings.copy_diag()
+    settings.show_log()
+    assert settings.diag_status.get().startswith("Файл лога:")
+
+    # Chat panel exposes focus_input used by Ctrl+K.
+    chat = app.pages["chat"]
+    chat.focus_input()

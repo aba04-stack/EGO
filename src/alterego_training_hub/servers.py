@@ -20,6 +20,11 @@ DEFAULT_TIMEOUT = 60.0
 _CONNECT_TIMEOUT = 15.0
 _MAX_OUTPUT = 200_000
 
+
+def known_hosts_path() -> Path:
+    """App-managed known_hosts: host keys are pinned on first use (TOFU)."""
+    return app_data_dir() / "known_hosts"
+
 INFO_COMMAND = (
     "uname -srmo; hostname; echo '---GPU---'; "
     "nvidia-smi --query-gpu=name,memory.total,utilization.gpu --format=csv,noheader "
@@ -147,7 +152,13 @@ def _clip(text: str) -> str:
 
 
 class SshRunner:
-    """One SSH connection backed by paramiko (imported on connect)."""
+    """One SSH connection backed by paramiko (imported on connect).
+
+    Host keys are verified against the system known_hosts plus an app-managed
+    file: unknown keys are pinned on first use (trust-on-first-use, like
+    ``ssh -o StrictHostKeyChecking=accept-new``) and rejected silently later if
+    they change. The remote host-key fingerprint is exposed for the UI.
+    """
 
     def __init__(self, host: str, port: int, user: str, *,
                  password: str = "", key_path: str = "",
@@ -159,6 +170,7 @@ class SshRunner:
         self.key_path = key_path
         self.connect_timeout = float(connect_timeout)
         self._client: Any = None
+        self.host_fingerprint = ""
 
     def connect(self) -> None:
         try:
@@ -169,7 +181,26 @@ class SshRunner:
                 "Выполните: pip install paramiko"
             ) from exc
         client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.load_system_host_keys()
+        pin_file = known_hosts_path()
+        if pin_file.exists():
+            try:
+                client.load_host_keys(str(pin_file))
+            except Exception:  # noqa: BLE001 - a corrupt pin file must not block
+                pass
+
+        class PinOnFirstUse(paramiko.MissingHostKeyPolicy):
+            def missing_host_key(self, ssh_client, hostname, key):
+                ssh_client.get_host_keys().add(hostname, key.get_name(), key)
+                try:
+                    pin_file.parent.mkdir(parents=True, exist_ok=True)
+                    with open(pin_file, "a", encoding="utf-8") as handle:
+                        handle.write(
+                            f"{hostname} {key.get_name()} {key.get_base64()}\n")
+                except OSError:
+                    pass  # session continues, but the key is not pinned
+
+        client.set_missing_host_key_policy(PinOnFirstUse())
         connect_kwargs: dict[str, Any] = {
             "hostname": self.host,
             "port": self.port,
@@ -181,18 +212,30 @@ class SshRunner:
         if self.password:
             connect_kwargs["password"] = self.password
         if self.key_path:
-            try:
-                connect_kwargs["key_filename"] = self.key_path
-            except Exception as exc:  # pragma: no cover - defensive
-                raise ServerError(f"Ключ недоступен: {exc}") from None
+            connect_kwargs["key_filename"] = self.key_path
         try:
             client.connect(**connect_kwargs)
         except paramiko.AuthenticationException:
             raise ServerError("SSH: отказ в авторизации (проверьте пользователя, "
                               "ключ или пароль).") from None
+        except paramiko.BadHostKeyException as exc:
+            raise ServerError(
+                "SSH: ключ сервера изменился (возможна атака). Проверьте "
+                f"known_hosts: {exc}.") from None
         except (paramiko.SSHException, OSError, TimeoutError) as exc:
             raise ServerError(f"SSH: не удалось подключиться ({exc}).") from None
         self._client = client
+        try:
+            import base64
+            import hashlib
+
+            remote_key = client.get_transport().get_remote_server_key()
+            digest = hashlib.sha256(remote_key.asbytes()).digest()
+            self.host_fingerprint = ("SHA256:"
+                                     + base64.b64encode(digest).decode()
+                                     .rstrip("="))
+        except Exception:  # noqa: BLE001 - fingerprint is informational
+            self.host_fingerprint = ""
 
     def run(self, command: str, timeout: float = DEFAULT_TIMEOUT) -> dict[str, Any]:
         if self._client is None:
@@ -200,13 +243,15 @@ class SshRunner:
         try:
             _stdin, stdout, stderr = self._client.exec_command(
                 command, timeout=float(timeout))
-            output = stdout.read().decode("utf-8", errors="replace")
-            err = stderr.read().decode("utf-8", errors="replace")
+            raw_out = stdout.read(_MAX_OUTPUT + 1)
+            raw_err = stderr.read(_MAX_OUTPUT + 1)
             exit_code = stdout.channel.recv_exit_status()
         except (OSError, TimeoutError) as exc:
             raise ServerError(f"SSH: команда не выполнена ({exc}).") from None
         except Exception as exc:  # paramiko transport errors
             raise ServerError(f"SSH: ошибка сессии ({exc}).") from None
+        output = raw_out.decode("utf-8", errors="replace")
+        err = raw_err.decode("utf-8", errors="replace")
         text = output + (("\n" + err) if err.strip() else "")
         return {"ok": exit_code == 0, "exit_code": exit_code,
                 "command": command, "output": _clip(text)}
@@ -298,9 +343,19 @@ class ServerManager:
 
     def test_connection(self, ref: str) -> dict[str, Any]:
         entry = self.resolve(ref)
-        result = self._run(entry, "echo connected && hostname",
-                           timeout=_CONNECT_TIMEOUT + 5)
+        runner = self._connect(entry)
+        try:
+            result = runner.run("echo connected && hostname",
+                                timeout=_CONNECT_TIMEOUT + 5)
+            fingerprint = str(getattr(runner, "host_fingerprint", "") or "")
+            if fingerprint:
+                result["host_fingerprint"] = fingerprint
+                result["output"] = (result.get("output", "").rstrip()
+                                    + f"\n[host key {fingerprint}]")
+        finally:
+            runner.close()
         result["ok"] = bool(result.get("ok"))
+        result.setdefault("server", entry.name)
         return result
 
     def info(self, ref: str) -> dict[str, Any]:

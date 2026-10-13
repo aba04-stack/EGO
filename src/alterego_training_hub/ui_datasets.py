@@ -7,7 +7,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from .datasets import DatasetEntry, DatasetError, DatasetLibrary, preview_rows
-from .ui_common import C, F_MONO, F_SMALL, card, page_header, set_text
+from .ui_common import C, F_BASE, F_MONO, F_SMALL, card, page_header, set_text
 
 
 class DatasetsPage(tk.Frame):
@@ -42,6 +42,26 @@ class DatasetsPage(tk.Frame):
         self.library_var = tk.StringVar()
         tk.Label(bar, textvariable=self.library_var, bg=C["panel"], fg=C["muted"],
                  font=F_SMALL).pack(side="right")
+
+        # Hugging Face download + filter/split tools
+        tools_row = tk.Frame(toolbar_card, bg=C["panel"])
+        tools_row.pack(fill="x", pady=(6, 0))
+        tk.Label(tools_row, text="Hugging Face", bg=C["panel"],
+                 font=F_BASE).pack(side="left", padx=(0, 6))
+        self.hf_var = tk.StringVar()
+        tk.Entry(tools_row, textvariable=self.hf_var, width=32, bd=1,
+                 relief="solid", font=F_MONO).pack(side="left", padx=(0, 6))
+        tk.Label(tools_row, text="(организация/имя)", bg=C["panel"],
+                 fg=C["muted"], font=F_SMALL).pack(side="left", padx=(0, 12))
+        ttk.Button(tools_row, text="Скачать с HF",
+                   command=self.download_hf).pack(side="left", padx=(0, 12))
+        tk.Label(tools_row, text="Фильтр (содержит)", bg=C["panel"],
+                 font=F_BASE).pack(side="left", padx=(0, 6))
+        self.filter_var = tk.StringVar()
+        tk.Entry(tools_row, textvariable=self.filter_var, width=18, bd=1,
+                 relief="solid", font=F_BASE).pack(side="left", padx=(0, 6))
+        ttk.Button(tools_row, text="Фильтр и разбиение train/val/test",
+                   command=self.filter_split).pack(side="left")
 
         table_card = card(self)
         table_card.pack(fill="both", expand=True, padx=24, pady=(0, 12))
@@ -96,6 +116,77 @@ class DatasetsPage(tk.Frame):
     def _selected(self) -> DatasetEntry | None:
         selection = self.tree.selection()
         return self._entries.get(selection[0]) if selection else None
+
+    def download_hf(self):
+        from .datasets import fetch_hf_rows, write_rows
+
+        repo_id = self.hf_var.get().strip()
+        if not repo_id:
+            messagebox.showinfo("Hugging Face",
+                                "Укажите идентификатор датасета, "
+                                "например squad или imdb.", parent=self)
+            return
+        if not messagebox.askyesno(
+            "Hugging Face",
+            f"Скачать до 100 строк датасета «{repo_id}» (split=train)?\n"
+            "Запрос пойдёт к datasets-server.huggingface.co.", parent=self):
+            return
+        library_dir = self.app.model_registry().library_dir
+
+        def work():
+            rows = fetch_hf_rows(repo_id, limit=100)
+            target = library_dir / "hf" / (repo_id.replace("/", "__") + ".jsonl")
+            write_rows(target, rows, "jsonl")
+            entry = DatasetEntry(
+                name=repo_id.replace("/", "__"), format="jsonl",
+                location=str(target), rows=len(rows),
+                size_bytes=target.stat().st_size, notes=f"hf:{repo_id}")
+            self._library().add(entry)
+            return len(rows)
+
+        def done(count):
+            self.refresh()
+            self.app.activity.log("system", f"Скачан датасет с HF: {repo_id} ({count} строк)")
+            messagebox.showinfo("Hugging Face", f"Готово: строк — {count}", parent=self)
+
+        def failed(error):
+            messagebox.showerror("Hugging Face", str(error), parent=self)
+
+        self.app.start_async("Скачать с Hugging Face", work, done, failed)
+
+    def filter_split(self):
+        from .datasets import filter_rows, read_rows, split_rows, write_rows
+
+        entry = self._selected()
+        if entry is None:
+            messagebox.showinfo("Датасеты", "Выберите датасет в таблице.",
+                                parent=self)
+            return
+        source = Path(entry.location)
+        if not source.is_file():
+            messagebox.showerror("Датасеты", f"Файл не найден: {entry.location}",
+                                 parent=self)
+            return
+        fmt = entry.format
+        try:
+            rows = read_rows(source, fmt)
+            rows = filter_rows(rows, contains=self.filter_var.get().strip())
+            parts = split_rows(rows, seed=42)
+        except Exception as exc:
+            messagebox.showerror("Датасеты", str(exc), parent=self)
+            return
+        written = []
+        for part, part_rows in parts.items():
+            target = source.with_name(f"{source.stem}.{part}.{fmt}")
+            write_rows(target, part_rows, fmt)
+            self._library().add(DatasetEntry(
+                name=f"{entry.name}-{part}", format=fmt, location=str(target),
+                rows=len(part_rows), size_bytes=target.stat().st_size))
+            written.append(f"{part}: {len(part_rows)}")
+        self.refresh()
+        self.app.activity.log("system", "Разбиение датасета: " + ", ".join(written))
+        messagebox.showinfo("Датасеты",
+                            "Готово — " + ", ".join(written), parent=self)
 
     def scan_folder(self):
         folder = filedialog.askdirectory(title="Папка с датасетами")

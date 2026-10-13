@@ -104,6 +104,10 @@ def main() -> int:
     n = 256
     xs = [random.uniform(-2, 2) for _ in range(n)]
     ys = [3.0 * x + 2.0 + random.uniform(-0.15, 0.15) for x in xs]
+    n_train = max(8, int(n * 0.8))
+    train_x, train_y = xs[:n_train], ys[:n_train]
+    val_x, val_y = xs[n_train:], ys[n_train:]
+    m = len(train_x)
 
     w, b = 0.0, 0.0
     ckpt_dir = ROOT / "checkpoints"
@@ -138,7 +142,7 @@ def main() -> int:
         except (TypeError, ValueError):
             grad_clip = 0.0
         grad_w = grad_b = loss = 0.0
-        for x, y in zip(xs, ys):
+        for x, y in zip(train_x, train_y):
             pred = w * x + b
             err = pred - y
             loss += err * err
@@ -148,11 +152,20 @@ def main() -> int:
             scale = min(1.0, grad_clip / (abs(grad_w) + abs(grad_b) + 1e-12))
             grad_w *= scale
             grad_b *= scale
-        w -= lr * grad_w / n
-        b -= lr * grad_b / n
-        loss = loss / n
+        w -= lr * grad_w / m
+        b -= lr * grad_b / m
+        loss = loss / m
         acc = max(0.0, 1.0 - loss / 4.0)
-        print(f"epoch {epoch}/{epochs} loss={loss:.4f} acc={acc:.4f} lr={lr}")
+        val_loss = 0.0
+        for x, y in zip(val_x, val_y):
+            err = (w * x + b) - y
+            val_loss += err * err
+        val_loss = val_loss / max(1, len(val_x))
+        val_acc = max(0.0, 1.0 - val_loss / 4.0)
+        ppl = pow(2.718281828, min(val_loss, 20.0))
+        print(f"epoch {epoch}/{epochs} loss={loss:.4f} acc={acc:.4f} "
+              f"val_loss={val_loss:.4f} val_acc={val_acc:.4f} "
+              f"perplexity={ppl:.4f} lr={lr}")
         if patience > 0:
             if loss < best_loss - 1e-6:
                 best_loss, stale_epochs = loss, 0

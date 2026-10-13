@@ -1166,3 +1166,88 @@ def test_update_plan_profiles_watchdog_and_chart(fake_ui, tmp_path):
     model_page = app.pages["model"]
     model_page._render_progress()
     assert model_page.watchdog_var.get() is not None
+
+
+def test_stage17_tools_eval_tuning_dataset(fake_ui, tmp_path):
+    import json
+
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    app.settings.workspace_path = str(workspace)
+    app.save_settings()
+
+    tools, schemas, mutations = app.agent_extra_tools()
+    for name in ("get_eval_report", "suggest_training_fixes", "compare_runs",
+                 "prepare_dataset"):
+        assert name in tools
+        assert any(schema["function"]["name"] == name for schema in schemas)
+    assert "prepare_dataset" in mutations
+
+    # Eval report works on empty log and on synthetic epoch lines.
+    result = tools["get_eval_report"]({})
+    assert result["ok"] and result["points"] == 0
+    log_file = tmp_path / "training.log"
+    app.training._log_path = log_file
+    log_file.write_text(
+        "epoch 1/2 loss=2.0 acc=0.5 val_loss=2.1 val_acc=0.5 perplexity=8.1 lr=0.05\n"
+        "epoch 2/2 loss=1.0 acc=0.7 val_loss=1.2 val_acc=0.7 perplexity=3.3 lr=0.05\n",
+        encoding="utf-8")
+    result = tools["get_eval_report"]({})
+    assert result["ok"] and result["best_epoch"] == 2
+
+    # Suggestions are read-only and reference control keys.
+    result = tools["suggest_training_fixes"]({})
+    assert result["ok"] and result["suggestions"]
+
+    # prepare_dataset: filter + split a workspace jsonl.
+    source = workspace / "corpus.jsonl"
+    source.write_text(
+        "\n".join(json.dumps({"text": f"пример {i}" * (3 if i % 2 else 1)},
+                             ensure_ascii=False) for i in range(10)),
+        encoding="utf-8")
+    result = tools["prepare_dataset"]({"path": "corpus.jsonl",
+                                       "min_chars": 20})
+    assert result["ok"] is True
+    assert (workspace / "corpus.train.jsonl").exists()
+    assert result["filtered_rows"] < 10
+    result = tools["prepare_dataset"]({"path": "missing.jsonl"})
+    assert result["ok"] is False
+
+    # Model page: hyperparameter suggestions round-trip.
+    model_page = app.pages["model"]
+    model_page.suggest_fixes()  # askyesno fake returns True → writes control.json
+    assert (workspace / "control.json").exists()
+
+    # Datasets page: HF download without network is refused cleanly;
+    # filter/split works on a real library entry.
+    datasets_page = app.pages["datasets"]
+    datasets_page.hf_var.set("bad id without slash")
+    datasets_page.download_hf()  # no crash; shows info dialog (faked)
+    datasets_page.filter_var.set("пример")
+    library = datasets_page._library()
+    from alterego_training_hub.datasets import DatasetEntry
+
+    library.add(DatasetEntry(name="corpus", format="jsonl",
+                             location=str(source)))
+    datasets_page.refresh()
+    iid = next(iter(datasets_page._entries))
+    datasets_page.tree._selection = (iid,)
+    datasets_page.filter_split()
+    assert (workspace / "corpus.train.jsonl").exists()
+
+    # Training page: A/B compare of two synthetic run logs.
+    training_page = app.pages["training"]
+    log_a = tmp_path / "run_a.log"
+    log_b = tmp_path / "run_b.log"
+    log_a.write_text(
+        "epoch 1/2 loss=1.0 acc=0.6 val_loss=1.1 lr=0.05\n"
+        "epoch 2/2 loss=0.5 acc=0.8 val_loss=0.6 lr=0.05\n", encoding="utf-8")
+    log_b.write_text(
+        "epoch 1/2 loss=1.5 acc=0.4 val_loss=1.6 lr=0.05\n"
+        "epoch 2/2 loss=1.2 acc=0.5 val_loss=1.3 lr=0.05\n", encoding="utf-8")
+    app.runs.start("python train.py", str(workspace), log_path=str(log_b))
+    app.runs.start("python train.py", str(workspace), log_path=str(log_a))
+    training_page.compare_runs()
+    assert "Сравнение" in training_page.metrics_var.get()

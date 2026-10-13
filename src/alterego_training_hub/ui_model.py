@@ -38,6 +38,8 @@ class ModelDashboardPage(tk.Frame):
         ttk.Button(bar, text="Обновить", command=self.refresh).pack(side="left", padx=8)
         ttk.Button(bar, text="Оценка наставника", style="Accent.TButton",
                    command=self.request_assessment).pack(side="left", padx=8)
+        ttk.Button(bar, text="Подобрать параметры",
+                   command=self.suggest_fixes).pack(side="left", padx=8)
         ttk.Button(bar, text="Открыть чат",
                    command=lambda: self.app.show_page("chat")).pack(side="left")
 
@@ -275,6 +277,38 @@ class ModelDashboardPage(tk.Frame):
         set_text(self.activity_text, "\n".join(lines))
 
     # ------------------------------------------------------------- actions
+    def suggest_fixes(self):
+        """Propose hyperparameter changes from metrics and apply on demand."""
+        from tkinter import messagebox
+
+        from .hparam_tuning import suggest_fixes as _suggest
+        from .training import read_control, write_control
+
+        root = self.app.workspace_root()
+        if root is None:
+            messagebox.showinfo("Подбор параметров",
+                                "Сначала выберите рабочую папку.", parent=self)
+            return
+        summary = parse_log(self.app.training.tail())
+        control = read_control(root)
+        suggestions = _suggest(summary, control)
+        if not suggestions:
+            messagebox.showinfo("Подбор параметров",
+                                "Нет предложений — метрики в норме.", parent=self)
+            return
+        text = "\n".join(suggestion.line() for suggestion in suggestions)
+        if not messagebox.askyesno(
+            "Подбор параметров",
+            "Предлагаемые изменения:\n\n" + text
+            + "\n\nПрименить их к обучению (control.json)?", parent=self):
+            return
+        patch = dict(control)
+        for suggestion in suggestions:
+            patch[suggestion.param] = suggestion.value
+        write_control(root, patch)
+        self.app.activity.log("tuning", "Применены параметры:\n" + text)
+        self.refresh()
+
     def request_assessment(self):
         prompt = self.app.assessment_prompt()
         self.app.show_page("chat")

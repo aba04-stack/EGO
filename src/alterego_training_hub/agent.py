@@ -231,6 +231,63 @@ MODEL_TOOLS_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_eval_report",
+            "description": "Отчёт валидации: perplexity, лучшая эпоха, признаки "
+                           "переобучения по eval-метрикам (val_loss/val_acc).",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "suggest_training_fixes",
+            "description": "Предложить изменения гиперпараметров (lr, grad_clip, "
+                           "early_stop_patience) на основе метрик и watchdog. "
+                           "Только предложения — применяй через set_training_control.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "compare_runs",
+            "description": "A/B-сравнение двух последних запусков обучения: "
+                           "какой лучше по loss и скорости сходимости.",
+            "parameters": {"type": "object", "properties": {
+                "key": {"type": "string",
+                        "description": "Метрика для наложения графиков, "
+                                       "по умолчанию loss"},
+            }},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "prepare_dataset",
+            "description": "Отфильтровать и разбить датасет (jsonl/txt/csv/json) "
+                           "на train/val/test прямо в рабочей папке. Мутация: "
+                           "создаёт файлы <имя>.train.<fmt> и т.д.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Файл датасета в рабочей папке"},
+                    "field": {"type": "string", "description": "Текстовое поле (по умолчанию text)"},
+                    "contains": {"type": "string", "description": "Оставить строки с подстрокой"},
+                    "excludes": {"type": "string", "description": "Убрать строки с подстрокой"},
+                    "min_chars": {"type": "integer", "description": "Минимальная длина строки"},
+                    "max_chars": {"type": "integer", "description": "Максимальная длина строки"},
+                    "train_ratio": {"type": "number", "default": 0.8},
+                    "val_ratio": {"type": "number", "default": 0.1},
+                    "test_ratio": {"type": "number", "default": 0.1},
+                    "seed": {"type": "integer", "default": 42},
+                },
+                "required": ["path"],
+            },
+        },
+    },
 ]
 
 
@@ -603,6 +660,10 @@ def _describe(call: ToolCall) -> str:
         "set_plan": "Опубликовать рабочий план",
         "update_plan": "Обновить план и статусы шагов",
         "spawn_subagent": "Запустить подагента на подзадачу",
+        "get_eval_report": "Отчёт валидации (perplexity/переобучение)",
+        "suggest_training_fixes": "Предложить правки гиперпараметров",
+        "compare_runs": "A/B-сравнение запусков обучения",
+        "prepare_dataset": "Фильтр и разбиение датасета на train/val/test",
     }
     base = descriptions.get(call.name, call.name)
     if call.name == "send_email":

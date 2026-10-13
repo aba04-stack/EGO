@@ -151,6 +151,8 @@ The **ИИ-агент** section configures the agent itself: behaviour profiles 
 
 While training runs, a **watchdog** monitors the log: loss spikes, a rising loss, plateaus, NaN/Inf and a stalled process raise warnings with concrete suggestions (including hot `set_training_control` fixes), and the «Модель и прогресс» page keeps the metrics chart live.
 
+**Data & evaluation**: download Hugging Face dataset samples in one click, filter and split any dataset into deterministic train/val/test files (also via the agent's `prepare_dataset`), and let the template `train.py` validate every epoch (`val_loss`/`val_acc`/`perplexity`). The evaluation report detects **overfitting** and names the best epoch; the **A/B comparison** overlays two recent runs and names a winner; **hyperparameter suggestions** (`suggest_training_fixes` / «Подобрать параметры») turn watchdog signals into concrete `control.json` changes.
+
 Then use the **Наставник** panel on the right: talk to the mentor, ask it to read your project, find bugs, run tests, or fix code. It can only touch the folder you selected on the **Рабочая папка** page. In *Ассистент* mode every file change or command execution is shown for your confirmation before it happens; in *Режим агента* it acts towards your goal without step-by-step confirmations — review its work via the activity trail and backups (use Git to diff and roll back).
 
 Only use mentor outputs for model development if the selected API/model terms permit that use. Do not send private training data without checking the provider's data handling and terms.

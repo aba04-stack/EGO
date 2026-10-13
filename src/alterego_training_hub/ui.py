@@ -814,6 +814,97 @@ class TrainingHubApp(tk.Tk):
                 handler("plan", {"tasks": tasks})
             return {"ok": True, "tasks": tasks}
 
+        def get_eval_report(_args):
+            from .evaluation import build_eval_report
+
+            report = build_eval_report(self.training.tail())
+            return {"ok": True, "points": len(report.points),
+                    "best_epoch": report.best_epoch,
+                    "best_val_loss": report.best_val_loss,
+                    "overfitting": report.overfitting,
+                    "lines": report.lines()}
+
+        def suggest_training_fixes(_args):
+            from .hparam_tuning import suggest_fixes
+            from .training import read_control as read_hot_control
+
+            root = self.workspace_root()
+            control = read_hot_control(root) if root is not None else {}
+            summary = parse_log(self.training.tail())
+            suggestions = suggest_fixes(summary, control)
+            return {"ok": True,
+                    "control": control,
+                    "suggestions": [
+                        {"param": s.param, "value": s.value,
+                         "reason": s.reason, "confidence": s.confidence}
+                        for s in suggestions],
+                    "lines": [s.line() for s in suggestions],
+                    "note": "Применяй выбранные параметры через set_training_control."}
+
+        def compare_runs(args):
+            from .compare import compare_runs as _compare, overlay_series
+
+            key = str(args.get("key") or "loss")
+            records = [record for record in self.runs.list(10)
+                       if record.log_path and Path(record.log_path).is_file()]
+            if len(records) < 2:
+                return {"ok": False,
+                        "error": "Нужны два завершённых запуска с логами."}
+            first, second = records[0], records[1]
+            summary_a = parse_log(Path(first.log_path).read_text(
+                encoding="utf-8", errors="replace"))
+            summary_b = parse_log(Path(second.log_path).read_text(
+                encoding="utf-8", errors="replace"))
+            report = _compare(summary_a, summary_b,
+                              label_a="Запуск 1", label_b="Запуск 2")
+            return {"ok": True,
+                    "run_a": first.command, "run_b": second.command,
+                    "series": overlay_series(key, summary_a, summary_b),
+                    "winner": report.winner,
+                    "lines": report.lines()}
+
+        def prepare_dataset(args):
+            from .datasets import DatasetError, filter_rows, read_rows, \
+                split_rows, write_rows
+
+            root = self.workspace_root()
+            if root is None:
+                return {"ok": False, "error": "Рабочая папка не выбрана."}
+            rel = str(args.get("path") or "")
+            source = Path(root) / rel
+            if not source.is_file():
+                return {"ok": False, "error": f"Файл не найден: {rel}"}
+            fmt = source.suffix.lstrip(".").lower()
+            if fmt not in {"jsonl", "json", "csv", "tsv", "txt"}:
+                return {"ok": False, "error": f"Неподдерживаемый формат: {fmt}"}
+            try:
+                rows = read_rows(source, fmt)
+                rows = filter_rows(
+                    rows, field=str(args.get("field") or "text"),
+                    contains=str(args.get("contains") or ""),
+                    excludes=str(args.get("excludes") or ""),
+                    min_chars=int(args.get("min_chars") or 0),
+                    max_chars=int(args.get("max_chars") or 0))
+                parts = split_rows(
+                    rows,
+                    train=float(args.get("train_ratio", 0.8)),
+                    val=float(args.get("val_ratio", 0.1)),
+                    test=float(args.get("test_ratio", 0.1)),
+                    seed=int(args.get("seed", 42)))
+            except (DatasetError, TypeError, ValueError) as exc:
+                return {"ok": False, "error": str(exc)}
+            stem = source.stem
+            written = {}
+            for part, part_rows in parts.items():
+                target = source.with_name(f"{stem}.{part}.{fmt}")
+                write_rows(target, part_rows, fmt)
+                written[part] = {"path": str(target.relative_to(root)),
+                                 "rows": len(part_rows)}
+            self.activity.log("dataset",
+                              "Агент разбил датасет: "
+                              + ", ".join(f"{k}={v['rows']}" for k, v in written.items()))
+            return {"ok": True, "splits": written, "filtered_rows": len(rows)}
+
         def spawn_subagent(args):
             if not self.settings.agent_subagents:
                 return {"ok": False, "error": "Подагенты отключены в настройках агента."}
@@ -870,6 +961,10 @@ class TrainingHubApp(tk.Tk):
             "set_plan": set_plan,
             "update_plan": update_plan,
             "spawn_subagent": spawn_subagent,
+            "get_eval_report": get_eval_report,
+            "suggest_training_fixes": suggest_training_fixes,
+            "compare_runs": compare_runs,
+            "prepare_dataset": prepare_dataset,
         }
         schemas = list(TRAINING_CONTEXT_TOOL_SCHEMAS) + list(MODEL_TOOLS_SCHEMAS) + [
             {"type": "function", "function": {
@@ -888,7 +983,8 @@ class TrainingHubApp(tk.Tk):
                                "рабочая папка, диск, настройки наставника.",
                 "parameters": {"type": "object", "properties": {}, "required": []}}},
         ]
-        mutations = {"start_training", "stop_training", "set_training_control"}
+        mutations = {"start_training", "stop_training", "set_training_control",
+                     "prepare_dataset"}
 
         try:
             manager = ConnectorManager(self.secrets,

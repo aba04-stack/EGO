@@ -85,6 +85,8 @@ class TrainingPage(tk.Frame):
                    command=self.send_log_to_mentor).pack(side="left", padx=8)
         ttk.Button(bar, text="Прогресс наставнику",
                    command=self.send_progress_to_mentor).pack(side="left", padx=8)
+        ttk.Button(bar, text="Сравнить два последних запуска",
+                   command=self.compare_runs).pack(side="left", padx=8)
         ttk.Button(bar, text="Открыть чат",
                    command=lambda: self.app.show_page("chat")).pack(side="left")
 
@@ -163,6 +165,33 @@ class TrainingPage(tk.Frame):
         for record in self.app.runs.list(15):
             stamp = time.strftime("%d.%m %H:%M", time.localtime(record.started_at))
             self.runs_list.insert("end", f"{stamp}  {record.status_ru}  {record.command[:40]}")
+
+    def compare_runs(self):
+        """A/B: overlay the last two run logs and print the verdict."""
+        from pathlib import Path
+
+        from .compare import compare_runs as _compare, overlay_series
+
+        records = [record for record in self.app.runs.list(10)
+                   if record.log_path and Path(record.log_path).is_file()]
+        if len(records) < 2:
+            messagebox.showinfo("Сравнение запусков",
+                                "Нужны два завершённых запуска с логами.",
+                                parent=self)
+            return
+        first, second = records[0], records[1]
+        summary_a = parse_log(Path(first.log_path).read_text(
+            encoding="utf-8", errors="replace"))
+        summary_b = parse_log(Path(second.log_path).read_text(
+            encoding="utf-8", errors="replace"))
+        report = _compare(summary_a, summary_b,
+                          label_a="Запуск 1 (новее)", label_b="Запуск 2")
+        key = summary_a.primary_key or summary_b.primary_key or "loss"
+        draw_line_chart(self.chart, overlay_series(key, summary_a, summary_b,
+                                                   label_a="Запуск 1 (новее)",
+                                                   label_b="Запуск 2"))
+        self.metrics_var.set("Сравнение по «" + key + "»:\n"
+                             + "\n".join(report.lines()))
 
     def send_log_to_mentor(self):
         tail = self.app.training.tail()

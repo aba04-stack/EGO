@@ -97,6 +97,144 @@ def preview_rows(path: Path, fmt: str, limit: int = MAX_PREVIEW_ROWS) -> list[di
     return rows
 
 
+def read_rows(path: Path, fmt: str, limit: int = 0) -> list[dict[str, Any]]:
+    """Read a whole dataset file into rows (optionally capped)."""
+    rows = preview_rows(path, fmt, limit=limit if limit > 0 else 10**9)
+    return rows
+
+
+def write_rows(path: Path, rows: list[dict[str, Any]], fmt: str) -> Path:
+    """Write rows to a dataset file in the given format (creates parents)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if fmt == "jsonl":
+        with path.open("w", encoding="utf-8") as handle:
+            for row in rows:
+                handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+    elif fmt == "json":
+        path.write_text(json.dumps(rows, ensure_ascii=False, indent=2),
+                        encoding="utf-8")
+    elif fmt in {"csv", "tsv"}:
+        delimiter = "\t" if fmt == "tsv" else ","
+        keys: list[str] = []
+        for row in rows:
+            for key in row:
+                if key not in keys:
+                    keys.append(key)
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=keys, delimiter=delimiter,
+                                    extrasaction="ignore")
+            writer.writeheader()
+            writer.writerows(rows)
+    elif fmt == "txt":
+        path.write_text("\n".join(str(row.get("text", "")) for row in rows) + "\n",
+                        encoding="utf-8")
+    else:
+        raise DatasetError(f"Неподдерживаемый формат: {fmt}")
+    return path
+
+
+def split_rows(rows: list[dict[str, Any]], *, train: float = 0.8,
+               val: float = 0.1, test: float = 0.1,
+               seed: int = 42) -> dict[str, list[dict[str, Any]]]:
+    """Deterministic shuffle + train/val/test split; ratios are normalised."""
+    if not rows:
+        return {"train": [], "val": [], "test": []}
+    total = float(train) + float(val) + float(test)
+    if total <= 0:
+        raise DatasetError("Сумма долей разбиения должна быть больше нуля.")
+    train_r, val_r = float(train) / total, float(val) / total
+    order = list(range(len(rows)))
+    import random
+
+    random.Random(int(seed)).shuffle(order)
+    n = len(order)
+    n_train = max(1, int(round(n * train_r)))
+    n_val = int(round(n * val_r))
+    if n_train + n_val > n:
+        n_val = max(0, n - n_train)
+    train_idx = order[:n_train]
+    val_idx = order[n_train:n_train + n_val]
+    test_idx = order[n_train + n_val:]
+    return {"train": [rows[i] for i in train_idx],
+            "val": [rows[i] for i in val_idx],
+            "test": [rows[i] for i in test_idx]}
+
+
+def filter_rows(rows: list[dict[str, Any]], *, field: str = "text",
+                contains: str = "", excludes: str = "",
+                min_chars: int = 0, max_chars: int = 0) -> list[dict[str, Any]]:
+    """Filter rows by substring/length rules on one text field."""
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        text = str(row.get(field, "")) if isinstance(row, dict) else str(row)
+        if contains and contains not in text:
+            continue
+        if excludes and excludes in text:
+            continue
+        if min_chars and len(text) < int(min_chars):
+            continue
+        if max_chars and len(text) > int(max_chars):
+            continue
+        out.append(row)
+    return out
+
+
+HF_DATASETS_SERVER = "https://datasets-server.huggingface.co"
+_MAX_HF_ROWS = 200
+_MAX_HF_BYTES = 8_000_000
+
+
+def fetch_hf_rows(repo_id: str, *, config: str = "default", split: str = "train",
+                  limit: int = 50, token: str = "",
+                  timeout: float = 30.0) -> list[dict[str, Any]]:
+    """Download sample rows of a Hugging Face dataset via the public API.
+
+    Network access is confined to ``datasets-server.huggingface.co``; the
+    response is size-capped and parsed defensively.
+    """
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    repo_id = str(repo_id or "").strip()
+    if not repo_id or "/" not in repo_id or " " in repo_id or "?" in repo_id:
+        raise DatasetError(
+            "Идентификатор датасета должен быть вида «организация/имя».")
+    limit = max(1, min(int(limit), _MAX_HF_ROWS))
+    params = urllib.parse.urlencode({
+        "dataset": repo_id, "config": config or "default",
+        "split": split or "train", "offset": 0, "length": limit})
+    url = f"{HF_DATASETS_SERVER}/rows?{params}"
+    request = urllib.request.Request(url, headers={
+        "User-Agent": "AlteregoTrainingHub/1.0"})
+    if token:
+        request.add_header("Authorization", f"Bearer {token.strip()}")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            payload = response.read(_MAX_HF_BYTES + 1)
+    except urllib.error.HTTPError as exc:
+        raise DatasetError(f"Hugging Face ответил ошибкой {exc.code}: "
+                           f"{exc.reason}") from None
+    except (urllib.error.URLError, OSError) as exc:
+        raise DatasetError(f"Не удалось подключиться к Hugging Face: {exc}") from None
+    if len(payload) > _MAX_HF_BYTES:
+        raise DatasetError("Ответ Hugging Face слишком большой.")
+    try:
+        data = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise DatasetError("Некорректный ответ Hugging Face.") from None
+    raw_rows = data.get("rows") if isinstance(data, dict) else None
+    if not isinstance(raw_rows, list):
+        raise DatasetError("В ответе нет строк (проверьте имя датасета и split).")
+    out: list[dict[str, Any]] = []
+    for item in raw_rows:
+        row = item.get("row") if isinstance(item, dict) else None
+        if isinstance(row, dict):
+            out.append(row)
+    return out
+
+
+
 class DatasetLibrary:
     """CRUD over datasets.json inside the shared model-library folder."""
 

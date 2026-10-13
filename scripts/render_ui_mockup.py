@@ -159,10 +159,11 @@ def draw_shell(c: Canvas, active: str, status: str, badge: str):
 def draw_terminal(c: Canvas, *, target: str = "Локально", lines=None):
     cxp = VW - CHAT_W
     y0 = VH - 26 - TERM_H
-    # Panel tabs (terminal / problems) — like VS Code's bottom panel
+    # Panel tabs (terminal / problems / git) — like VS Code's bottom panel
     c.text(SIDE + 12, y0 + 8, "ТЕРМИНАЛ", 8, bold=True, fill=C["accent"])
     c.rect(SIDE + 12, y0 + 22, 62, 2, C["accent"])
     c.text(SIDE + 86, y0 + 8, "ПРОБЛЕМЫ (2)", 8, fill=C["muted"])
+    c.text(SIDE + 190, y0 + 8, "ГИТ (3)", 8, fill=C["muted"])
     c.text(cxp - 24, y0 + 8, "Ctrl+J — свернуть панель", 7.4, fill=C["muted"],
            anchor="ra")
     c.text(SIDE + 14, y0 + 33, "v", 8, bold=True, fill=C["muted"])

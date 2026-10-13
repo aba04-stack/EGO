@@ -7,6 +7,14 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 from .finding import iter_matches, next_match_index, replace_all
+from .pairing import (
+    PAIRS,
+    auto_close_decision,
+    backspace_decision,
+    bracket_for_cursor,
+    find_matching_bracket,
+)
+from .pathutil import PathSafetyError, safe_child_path
 from .syntax import configure_tags, detect_language, highlight
 from .templates import TemplateError, create_project, list_templates
 from .ui_common import C, F_BASE, F_MONO, F_SMALL, Collapsible, card, page_header
@@ -97,6 +105,17 @@ class EditorPage(tk.Frame):
             side="left")
         ttk.Button(tree_btns, text="Открыть", command=self.open_selected).pack(
             side="left", padx=6)
+        file_ops = tk.Frame(left, bg=C["panel"])
+        file_ops.pack(fill="x", pady=(4, 0))
+        self.new_name_var = tk.StringVar()
+        tk.Entry(file_ops, textvariable=self.new_name_var, width=16, bd=1,
+                 relief="solid", font=F_BASE).pack(side="left")
+        ttk.Button(file_ops, text="+ Файл",
+                   command=self.create_file).pack(side="left", padx=4)
+        ttk.Button(file_ops, text="Переименовать",
+                   command=self.rename_selected).pack(side="left")
+        ttk.Button(file_ops, text="Удалить",
+                   command=self.delete_selected).pack(side="left", padx=4)
 
         # Editor card: tab bar + find bar + gutter + text
         right = card(body, "Редактор")
@@ -147,6 +166,26 @@ class EditorPage(tk.Frame):
         ttk.Button(find_row, text="✕", width=3,
                    command=self.close_find).pack(side="right", padx=6)
 
+        # Go-to-line bar (hidden until Ctrl+G)
+        self.goto_bar = tk.Frame(right, bg=C["panel_alt"])
+        self.goto_visible = False
+        goto_row = tk.Frame(self.goto_bar, bg=C["panel_alt"])
+        goto_row.pack(fill="x", padx=2, pady=2)
+        tk.Label(goto_row, text="Строка", bg=C["panel_alt"],
+                 font=F_SMALL).pack(side="left", padx=(6, 4))
+        self.goto_var = tk.StringVar()
+        self.goto_entry = tk.Entry(goto_row, textvariable=self.goto_var,
+                                   width=10, bd=1, relief="solid", font=F_MONO)
+        self.goto_entry.pack(side="left", padx=(0, 6))
+        self.goto_entry.bind("<Return>",
+                             lambda _e: (self.goto_line_jump(), "break")[1])
+        self.goto_entry.bind("<Escape>",
+                             lambda _e: (self.close_goto_line(), "break")[1])
+        ttk.Button(goto_row, text="Перейти",
+                   command=self.goto_line_jump).pack(side="left", padx=(0, 4))
+        ttk.Button(goto_row, text="✕", width=3,
+                   command=self.close_goto_line).pack(side="right", padx=6)
+
         bar = tk.Frame(right, bg=C["panel"])
         bar.pack(fill="x", pady=(4, 6))
         self.file_var = tk.StringVar(value="файл не открыт")
@@ -183,9 +222,16 @@ class EditorPage(tk.Frame):
         self.editor.tag_configure("find_current", background=C["accent"],
                                   foreground="#ffffff")
         self.editor.tag_configure("line_problem", background="#3f1d24")
+        self.editor.tag_configure("bracket_match", background="#2f4f6f")
         self.editor.bind("<Control-s>", lambda _e: (self.save_file(), "break")[1])
         self.editor.bind("<Control-w>", lambda _e: (self.close_tab(), "break")[1])
         self.editor.bind("<Control-Tab>", lambda _e: (self.next_tab(), "break")[1])
+        self.editor.bind("<Control-g>",
+                         lambda _e: (self.open_goto_line(), "break")[1])
+        for char in ("(", "[", "{", '"', "'", ")", "]", "}"):
+            self.editor.bind(
+                char, lambda _e, ch=char: self._on_auto_char(ch, _e))
+        self.editor.bind("<BackSpace>", self._on_backspace)
         self.editor.bind("<<Modified>>", self._on_modified)
         self.editor.bind("<KeyRelease>", self._on_key_release)
         self.editor.bind("<ButtonRelease-1>", self._on_click)
@@ -253,6 +299,97 @@ class EditorPage(tk.Frame):
         if not selection:
             return
         self.open_file(Path(selection[0]))
+
+    # -------------------------------------------------------- file actions
+    def create_file(self):
+        root = self.app.workspace_root()
+        if root is None:
+            messagebox.showerror("Файлы", "Сначала выберите рабочую папку.",
+                                 parent=self)
+            return
+        try:
+            target = safe_child_path(root, self.new_name_var.get())
+        except PathSafetyError as exc:
+            messagebox.showerror("Файлы", str(exc), parent=self)
+            return
+        if target.exists():
+            messagebox.showerror("Файлы", "Файл уже существует.", parent=self)
+            return
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("", encoding="utf-8")
+        except OSError as exc:
+            messagebox.showerror("Файлы", f"Не удалось создать файл: {exc}",
+                                 parent=self)
+            return
+        self.new_name_var.set("")
+        self.refresh_tree()
+        self.open_file(target)
+        self.status_var.set(f"создан файл {target.name}")
+
+    def rename_selected(self):
+        root = self.app.workspace_root()
+        selection = self.tree.selection()
+        if root is None or not selection:
+            messagebox.showerror("Файлы", "Выберите файл в дереве.", parent=self)
+            return
+        old_path = Path(selection[0])
+        if not old_path.is_file():
+            messagebox.showerror("Файлы", "Переименовать можно только файл.",
+                                 parent=self)
+            return
+        try:
+            new_path = safe_child_path(root, self.new_name_var.get())
+        except PathSafetyError as exc:
+            messagebox.showerror("Файлы", str(exc), parent=self)
+            return
+        if new_path.exists():
+            messagebox.showerror("Файлы", "Имя уже занято.", parent=self)
+            return
+        try:
+            new_path.parent.mkdir(parents=True, exist_ok=True)
+            old_path.rename(new_path)
+        except OSError as exc:
+            messagebox.showerror("Файлы", f"Не удалось переименовать: {exc}",
+                                 parent=self)
+            return
+        for tab in self._tabs:
+            if tab["path"] == old_path:
+                tab["path"] = new_path
+        if self._current_path == old_path:
+            self._current_path = new_path
+            self.file_var.set(str(new_path))
+        self.new_name_var.set("")
+        self.refresh_tree()
+        self.status_var.set(f"переименовано в {new_path.name}")
+
+    def delete_selected(self):
+        selection = self.tree.selection()
+        if not selection:
+            messagebox.showerror("Файлы", "Выберите файл в дереве.", parent=self)
+            return
+        path = Path(selection[0])
+        if not path.is_file():
+            messagebox.showerror("Файлы", "Удалить можно только файл.",
+                                 parent=self)
+            return
+        if not messagebox.askyesno(
+            "Удалить файл",
+            f"Удалить {path.name}? Файл будет удалён безвозвратно.",
+            parent=self,
+        ):
+            return
+        for index in [i for i, tab in enumerate(self._tabs)
+                      if tab["path"] == path]:
+            self.close_tab(index)
+        try:
+            path.unlink()
+        except OSError as exc:
+            messagebox.showerror("Файлы", f"Не удалось удалить: {exc}",
+                                 parent=self)
+            return
+        self.refresh_tree()
+        self.status_var.set(f"удалён файл {path.name}")
 
     # --------------------------------------------------------------- tabs
     def _render_tabs(self):
@@ -333,6 +470,91 @@ class EditorPage(tk.Frame):
             self._update_cursor()
         except Exception:  # noqa: BLE001 - cosmetic only
             pass
+
+    # -------------------------------------------------------- go to line
+    def open_goto_line(self):
+        self.close_find()
+        if not self.goto_visible:
+            self.goto_bar.pack(fill="x")
+            self.goto_visible = True
+        self.goto_entry.focus_set()
+        self.goto_entry.selection_range(0, "end")
+
+    def close_goto_line(self):
+        if self.goto_visible:
+            self.goto_bar.pack_forget()
+            self.goto_visible = False
+        self.editor.focus_set()
+
+    def goto_line_jump(self):
+        raw = self.goto_var.get().strip()
+        try:
+            line = int(raw)
+        except ValueError:
+            line = 0
+        total = self._line_count()
+        if line >= 1:
+            self.open_at(min(line, total))
+            self.status_var.set(f"переход к строке {min(line, total)}")
+        self.close_goto_line()
+
+    # ------------------------------------------------- brackets & pairing
+    def _cursor_line_col(self) -> tuple[str, int]:
+        try:
+            index = self.editor.index("insert")
+            line, col = str(index).split(".")
+            return self.editor.get(f"{line}.0", f"{line}.end"), int(col)
+        except Exception:  # noqa: BLE001 - widget may be gone / fake
+            return "", 0
+
+    def _on_auto_char(self, char: str, _event=None):
+        line, col = self._cursor_line_col()
+        decision = auto_close_decision(line, col, char)
+        if decision == "pair":
+            try:
+                self.editor.insert("insert", char + PAIRS[char])
+                self.editor.mark_set("insert", "insert-1c")
+                self._on_modified_force()
+            except Exception:  # noqa: BLE001
+                return None
+            return "break"
+        if decision == "skip":
+            try:
+                self.editor.mark_set("insert", "insert+1c")
+            except Exception:  # noqa: BLE001
+                return None
+            return "break"
+        return None
+
+    def _on_backspace(self, _event=None):
+        line, col = self._cursor_line_col()
+        if backspace_decision(line, col) == 2:
+            try:
+                self.editor.delete("insert-2c", "insert")
+                self._on_modified_force()
+            except Exception:  # noqa: BLE001
+                return None
+            return "break"
+        return None
+
+    def _highlight_bracket(self):
+        try:
+            self.editor.tag_remove("bracket_match", "1.0", "end")
+            offset = self.editor.count("1.0", "insert", "chars")
+            if offset is None:
+                return
+            text = self.editor.get("1.0", "end-1c")
+        except Exception:  # noqa: BLE001 - widget may be gone / fake
+            return
+        index = bracket_for_cursor(text, int(offset))
+        if index is None:
+            return
+        match = find_matching_bracket(text, index)
+        if match is None:
+            return
+        for position in (index, match):
+            self.editor.tag_add("bracket_match", f"1.0+{position}c",
+                                f"1.0+{position + 1}c")
 
     def close_tab(self, index: int | None = None):
         if not self._tabs:
@@ -611,6 +833,7 @@ class EditorPage(tk.Frame):
     def _on_key_release(self, event=None):
         self._update_cursor()
         self._schedule_highlight()
+        self._highlight_bracket()
         if self.completion is None:
             return
         try:
@@ -626,6 +849,7 @@ class EditorPage(tk.Frame):
 
     def _on_click(self, _event=None):
         self._update_cursor()
+        self._highlight_bracket()
         if self.completion is not None:
             self.completion.hide()
 
@@ -640,6 +864,9 @@ class EditorPage(tk.Frame):
         return "break"
 
     def _on_escape(self, _event=None):
+        if self.goto_visible:
+            self.close_goto_line()
+            return "break"
         if self.find_visible:
             self.close_find()
             return "break"

@@ -257,6 +257,7 @@ def fake_ui(monkeypatch, tmp_path):
         "alterego_training_hub.ui_search",
         "alterego_training_hub.ui_palette",
         "alterego_training_hub.ui_problems",
+        "alterego_training_hub.ui_git",
         "alterego_training_hub.ui_completion",
         "alterego_training_hub.ui_models",
         "alterego_training_hub.ui_model",
@@ -889,3 +890,77 @@ def test_editor_find_replace_bookmarks_gutter(fake_ui, tmp_path):
 
     editor.close_find()
     assert editor.find_visible is False
+
+
+def test_git_panel_and_editor_polish(fake_ui, tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    git_panel = app.git_panel
+
+    # Without a workspace the panel explains itself instead of crashing.
+    git_panel.refresh()
+    assert "не выбрана" in git_panel.status_var.get()
+
+    workspace = tmp_path / "proj"
+    workspace.mkdir()
+    (workspace / "a.py").write_text("x = 1\n", encoding="utf-8")
+    app.settings.workspace_path = str(workspace)
+    app.save_settings()
+
+    monkeypatch.setattr(app.git, "status", lambda root: SimpleNamespace(
+        branch="main", ahead_behind="0 1", changes=("?? a.py",),
+        path=str(root)))
+    monkeypatch.setattr(app.git, "numstat",
+                        lambda root, staged=False: "1\t0\ta.py")
+    monkeypatch.setattr(app.git, "diff_text",
+                        lambda root, **kwargs: "+x = 1\n")
+    git_panel.refresh()
+    assert git_panel.tree.get_children() == ["a.py"]
+    assert git_panel.branch_var.get() == "ветка: main 0 1"
+    assert git_panel.status_var.get() == "Изменений: 1"
+
+    git_panel._set_diff_text("+x = 1\n-old\n")
+    assert "x = 1" in git_panel.diff.get("1.0", "end")
+
+    recorded: dict = {}
+    monkeypatch.setattr(
+        app.git, "commit",
+        lambda root, msg: recorded.setdefault("message", msg) or "ok")
+    git_panel.commit_var.set("первый коммит")
+    git_panel.commit_changes()
+    assert recorded["message"] == "первый коммит"
+
+    # Editor: go-to-line, auto-close, bracket highlight stay crash-free.
+    editor = app.pages["editor"]
+    app.show_page("editor")
+    editor.open_file(workspace / "a.py")
+    editor.open_goto_line()
+    assert editor.goto_visible is True
+    editor.goto_var.set("2")
+    editor.goto_line_jump()
+    assert editor.goto_visible is False
+    assert editor._on_auto_char("(") == "break"
+    assert editor._on_backspace() in ("break", None)
+    editor._highlight_bracket()
+    editor._on_click()
+    editor._on_escape()
+
+    # File operations: create, refuse traversal, rename, delete.
+    editor.new_name_var.set("b.py")
+    editor.create_file()
+    assert (workspace / "b.py").exists()
+    editor.new_name_var.set("../evil.py")
+    editor.create_file()
+    assert not (tmp_path / "evil.py").exists()
+
+    editor.tree._selection = (str(workspace / "b.py"),)
+    editor.new_name_var.set("c.py")
+    editor.rename_selected()
+    assert (workspace / "c.py").exists()
+    assert not (workspace / "b.py").exists()
+
+    editor.tree._selection = (str(workspace / "c.py"),)
+    editor.delete_selected()
+    assert not (workspace / "c.py").exists()

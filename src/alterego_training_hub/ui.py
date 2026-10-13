@@ -164,7 +164,8 @@ class TrainingHubApp(tk.Tk):
             self.pages[key] = page
         self.pages["chat"] = self.chat_panel
 
-        # Bottom panel: ТЕРМИНАЛ / ПРОБЛЕМЫ tabs (VS Code style)
+        # Bottom panel: ТЕРМИНАЛ / ПРОБЛЕМЫ / ГИТ tabs (VS Code style)
+        from .ui_git import GitPanel
         from .ui_problems import ProblemsPanel
 
         self.bottom = tk.Frame(center, bg=C["panel"])
@@ -187,11 +188,18 @@ class TrainingHubApp(tk.Tk):
         self.problems_tab.pack(side="left")
         self.problems_tab.bind("<Button-1>",
                                lambda _e: self.show_bottom("problems"))
+        self.git_tab = tk.Label(bottom_bar, text="ГИТ", bg=C["panel"],
+                                fg=C["muted"], font=F_NAV_SMALL, padx=12,
+                                pady=6, cursor="hand2")
+        self.git_tab.pack(side="left")
+        self.git_tab.bind("<Button-1>",
+                          lambda _e: self.show_bottom("git"))
         tk.Label(bottom_bar, text="Ctrl+J — свернуть панель", bg=C["panel"],
                  fg=C["muted"], font=F_NAV_SMALL, padx=12).pack(side="right")
 
         self.terminal = TerminalPanel(self.bottom, self)
         self.problems = ProblemsPanel(self.bottom, self)
+        self.git_panel = GitPanel(self.bottom, self)
         self.problems_tab.configure(textvariable=self.problems.count_var)
         self.show_bottom("terminal")
 
@@ -202,16 +210,21 @@ class TrainingHubApp(tk.Tk):
 
     def show_bottom(self, which: str):
         self._bottom_view = which
-        self.terminal.pack_forget()
-        self.problems.pack_forget()
-        (self.terminal if which == "terminal" else self.problems).pack(
-            fill="both", expand=True)
+        panels = {"terminal": self.terminal, "problems": self.problems,
+                  "git": self.git_panel}
+        for panel in panels.values():
+            panel.pack_forget()
+        panels.get(which, self.terminal).pack(fill="both", expand=True)
         self.terminal_tab.configure(
             fg=C["accent"] if which == "terminal" else C["muted"])
         self.problems_tab.configure(
             fg=C["accent"] if which == "problems" else C["muted"])
+        self.git_tab.configure(
+            fg=C["accent"] if which == "git" else C["muted"])
         if which == "problems":
             self.problems.refresh()
+        elif which == "git":
+            self.git_panel.refresh()
 
     def toggle_bottom(self):
         self._bottom_visible = not self._bottom_visible
@@ -234,6 +247,10 @@ class TrainingHubApp(tk.Tk):
                       lambda _e: self.show_bottom("problems"))
         self.bind_all("<Control-Shift-m>",
                       lambda _e: self.show_bottom("problems"))
+        self.bind_all("<Control-Shift-G>",
+                      lambda _e: self.show_bottom("git"))
+        self.bind_all("<Control-Shift-g>",
+                      lambda _e: self.show_bottom("git"))
         self.bind_all("<Control-p>", lambda _e: self.open_command_palette("files"))
         self.bind_all("<Control-Shift-P>",
                       lambda _e: self.open_command_palette("commands"))
@@ -275,6 +292,7 @@ class TrainingHubApp(tk.Tk):
             "Ctrl+F / Ctrl+H — поиск и замена в редакторе\n"
             "F3 / Shift+F3 — следующее/предыдущее совпадение\n"
             "Ctrl+F2 — закладка, F2 / Shift+F2 — между закладками\n"
+            "Ctrl+G — перейти к строке; Ctrl+Shift+G — панель Git\n"
             "F5 — обновить текущую страницу\n"
             "F1 — эта справка\n"
             "Ctrl+Enter — отправить сообщение в чате\n"

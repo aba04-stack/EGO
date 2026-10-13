@@ -836,3 +836,56 @@ def test_bottom_panel_problems_and_git_badge(fake_ui, monkeypatch, tmp_path):
     editor._on_up_key()
     editor._on_down_key()
     editor._on_click()
+
+
+def test_editor_find_replace_bookmarks_gutter(fake_ui, tmp_path):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    (workspace / "code.py").write_text("alpha beta\ngamma beta\n", encoding="utf-8")
+    app.settings.workspace_path = str(workspace)
+    app.save_settings()
+
+    editor = app.pages["editor"]
+    app.show_page("editor")
+    editor.open_file(workspace / "code.py")
+
+    # Gutter renders line numbers.
+    editor._regen_gutter()
+    assert "1" in editor.gutter.get("1.0", "end")
+
+    # Find bar: matches are counted and navigation reports position.
+    editor.open_find()
+    editor.find_var.set("beta")
+    editor._refresh_matches()
+    assert len(editor._matches) == 2
+    editor.find_next(1)
+    assert editor.find_status.get() == "1 из 2"
+    editor.find_next(-1)
+    assert editor.find_status.get() == "2 из 2"
+
+    # Replace all rewrites the buffer and marks the tab modified.
+    editor.replace_var.set("delta")
+    editor.replace_all_in_file()
+    buffer = editor.editor.get("1.0", "end")
+    assert "delta" in buffer and "beta" not in buffer
+    assert editor._tabs[editor._active]["modified"] is True
+
+    # Bookmarks: toggle, navigate, toggle off.
+    editor.toggle_bookmark(1)
+    editor.toggle_bookmark(3)
+    assert editor._tabs[editor._active]["bookmarks"] == {1, 3}
+    editor.goto_bookmark(1)
+    editor.goto_bookmark(-1)
+    editor.toggle_bookmark(1)
+    assert editor._tabs[editor._active]["bookmarks"] == {3}
+
+    # Problem markers show up in the gutter for the current file.
+    app.problems._items = [{"severity": "error", "message": "boom",
+                            "path": "code.py", "line": 2}]
+    editor._regen_gutter()
+    assert "●" in editor.gutter.get("1.0", "end")
+
+    editor.close_find()
+    assert editor.find_visible is False

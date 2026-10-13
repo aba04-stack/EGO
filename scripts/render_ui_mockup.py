@@ -321,6 +321,15 @@ def render_chat() -> Path:
                fill="#ffffff" if active else C["muted"])
         tx += width + 2
     c.rect(ex + 1, 177, ew - 2, 1, C["border"])
+    # Find bar (Ctrl+F): query, match counter, replace row.
+    c.rect(ex + 1, 178, ew - 2, 24, C["panel"], radius=4)
+    c.text(ex + 10, 184, "Найти:", 7.8, mono=True, fill=C["muted"])
+    c.rect(ex + 58, 181, 110, 18, C["code_bg"], radius=3, outline=C["accent"])
+    c.text(ex + 64, 185, "beta", 7.8, mono=True, fill=C["code_fg"])
+    c.text(ex + 176, 185, "1 из 2  Aa", 7.8, mono=True, fill=C["muted"])
+    c.text(ex + 262, 185, "Заменить:", 7.8, mono=True, fill=C["muted"])
+    c.rect(ex + 330, 181, 110, 18, C["code_bg"], radius=3, outline=C["border"])
+    c.text(ex + 336, 185, "delta", 7.8, mono=True, fill=C["muted"])
     code = [
         "def train(model, loader, *, epochs=10, lr=3e-4):",
         "    opt = torch.optim.AdamW(model.parameters(), lr=lr)",
@@ -334,10 +343,15 @@ def render_chat() -> Path:
         "        log(epoch=epoch + 1, val_loss=val)",
         "    return model",
     ]
-    for idx, line in enumerate(code):
-        y = 188 + idx * 17
-        c.text(ex + 12, y, f"{idx + 1:>3}", 7.6, mono=True, fill=C["muted"])
-        draw_code_line(c, ex + 36, y, line)
+    # Line-number gutter: problems marked ●, bookmarks ★.
+    marks = {2: ("●", "#f14c4c"), 4: ("★", C["accent"])}
+    c.rect(ex + 1, 202, 30, 290, C["panel"], radius=4)
+    c.rect(ex + 31, 202, 1, 290, C["border"])
+    for idx, line in enumerate(code, 1):
+        y = 210 + (idx - 1) * 17
+        mark, mark_color = marks.get(idx, (" ", C["muted"]))
+        c.text(ex + 8, y, f"{idx:>2} {mark}", 7.6, mono=True, fill=mark_color)
+        draw_code_line(c, ex + 42, y, line)
 
     draw_terminal(c)
     draw_chat_panel(c, agent_mode=True)

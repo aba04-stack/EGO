@@ -78,6 +78,10 @@ class ProblemsPanel(tk.Frame):
                                                 location))
         self.count_var.set(f"ПРОБЛЕМЫ ({len(self._items)})")
         self.status_var.set("Найдено: " + str(len(self._items)))
+        editor = self.app.pages.get("editor")
+        regen = getattr(editor, "_regen_gutter", None) if editor else None
+        if callable(regen):
+            regen()
 
     def open_selected(self):
         selection = self.tree.selection()

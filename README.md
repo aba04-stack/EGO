@@ -24,6 +24,10 @@ Mockups are rendered from the app's real design tokens by `scripts/render_ui_moc
 | `Ctrl+Shift+M` | Problems panel |
 | `Ctrl+W` | Close editor tab |
 | `Ctrl+Tab` | Next editor tab |
+| `Ctrl+F` / `Ctrl+H` | Find / replace in the editor |
+| `F3` / `Shift+F3` | Next / previous match |
+| `Ctrl+F2` | Toggle bookmark |
+| `F2` / `Shift+F2` | Next / previous bookmark |
 | `F5` | Refresh the current page |
 | `F1` | Shortcut help |
 | `Ctrl+Enter` | Send a chat message |
@@ -31,7 +35,7 @@ Mockups are rendered from the app's real design tokens by `scripts/render_ui_moc
 
 ## Editor, palette, search
 
-The editor opens files in **IDE-style tabs** (each tab keeps its buffer, `•` marks unsaved changes, `Ctrl+W` closes, `Ctrl+Tab` cycles) with a cursor position readout and **syntax highlighting** (Python, YAML/JSON, plain text) on a dark code canvas. **Autocomplete** suggests words from the file and the Python vocabulary (`Tab`/`Enter` accepts, `Esc` closes, `↑`/`↓` navigates). **Ctrl+P** opens any workspace file by fuzzy name; **Ctrl+Shift+P** runs commands from one palette (navigation, training, diagnostics). **Ctrl+Shift+F** searches the workspace by regex and jumps straight to the matching line in the editor.
+The editor opens files in **IDE-style tabs** (each tab keeps its buffer, `•` marks unsaved changes, `Ctrl+W` closes, `Ctrl+Tab` cycles) with a cursor position readout and **syntax highlighting** (Python, YAML/JSON, plain text) on a dark code canvas. A **line-number gutter** marks problem lines (● from the Problems tab) and bookmarks (★; click a line number to toggle). **Ctrl+F** / **Ctrl+H** open find & replace with all matches highlighted, an «1 of N» counter (`F3` / `Shift+F3` cycle matches, `Aa` toggles case sensitivity); **bookmarks** jump with `F2` / `Shift+F2` and toggle with `Ctrl+F2`. **Autocomplete** suggests words from the file and the Python vocabulary (`Tab`/`Enter` accepts, `Esc` closes, `↑`/`↓` navigates). **Ctrl+P** opens any workspace file by fuzzy name; **Ctrl+Shift+P** runs commands from one palette (navigation, training, diagnostics). **Ctrl+Shift+F** searches the workspace by regex and jumps straight to the matching line in the editor.
 
 The bottom panel behaves like VS Code's: **ТЕРМИНАЛ** and **ПРОБЛЕМЫ** tabs (`Ctrl+Shift+M`, `Ctrl+J` collapses the panel). The Problems tab collects errors from training logs (tracebacks, `FAILED` tests, metric anomalies) and a double-click opens the exact file and line in the editor; the list can be sent to the mentor in one click. The status bar shows the current **Git branch** with a dirty marker.
 

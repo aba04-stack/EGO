@@ -2,9 +2,11 @@
 from pathlib import Path
 
 from alterego_training_hub.semantic_search import (
-    ApiEmbedder, HashEmbedder, SemanticIndex)
-from alterego_training_hub.theme import (
-    bundled_fonts_dir, register_bundled_fonts)
+    ApiEmbedder,
+    HashEmbedder,
+    SemanticIndex,
+)
+from alterego_training_hub.theme import bundled_fonts_dir, register_bundled_fonts
 
 
 def test_embedder_ids_differ():
@@ -39,7 +41,6 @@ def test_bundled_fonts_ship_with_package():
 
 
 def test_register_bundled_fonts_linux_copies(tmp_path, monkeypatch):
-    import alterego_training_hub.theme as theme
 
     home = tmp_path / "home"
     home.mkdir()

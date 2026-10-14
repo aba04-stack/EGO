@@ -8,7 +8,7 @@ from tkinter import messagebox, ttk
 
 from .config import app_data_dir
 from .i18n import t
-from .semantic_search import SemanticIndex
+from .semantic_search import ApiEmbedder, HashEmbedder, SemanticIndex
 from .tools import WorkspaceTools
 from .ui_common import F_BASE, F_MONO, F_SMALL, C, Collapsible, card, page_header
 
@@ -124,14 +124,17 @@ class SearchPage(tk.Frame):
             str(root.resolve()).encode("utf-8")).hexdigest()[:16]
         cache_path = app_data_dir() / "semantic-index" / f"{cache_name}.json"
 
+        embedder = self._make_embedder()
+
         def work():
-            index = SemanticIndex(root)
+            index = SemanticIndex(root, embedder)
             stats = index.build(SemanticIndex.load_cache(cache_path))
             try:
                 index.save(cache_path)
             except OSError:
                 pass
-            return {"hits": index.search(query), "stats": stats}
+            return {"hits": index.search(query), "stats": stats,
+                    "embedder": index.embedder_id}
 
         def done(result):
             hits = result["hits"]
@@ -148,6 +151,21 @@ class SearchPage(tk.Frame):
 
         self.app.start_async(t('Смысловой поиск: {pattern}').format(pattern=query),
                              work, done)
+
+    def _make_embedder(self):
+        """API embeddings when a provider is configured, else local hash."""
+        settings = self.app.settings
+        base_url = (getattr(settings, "mentor_base_url", "") or "").strip()
+        model = (getattr(settings, "embeddings_model", "") or "").strip()
+        key = ""
+        if base_url and model:
+            try:
+                key = self.app.secrets.get("mentor_api_key") or ""
+            except Exception:
+                key = ""
+        if base_url and model and key:
+            return ApiEmbedder(base_url, model, key)
+        return HashEmbedder()
 
     @staticmethod
     def _parse_match(text: str) -> tuple[str, int, str]:

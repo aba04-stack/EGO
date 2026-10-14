@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alterego-training-hub-desktop"
-version = "1.8.5"
+version = "1.8.6"
 description = "Desktop control panel for AlterEgo training repositories, API mentors, and cloud GPUs"
 requires-python = ">=3.10"
 dependencies = ["keyring>=25.0", "paramiko>=3.4"]

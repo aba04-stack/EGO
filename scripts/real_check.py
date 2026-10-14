@@ -436,9 +436,9 @@ def main() -> int:
     print(f"\nИтог: ✓ {len(passed)} · ✗ {len(failed)} · ⊘ {len(blocked_n)}")
     if failed:
         return 1
-    if require_torch and any(name.startswith("torch")
+    if require_torch and any(name.startswith(("torch", "LoRA"))
                              for name, ok, _ in RESULTS if ok is None):
-        print("✗ --require-torch: torch недоступен, реальное обучение "
+        print("✗ --require-torch: torch/LoRA недоступны, реальное обучение "
               "не проверено — это провал, а не пропуск")
         return 1
     return 0

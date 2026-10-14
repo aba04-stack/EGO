@@ -39,16 +39,19 @@ def parse_version(text: str) -> tuple[int, ...]:
 
 
 def _prerelease_key(text: str) -> tuple:
-    """Ключ prerelease-суффикса: релиз (пустой суффикс) новее любого rc."""
+    """SemVer §11: релиз новее prerelease; идентификаторы через точку:
+    числовые сравниваются числом и ниже буквенных, буквенные — лексически,
+    меньшее число идентификаторов ниже при равном префиксе."""
     raw = str(text or "").strip().lstrip("vV")
     if "-" not in raw:
-        return (1,)  # финальный релиз
+        return (1,)
     suffix = raw.split("-", 1)[1].split("+", 1)[0]
     parts: list[tuple[int, int, str]] = []
-    for chunk in suffix.replace("_", ".").split("."):
-        digits = "".join(ch for ch in chunk if ch.isdigit())
-        alpha = "".join(ch for ch in chunk if not ch.isdigit())
-        parts.append((int(digits) if digits else 0, 0 if digits else 1, alpha))
+    for chunk in suffix.split("."):
+        if chunk.isdigit():
+            parts.append((0, int(chunk), ""))   # числовой: ниже буквенного
+        else:
+            parts.append((1, 0, chunk))        # буквенный: лексически целиком
     return (0, *parts)
 
 

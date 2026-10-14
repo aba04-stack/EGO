@@ -72,22 +72,43 @@ class CloudJobQueue:
     def __init__(self, library_dir: Path):
         self.library_dir = Path(library_dir)
         self.path = self.library_dir / "cloud_jobs.json"
+        self.load_error = ""
+        self._corrupt_backed_up = False
 
     def _load(self) -> list[CloudJob]:
         if not self.path.exists():
             return []
         try:
             raw = json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+        except (OSError, json.JSONDecodeError) as exc:
+            # Повреждённую очередь НЕ обнуляем молча: копия рядом и
+            # load_error для интерфейса (история заданий не «исчезает»).
+            self.load_error = (f"cloud_jobs.json повреждён "
+                               f"({type(exc).__name__}); копия сохранена")
+            if not self._corrupt_backed_up:
+                try:
+                    backup = self.path.with_name(
+                        f"cloud_jobs.json.corrupt-{int(time.time())}")
+                    backup.write_bytes(self.path.read_bytes())
+                    self._corrupt_backed_up = True
+                except OSError:
+                    pass
             return []
         out: list[CloudJob] = []
+        skipped = 0
         for item in raw if isinstance(raw, list) else []:
+            if not isinstance(item, dict):
+                skipped += 1
+                continue
             try:
                 out.append(CloudJob(**{
                     key: value for key, value in item.items()
                     if key in CloudJob.__dataclass_fields__}))
             except TypeError:
-                continue
+                skipped += 1
+        if skipped:
+            self.load_error = (f"Пропущено повреждённых записей заданий: "
+                               f"{skipped}")
         return out
 
     def _save(self, jobs: list[CloudJob]) -> Path:
@@ -200,6 +221,7 @@ class CloudJobQueue:
             return self.update(job_id, status="failed",
                                error=f"{type(exc).__name__}: {exc}")
         pod_id = str(pod.get("id") or pod.get("podId") or "")
+        budget_note = ""
         if pod_id:
             try:
                 from .budget_guard import BudgetLedger
@@ -211,13 +233,19 @@ class CloudJobQueue:
                           or job.max_gpu_hourly_usd or 0),
                     managed=True)  # создан приложением — страж вправе стопорить
                 ledger.save()
-            except Exception:
-                pass
+                if ledger.load_error:
+                    budget_note = f" ⚠ бюджет: {ledger.load_error}"
+            except Exception as exc:
+                # Автостоп зависит от этого учёта — молчать нельзя.
+                budget_note = (f" ⚠ НЕ удалось записать pod в журнал бюджета "
+                               f"({type(exc).__name__}: {exc}) — автостоп по "
+                               "бюджету для этого пода может не сработать")
         return self.update(
             job_id, status="submitted", pod_id=pod_id,
-            log=(f"pod создан: {pod_id}; команда передана как dockerArgs — "
-                 "убедитесь, что образ контейнера её исполняет "
-                 "(иначе запустите обучение вручную по SSH)"))
+            log=(f"pod создан: {pod_id}; команда передана полем args "
+                 "(RunPod REST v2) — убедитесь, что образ контейнера её "
+                 "исполняет (иначе запустите обучение вручную по SSH)")
+            + budget_note)
 
     def sync(self, job_id: str, client) -> CloudJob:
         """Refresh job status from the provider (RunPod pod list)."""

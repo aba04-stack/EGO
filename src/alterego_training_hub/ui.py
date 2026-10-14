@@ -977,7 +977,7 @@ class TrainingHubApp(tk.Tk):
             client.pod_action(pod_id, "stop", confirmed=True)
 
         verdict = apply_guard(ledger, pods, cap, stopper=stopper)
-        if verdict.stopped:
+        if verdict.stopped or verdict.warning:
             self.post_event("budget", {"verdict": verdict})
 
     def _on_budget_event(self, verdict) -> None:

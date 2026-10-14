@@ -84,7 +84,7 @@ def test_sync_exited_is_unverified_done(tmp_path):
     assert "НЕ подтверждена" in done.log
 
 
-# 1: create_pod шлёт dockerArgs строкой и подтверждает статус пода
+# 1: create_pod шлёт команду полем args (RunPod REST v2) и подтверждает статус
 def test_create_pod_payload_and_status(monkeypatch):
     client = RunPodClient("key")
     captured = {}
@@ -101,7 +101,8 @@ def test_create_pod_payload_and_status(monkeypatch):
     monkeypatch.setattr(client, "list_pods",
                         lambda: [{"id": "pod-1", "desiredStatus": "RUNNING"}])
     result = client.create_pod({"command": "python train.py"}, confirmed=True)
-    assert captured["payload"]["dockerArgs"] == "python train.py"
+    assert captured["payload"]["args"] == "python train.py"  # REST v2 SDK
+    assert "dockerArgs" not in captured["payload"]
     assert result["pod_status"] == "RUNNING"
     assert "не подтверждает" in result["command_status"]
 

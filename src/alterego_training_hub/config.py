@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from dataclasses import MISSING as _MISSING
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -104,7 +105,11 @@ class AppSettings:
         for key, value in raw.items():
             if key not in fields or key == "load_error":
                 continue
-            ok, coerced = _coerce_setting(fields[key].default, value)
+            field = fields[key]
+            default = field.default
+            if default is _MISSING and field.default_factory is not _MISSING:  # type: ignore[attr-defined]
+                default = field.default_factory()  # type: ignore[misc]
+            ok, coerced = _coerce_setting(default, value)
             if ok:
                 values[key] = coerced
             else:

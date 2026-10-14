@@ -187,7 +187,9 @@ class RunPodClient:
         }
         command = str(plan.get("command") or "").strip()
         if command:
-            payload["dockerArgs"] = command
+            # Официальный runpod-python (ctl_commands.create_pod, REST v2):
+            # docker_args кладётся в поле "args". Поля "dockerArgs" в v2 нет.
+            payload["args"] = command
         created = self._request("POST", "/pods", payload=payload)
         if not created.get("id"):
             raise CloudGpuError("RunPod did not return a pod ID.")
@@ -211,9 +213,9 @@ class RunPodClient:
                 "cost_warning": current["warning"],
                 "pod_status": pod_status,
                 "command_status": (
-                    "dockerArgs отправлен как строка (формат RunPod API); "
-                    "API не подтверждает запуск команды внутри контейнера — "
-                    "проверьте логи/SSH пода")}
+                    "команда отправлена полем args (RunPod REST v2, как в "
+                    "официальном runpod-python); API не подтверждает запуск "
+                    "команды внутри контейнера — проверьте логи/SSH пода")}
 
     def pod_action(self, pod_id: str, action: str, *, confirmed: bool = False) -> dict[str, Any]:
         if action not in {"start", "stop"}:

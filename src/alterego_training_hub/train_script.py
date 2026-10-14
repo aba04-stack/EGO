@@ -80,6 +80,7 @@ eval: val_loss=..., сэмплы {{"sample": ...}} — их подхватят �
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import math
 import os
@@ -154,6 +155,73 @@ def _row_text(row) -> str:
     return f"{text}\\n{answer}" if answer else text
 
 
+def _mask_labels(input_ids, prompt_ids):
+    """labels примера: prompt маскируется -100, ответ остаётся."""
+    cut = min(len(prompt_ids), len(input_ids))
+    return [-100] * cut + list(input_ids[cut:])
+
+
+def _row_pair(row):
+    """(prompt, full) для SFT: модель учится только на целевом ответе.
+
+    full — весь текст примера; prompt — инструкция/диалог БЕЗ финального
+    ответа ассистента. Токены prompt маскируются -100 в train_lora.
+    """
+    if isinstance(row, str):
+        return "", row
+    if not isinstance(row, dict):
+        return "", str(row or "")
+    messages = row.get("messages")
+    if isinstance(messages, list) and messages:
+        parts = [f"{m.get('role', 'user')}: {m.get('content', '')}"
+                 for m in messages if isinstance(m, dict) and m.get("content")]
+        full = "\\n".join(parts)
+        last_assistant = -1
+        for i, m in enumerate(messages):
+            if isinstance(m, dict) and m.get("role") == "assistant":
+                last_assistant = i
+        if last_assistant > 0:
+            prompt = "\\n".join(parts[:last_assistant]) + "\\nassistant:"
+            return prompt, full
+        return "", full
+    answer = str(row.get("output") or row.get("completion")
+                 or row.get("response") or "")
+    if row.get("instruction"):
+        head = str(row.get("instruction") or "")
+        if row.get("input"):
+            head += "\\n" + str(row["input"])
+        return head, (f"{head}\\n{answer}" if answer else head)
+    if row.get("prompt"):
+        head = str(row.get("prompt") or "")
+        return head, (f"{head}\\n{answer}" if answer else head)
+    return "", str(row.get("text") or "")
+
+
+def iter_rows_raw(path: str):
+    """Потоковые сырые строки датасета (jsonl/csv/txt построчно; json — списком)."""
+    if path.endswith(".jsonl"):
+        with open(path, encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                try:
+                    yield json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+    elif path.endswith(".json"):
+        raw = json.load(open(path, encoding="utf-8"))
+        yield from raw if isinstance(raw, list) else [raw]
+    elif path.endswith((".csv", ".tsv")):
+        with open(path, encoding="utf-8", newline="") as handle:
+            yield from csv.DictReader(
+                handle, delimiter="\\t" if path.endswith(".tsv") else ",")
+    else:
+        with open(path, encoding="utf-8") as handle:
+            for line in handle:
+                if line.strip():
+                    yield {"text": line.rstrip("\\n")}
+
+
 def load_texts(path: str) -> list[str]:
     """Датасет построчно (стриминг): .txt, .jsonl, .json список.
 
@@ -196,14 +264,15 @@ def main() -> None:
         print(f"Подсказка: для {CONFIG['gpus']} GPU запустите через "
               f"torchrun --nproc_per_node={CONFIG['gpus']} train_llm.py",
               flush=True)
-    texts = [t for t in load_texts(args.dataset) if t.strip()]
-    if not texts:
-        raise SystemExit("Датасет пуст — проверьте путь и формат.")
-    print(f"Данные: {len(texts)} строк", flush=True)
     if CONFIG["path"] == "scratch":
+        # Scratch строит char-корпус в памяти по дизайну (тензор токенов).
+        texts = [t for t in load_texts(args.dataset) if t.strip()]
+        if not texts:
+            raise SystemExit("Датасет пуст — проверьте путь и формат.")
+        print(f"Данные: {len(texts)} строк", flush=True)
         train_scratch(args, texts)
     else:
-        train_lora(args, texts)
+        train_lora(args)  # потоково читает args.dataset, список не строит
 
 '''
 
@@ -239,6 +308,8 @@ def train_scratch(args, texts: list[str]) -> None:
     else:
         device = "cuda" if torch.cuda.is_available() else "cpu"
     main_proc = rank == 0
+    if distributed:
+        print(f"[rank {rank}/{world}] устройство: {device}", flush=True)
     # Токенизатор: сгенерированный мастером BPE (library/tokenizers) — зачаток;
     # для простоты старта используем char-level словарь по корпусу.
     corpus = "\\n".join(texts)
@@ -260,8 +331,22 @@ def train_scratch(args, texts: list[str]) -> None:
                       f"(vocab={len(stoi)})", flush=True)
         elif isinstance(loaded, dict) and "state_dict" in loaded:
             resume_bundle = loaded
+    if resume_bundle is not None and isinstance(
+            resume_bundle.get("arch"), dict):
+        # Архитектура из чекпоинта важнее текущего пресета: иначе размеры
+        # слоёв не совпадут с весами.
+        arch = resume_bundle["arch"]
+        if main_proc:
+            print(f"Resume: архитектура чекпоинта {arch.get('id', '?')} "
+                  "восстановлена", flush=True)
     data = torch.tensor([stoi.get(ch, 0) for ch in corpus], dtype=torch.long)
     seq = min(CONFIG["seq_len"], 1024)  # char-модель: предел по памяти позиций
+    if resume_bundle is not None and resume_bundle.get("seq"):
+        saved_seq = int(resume_bundle["seq"])
+        if saved_seq != seq and main_proc:
+            print(f"Resume: seq из чекпоинта ({saved_seq}) вместо "
+                  f"CONFIG ({seq})", flush=True)
+        seq = saved_seq
     min_tokens = 4 * seq + 8
     if len(data) < min_tokens:
         raise SystemExit(
@@ -352,22 +437,26 @@ def train_scratch(args, texts: list[str]) -> None:
     print(f"Устройство: {device}, шагов: ~{total_steps}", flush=True)
     step = 0
     for epoch in range(1, args.epochs + 1):
-        print(f"epoch {epoch}/{args.epochs}", flush=True)
+        if main_proc:
+            print(f"epoch {epoch}/{args.epochs}", flush=True)
         for _ in range(steps_per_epoch):
             opt.zero_grad()
             value = 0.0
             for _micro in range(accum):
-                batch, target = batch_from(train_data, step)
+                # Каждый микробатч — СВОЯ выборка: сид зависит от номера
+                # микробатча, иначе grad_accum повторял бы один батч.
+                batch, target = batch_from(
+                    train_data, step * accum + _micro)
                 logits = model(batch)
                 loss = nn.functional.cross_entropy(
                     logits.reshape(-1, logits.size(-1)),
                     target.reshape(-1)) / accum
                 loss.backward()
-                value = float(loss.detach()) * accum
+                value += float(loss.detach())  # среднее по микробатчам
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
             step += 1
-            if step % 20 == 0:
+            if step % 20 == 0 and main_proc:
                 mem = (f" mem={torch.cuda.max_memory_allocated() / 1e9:.2f}GB"
                        if torch.cuda.is_available() else "")
                 print(f"loss={value:.4f} step={step} "
@@ -376,7 +465,8 @@ def train_scratch(args, texts: list[str]) -> None:
                 with torch.no_grad():
                     val_losses = []
                     for _v in range(4):
-                        vx, vy = batch_from(val_data)
+                        # Разные батчи валидации, а не один 4 раза.
+                        vx, vy = batch_from(val_data, 100_000 + step + _v)
                         vlogits = model(vx)
                         val_losses.append(float(nn.functional.cross_entropy(
                             vlogits.reshape(-1, vlogits.size(-1)),
@@ -384,7 +474,7 @@ def train_scratch(args, texts: list[str]) -> None:
                 model.train()
                 print(f"eval: val_loss={sum(val_losses) / len(val_losses):.4f}",
                       flush=True)
-            if step % max(1, CONFIG["sample_every"]) == 0:
+            if main_proc and step % max(1, CONFIG["sample_every"]) == 0:
                 model.eval()
                 with torch.no_grad():
                     prompt = CONFIG["eval_prompts"][0][:20] or "А"
@@ -416,7 +506,7 @@ def train_scratch(args, texts: list[str]) -> None:
 
 def _lora_body() -> str:
     return '''
-def train_lora(args, texts: list[str]) -> None:
+def train_lora(args) -> None:
     """LoRA/QLoRA поверх базовой модели через Hugging Face (transformers+peft)."""
     try:
         import torch
@@ -437,13 +527,20 @@ def train_lora(args, texts: list[str]) -> None:
     tokenizer = AutoTokenizer.from_pretrained(CONFIG["tokenizer"] or base)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    load_kwargs = {"torch_dtype": torch.bfloat16 if torch.cuda.is_available()
-                   else torch.float32}
+    # BF16 только там, где он нативно поддержан (T4 и старше — FP16):
+    # безусловный bf16 на старых GPU даёт ошибки/тихую деградацию.
+    if not torch.cuda.is_available():
+        compute_dtype = torch.float32
+    elif torch.cuda.is_bf16_supported():
+        compute_dtype = torch.bfloat16
+    else:
+        compute_dtype = torch.float16
+    load_kwargs = {"torch_dtype": compute_dtype}
     if lora_cfg["qlora"]:
         from transformers import BitsAndBytesConfig
         load_kwargs["quantization_config"] = BitsAndBytesConfig(
             load_in_4bit=True, bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16)
+            bnb_4bit_compute_dtype=compute_dtype)
     model = AutoModelForCausalLM.from_pretrained(base, **load_kwargs)
     if args.resume and os.path.isdir(args.resume) and os.path.exists(
             os.path.join(args.resume, "adapter_config.json")):
@@ -463,21 +560,34 @@ def train_lora(args, texts: list[str]) -> None:
         ([t.strip() for t in targets.split(",") if t.strip()]
          if targets != "all-linear" else "all-linear"),
         task_type="CAUSAL_LM"))
-    rows = [{"text": t} for t in texts]
-    random.Random(CONFIG["seed"]).shuffle(rows)
-    if len(rows) >= 2:
-        split = max(1, len(rows) - max(1, len(rows) // 10))
-        eval_rows = rows[split:]
+    def _pairs():
+        for row in iter_rows_raw(args.dataset):
+            prompt, full = _row_pair(row)
+            if full.strip():
+                yield {"text": full, "prompt": prompt}
+
+    # from_generator: датасет строится потоково (Arrow на диске),
+    # весь корпус в RAM не собирается.
+    full_ds = Dataset.from_generator(_pairs)
+    if full_ds.num_rows >= 2:
+        parts = full_ds.train_test_split(
+            test_size=max(1, full_ds.num_rows // 10), seed=CONFIG["seed"])
+        train_ds, eval_ds = parts["train"], parts["test"]
     else:
-        split, eval_rows = len(rows), []
-    train_ds = Dataset.from_list(rows[:split])
-    eval_ds = Dataset.from_list(eval_rows) if eval_rows else None
+        train_ds, eval_ds = full_ds, None
 
     def tokenize(batch):
         enc = tokenizer(batch["text"], truncation=True,
                         max_length=CONFIG["seq_len"])
-        # Без labels Trainer не получит loss от CausalLM.
-        enc["labels"] = [list(ids) for ids in enc["input_ids"]]
+        prompt_enc = tokenizer(batch["prompt"], truncation=True,
+                               max_length=CONFIG["seq_len"])
+        # Маскируем prompt (инструкции, system/user): loss только
+        # по целевому ответу. Для plain text prompt пуст — учимся
+        # на всём тексте, как в обычном LM.
+        enc["labels"] = [
+            _mask_labels(ids, prompt_ids)
+            for ids, prompt_ids in zip(enc["input_ids"],
+                                       prompt_enc["input_ids"])]
         return enc
 
     trainer = Trainer(

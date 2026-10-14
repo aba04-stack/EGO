@@ -90,7 +90,11 @@ def audit_rows(rows, *, min_len: int = 10, progress=None) -> DataAudit:
     ``progress(done_count)`` fires every 1000 rows when given.
     """
     audit = DataAudit()
-    seen: set[str] = set()
+    # Точные дубли ищутся по хэшам нормализованного текста: память на
+    # строку — фиксированные 16 байт, а не весь текст уникальной строки.
+    import hashlib
+
+    seen: set[bytes] = set()
     cyr = lat = 0
     for row in rows or []:
         audit.rows += 1
@@ -103,7 +107,9 @@ def audit_rows(rows, *, min_len: int = 10, progress=None) -> DataAudit:
             continue
         if len(text) < min_len:
             audit.too_short += 1
-        key = " ".join(text.lower().split())
+        key = hashlib.blake2b(
+            " ".join(text.lower().split()).encode("utf-8"),
+            digest_size=16).digest()
         if key in seen:
             audit.duplicates += 1
         seen.add(key)

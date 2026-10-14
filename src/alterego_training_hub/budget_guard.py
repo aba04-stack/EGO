@@ -129,6 +129,7 @@ class BudgetVerdict:
     spent_usd: float
     over: bool
     stopped: list[str] = field(default_factory=list)
+    warning: str = ""  # повреждённый журнал / сбой записи — автостоп под угрозой
 
     def render(self) -> str:
         if self.cap_usd <= 0:
@@ -141,6 +142,8 @@ class BudgetVerdict:
             base += f" · АВТОСТОП: {', '.join(self.stopped)}"
         elif self.over:
             base += " · потолок превышен"
+        if self.warning:
+            base += f" · ⚠ {self.warning}"
         return base
 
 
@@ -206,5 +209,15 @@ def apply_guard(ledger: BudgetLedger, pods, cap_usd: float,
     sync_ledger(ledger, pods, now=now)
     verdict = check_budget(ledger, cap_usd,
                            stopper=stopper if cap_usd > 0 else None, now=now)
-    ledger.save()
+    if ledger.load_error:
+        verdict.warning = ledger.load_error
+    try:
+        ledger.save()
+    except (OSError, ValueError) as exc:
+        # Журнал не записался — следующий тик потеряет состояние; честно
+        # предупреждаем, а не делаем вид, что страж работает.
+        note = (f"не удалось сохранить журнал бюджета "
+                f"({type(exc).__name__}) — автостоп под угрозой")
+        verdict.warning = f"{verdict.warning}; {note}" if verdict.warning \
+            else note
     return verdict

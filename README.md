@@ -180,6 +180,9 @@ This is a desktop control-plane MVP, not yet an end-to-end training orchestratio
 The next milestone is a typed remote training worker with resumable checkpoint/data transfers, explicit elapsed-time and total-cost guards, live logs, and end-to-end tests on a short disposable job.
 
 ## Releases
+- 0.31.0: live model benchmark — your configured LLM runs three sandboxed
+  tasks (fix, create, answer-from-file) with on-disk verification, per-task
+  timeouts, token/cost/time report for honest model comparison.
 - 0.30.0: parallel read-only agent tool calls (Cursor-style) — independent
   reads/searches in one model block run concurrently with strict result
   ordering, while mutations and confirmations stay strictly sequential.

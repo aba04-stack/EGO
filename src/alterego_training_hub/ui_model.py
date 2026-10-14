@@ -188,6 +188,8 @@ class ModelDashboardPage(tk.Frame):
                    command=self.show_samples).pack(side="left", padx=8)
         ttk.Button(trans_row, text=t('Бенчмарк агента'),
                    command=self.run_agent_benchmark).pack(side="left")
+        ttk.Button(trans_row, text=t('Бенчмарк модели'),
+                   command=self.run_live_benchmark).pack(side="left", padx=6)
         self.samples_var = tk.StringVar(value="")
         tk.Label(trans_card, textvariable=self.samples_var, bg=C["panel"],
                  fg=C["muted"], font=F_SMALL, wraplength=860,
@@ -420,6 +422,26 @@ class ModelDashboardPage(tk.Frame):
             messagebox.showinfo(t('Smoke-прогон скрипта'), text, parent=self)
 
         self.app.start_async(t('Smoke-прогон'), self.smoke_text, done)
+
+    def live_benchmark_text(self) -> str:
+        from .live_bench import run_live_benchmark
+        from .mentor import MentorError
+
+        try:
+            mentor = self.app.mentor_client()
+        except MentorError as exc:
+            return str(exc)
+        return run_live_benchmark(mentor).render()
+
+    def run_live_benchmark(self):
+        from tkinter import messagebox
+
+        def done(text):
+            self.samples_var.set(text.splitlines()[0] if text else "")
+            messagebox.showinfo(t('Бенчмарк модели'), text, parent=self)
+
+        self.app.start_async(t('Бенчмарк модели'),
+                             self.live_benchmark_text, done)
 
     def save_transparency(self):
         self.app.settings.thought_protocol = bool(self.thought_var.get())

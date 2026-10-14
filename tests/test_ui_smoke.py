@@ -1750,3 +1750,35 @@ def test_stage33_parallel_event_renders(fake_ui, tmp_path):
     app = app_module.TrainingHubApp()
     app.chat_panel.on_agent_event("parallel_batch",
                                   {"count": 3, "names": ["read_file"]})
+
+
+def test_stage34_live_benchmark_button(fake_ui, tmp_path):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    model_page = app.pages["model"]
+    # без настроенного провайдера — честный текст ошибки, не исключение
+    text = model_page.live_benchmark_text()
+    assert text
+    # со скриптовым ментором — полный прогон 3/3
+    from alterego_training_hub.agent_bench import ScriptedMentor
+    from alterego_training_hub.mentor import MentorReply, ToolCall
+
+    def tc(name, **args):
+        return ToolCall(id="x", name=name, arguments=args)
+
+    script = [
+        MentorReply(text="", model="m", usage={},
+                    tool_calls=(tc("replace_in_file", path="calc.py",
+                                   find="a - b", replace="a + b"),)),
+        MentorReply(text="Исправил.", model="m", usage={}),
+        MentorReply(text="", model="m", usage={},
+                    tool_calls=(tc("write_file", path="notes.md",
+                                   content="# Заметки проекта\n"),)),
+        MentorReply(text="Создал.", model="m", usage={}),
+        MentorReply(text="", model="m", usage={},
+                    tool_calls=(tc("read_file", path="config.txt"),)),
+        MentorReply(text="mode = nightly", model="m", usage={}),
+    ]
+    app.mentor_client = lambda: ScriptedMentor(script)
+    report = model_page.live_benchmark_text()
+    assert "3/3" in report, report

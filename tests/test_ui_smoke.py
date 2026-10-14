@@ -1795,3 +1795,17 @@ def test_stage35_stop_button(fake_ui, tmp_path):
     chat.stop_agent()
     assert chat._cancel_event.is_set()
     chat.on_agent_event("cancelled", {"step": 1})
+
+
+def test_stage36_entry_points(fake_ui, tmp_path):
+    import alterego_training_hub.__main__ as main_module
+
+    assert callable(main_module.main)
+    from pathlib import Path
+
+    import tomllib
+
+    root = Path(__file__).resolve().parent.parent
+    parsed = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    assert parsed["project"]["scripts"]["alterego-llm-studio"] \
+        == "alterego_training_hub.ui:main"

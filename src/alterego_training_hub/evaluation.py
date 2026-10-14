@@ -122,13 +122,14 @@ def build_eval_report(text: str) -> EvalReport:
 
     # Overfitting: val worsens after the best epoch while train improves.
     if len(points) >= 3:
-        after = points[best.epoch:] if points[0].epoch == 1 else \
-            [point for point in points if point.epoch > best.epoch]
+        after = [point for point in points if point.epoch > best.epoch]
         later = after[-1] if after else None
+        best_train = best.train_loss if best.train_loss == best.train_loss \
+            else float("inf")
         if (later is not None and later.val_loss == later.val_loss
                 and later.train_loss == later.train_loss
                 and later.val_loss > best.val_loss * 1.05
-                and later.train_loss < (best.train_loss or float("inf"))):
+                and later.train_loss < best_train):
             report.overfitting = True
 
     final = points[-1]

@@ -59,6 +59,20 @@ def validate_key(sequence: str) -> str:
     return text
 
 
+def case_variants(sequence: str) -> list[str]:
+    """Tk delivers shifted letters inconsistently (``M`` vs ``m``).
+
+    For sequences ending in an uppercase letter return both cases so the
+    shortcut fires no matter which variant Tk emits; other sequences stay
+    as-is.
+    """
+    text = str(sequence or "").strip()
+    match = re.match(r"^(.*-)([A-Z])(>)$", text)
+    if match:
+        return [text, f"{match.group(1)}{match.group(2).lower()}{match.group(3)}"]
+    return [text]
+
+
 def resolve_hotkeys(custom: dict | None = None) -> dict[str, str]:
     """Merge user bindings over defaults; unknown actions and bad keys drop."""
     resolved = {action_id: action.default_key

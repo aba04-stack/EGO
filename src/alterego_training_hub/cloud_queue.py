@@ -25,8 +25,11 @@ class CloudQueueError(RuntimeError):
 class CloudJob:
     name: str
     command: str
-    image: str = "python:3.11-slim"
-    gpu_type: str = ""
+    image: str = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1"
+    gpu_id: str = ""               # RunPod catalog gpu id (resolved on submit)
+    max_gpu_hourly_usd: float = 0.0  # 0 = no explicit budget check here
+    cloud: str = "SECURE"
+    container_disk_gb: int = 30
     provider: str = "runpod"  # "runpod" | "colab" | "manual"
     status: str = "pending"
     pod_id: str = ""
@@ -43,6 +46,10 @@ class CloudJob:
             raise CloudQueueError("Команда задания не должна быть пустой.")
         if self.status not in JOB_STATUSES:
             raise CloudQueueError(f"Статус: один из {JOB_STATUSES}.")
+        if self.cloud.upper() not in {"SECURE", "COMMUNITY"}:
+            raise CloudQueueError("Облако: SECURE или COMMUNITY.")
+        if not 10 <= int(self.container_disk_gb) <= 1000:
+            raise CloudQueueError("Контейнерный диск: 10–1000 GB.")
 
     @property
     def active(self) -> bool:
@@ -130,16 +137,21 @@ class CloudJobQueue:
             -> CloudJob:
         """Create a RunPod pod for the job and mark it submitted.
 
-        ``client`` must implement ``create_pod(plan, confirmed=True)``
-        returning a dict with a pod id. Errors are recorded on the job.
+        The plan uses the exact shape ``RunPodClient.create_pod`` expects
+        (gpu_id / budget / cloud / image / disk / name) so the client can
+        re-check the live price before provisioning. Errors are recorded on
+        the job; the queue stays usable.
         """
         job = self.get(job_id)
         if job.status not in {"pending", "queued"}:
             raise CloudQueueError(f"Задание не в очереди: {job.status}.")
         plan = {
             "name": f"{name_suffix}-{job.name}"[:60],
+            "gpu_id": job.gpu_id,
+            "gpu_only_budget_usd": float(job.max_gpu_hourly_usd),
+            "cloud": job.cloud.upper(),
             "image": job.image,
-            "gpu_type": job.gpu_type or "NVIDIA RTX A4000",
+            "container_disk_gb": int(job.container_disk_gb),
             "command": job.command,
         }
         try:

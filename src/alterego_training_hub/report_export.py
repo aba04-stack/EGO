@@ -124,7 +124,6 @@ def _inline(text: str) -> str:
     out = text
     for marker in ("**", "__"):
         out = out.replace(marker, "")
-    out = out.replace("_", "‗")  # avoid fake emphasis in plain text
     return out
 
 
@@ -147,7 +146,7 @@ def save_report(path: str | Path, context: ReportContext, *,
         file.write_text(markdown, encoding="utf-8")
         return ExportedReport(str(file), "md")
     if fmt in {"html", "pdf"}:
-        file = file.with_suffix(".html" if fmt == "html" else ".html")
+        file = file.with_suffix(".html")
         file.write_text(markdown_to_html(markdown, context.title),
                         encoding="utf-8")
         note = ("HTML готов: распечатайте в PDF через браузер (Ctrl+P)."

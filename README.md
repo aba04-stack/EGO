@@ -179,6 +179,16 @@ This is a desktop control-plane MVP, not yet an end-to-end training orchestratio
 
 The next milestone is a typed remote training worker with resumable checkpoint/data transfers, explicit elapsed-time and total-cost guards, live logs, and end-to-end tests on a short disposable job.
 
+## Releases
+- 0.19.1: stabilization — RunPod plan shape fix, overfitting detection on
+  restarted logs, shifted hotkey case variants, live hotkey rebinding,
+  accurate package version, full-pipeline integration tests.
+- 0.19.0: platform — UI language packs, customizable hotkeys, saved layouts,
+  plugin system with tools/mutations and `examples/hello_plugin.py`.
+- 0.18.0: engineering — roles/permissions, cloud job queue with RunPod
+  integration, report export (MD/HTML/PDF-via-browser), session
+  share/import, `alterego_cloud` CLI.
+
 ## Tests
 
 ```powershell

@@ -398,8 +398,10 @@ MODEL_TOOLS_SCHEMAS: list[dict[str, Any]] = [
                 "properties": {
                     "name": {"type": "string", "description": "Название задания"},
                     "command": {"type": "string", "description": "Команда обучения на машине"},
-                    "image": {"type": "string", "description": "Docker-образ (по умолчанию python:3.11-slim)"},
-                    "gpu_type": {"type": "string", "description": "Тип GPU (пусто = по умолчанию)"},
+                    "image": {"type": "string", "description": "Docker-образ (по умолчанию runpod/pytorch)"},
+                    "gpu_id": {"type": "string", "description": "ID GPU из каталога RunPod (обязателен для запуска)"},
+                    "max_gpu_hourly_usd": {"type": "number", "description": "Лимит цены GPU, $/час"},
+                    "container_disk_gb": {"type": "integer", "default": 30},
                 },
                 "required": ["name", "command"],
             },

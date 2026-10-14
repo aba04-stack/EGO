@@ -2,6 +2,28 @@
 
 Все заметные изменения проекта. Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.19.1] — 2026-10-13
+
+### Fixed
+- Cloud job plan now matches `RunPodClient.create_pod` exactly (`gpu_id`,
+  `gpu_only_budget_usd`, `cloud`, `image`, `container_disk_gb`, `name`) —
+  submit no longer sends a malformed plan; new job fields replace `gpu_type`.
+- Overfitting detection no longer uses the epoch number as a list index
+  (`points[best.epoch:]`) — restarted/non-contiguous epoch logs are handled;
+  `train_loss == 0.0` no longer counts as “infinitely good”.
+- Shifted-letter hotkeys (`<Control-Shift-M>` and friends) are bound in both
+  key cases so they fire regardless of which variant Tk delivers.
+- Hotkey changes apply live after Save/Reset (`App.rebind_hotkeys`), no
+  restart needed.
+- Package `__version__` follows installed metadata (was stuck at 0.4.0);
+  the About string formats the real version dynamically.
+- Report export keeps underscores in identifiers; cleaned dead suffix logic.
+
+### Added
+- `tests/test_full_pipeline.py`: end-to-end template → training script →
+  metrics → evaluation → watchdog → tuning → report export, plus cloud plan
+  shape and regression tests for every fix above.
+
 ## [0.19.0] — 2026-10-13
 
 ### Добавлено

@@ -185,6 +185,9 @@ class RunPodClient:
             "disk": current["container_disk_gb"],
             "gpu": {"id": current["gpu_id"], "count": 1},
         }
+        command = str(plan.get("command") or "").strip()
+        if command:
+            payload["dockerArgs"] = command
         created = self._request("POST", "/pods", payload=payload)
         if not created.get("id"):
             raise CloudGpuError("RunPod did not return a pod ID.")

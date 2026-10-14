@@ -134,7 +134,11 @@ class TrainingHubApp(tk.Tk):
             for key, label in items:
                 self._make_nav_item(sidebar, key, label)
 
-        tk.Label(sidebar, text=t("brand.version"), bg=C["sidebar"],
+        from . import __version__
+
+        tk.Label(sidebar,
+                 text=t("brand.version").format(version=__version__),
+                 bg=C["sidebar"],
                  fg="#5b6b85", font=F_NAV_SMALL).pack(side="bottom", pady=12)
 
         # ---- Right chat panel (docked) --------------------------------
@@ -289,7 +293,7 @@ class TrainingHubApp(tk.Tk):
         self.save_settings()
 
     def _bind_shortcuts(self):
-        from .hotkeys import resolve_hotkeys
+        from .hotkeys import case_variants, resolve_hotkeys
 
         actions = {
             "page.editor": lambda _e: self.show_page("editor"),
@@ -313,10 +317,24 @@ class TrainingHubApp(tk.Tk):
             "app.help": lambda _e: self.show_shortcuts_help(),
         }
         bindings = resolve_hotkeys(self.settings.hotkeys)
+        self._bound_hotkeys = []
         for action_id, handler in actions.items():
             sequence = bindings.get(action_id)
-            if sequence:
-                self.bind_all(sequence, handler)
+            if not sequence:
+                continue
+            for variant in case_variants(sequence):
+                self.bind_all(variant, handler)
+                self._bound_hotkeys.append(variant)
+
+    def rebind_hotkeys(self):
+        """Unbind old sequences and bind the current ones (live apply)."""
+        for sequence in getattr(self, "_bound_hotkeys", []):
+            try:
+                self.unbind_all(sequence)
+            except Exception:
+                pass
+        self._bound_hotkeys = []
+        self._bind_shortcuts()
 
     def open_command_palette(self, mode: str = "commands"):
         from .ui_palette import open_command_palette
@@ -1201,8 +1219,12 @@ class TrainingHubApp(tk.Tk):
                 job = CloudJob(
                     name=str(args.get("name") or "задание"),
                     command=str(args.get("command") or ""),
-                    image=str(args.get("image") or "python:3.11-slim"),
-                    gpu_type=str(args.get("gpu_type") or ""))
+                    image=str(args.get("image") or
+                              "runpod/pytorch:2.8.0-py3.11-cuda12.8.1"),
+                    gpu_id=str(args.get("gpu_id") or ""),
+                    max_gpu_hourly_usd=float(
+                        args.get("max_gpu_hourly_usd") or 0.0),
+                    container_disk_gb=int(args.get("container_disk_gb") or 30))
                 queue = CloudJobQueue(self.model_registry().library_dir)
                 queue.add(job)
                 client = RunPodClient(key)

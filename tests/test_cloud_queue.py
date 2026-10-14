@@ -63,12 +63,12 @@ def test_queue_crud(tmp_path):
 def test_submit_and_sync(tmp_path):
     queue = CloudJobQueue(tmp_path)
     job = queue.add(CloudJob(name="train", command="python train.py",
-                             gpu_type="RTX A4000"))
+                             gpu_id="RTX A4000"))
     client = FakePodClient()
     submitted = queue.submit(job.id, client)
     assert submitted.status == "submitted" and submitted.pod_id == "pod-123"
     assert client.plans[0]["command"] == "python train.py"
-    assert client.plans[0]["gpu_type"] == "RTX A4000"
+    assert client.plans[0]["gpu_id"] == "RTX A4000"
 
     synced = queue.sync(job.id, FakePodClient(
         pods=[{"id": "pod-123", "desiredStatus": "RUNNING"}]))

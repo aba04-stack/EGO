@@ -11,7 +11,7 @@ DEFAULT_LANGUAGE = "ru"
 
 _STRINGS_RU: dict[str, str] = {
     "brand.subtitle": "LLM Studio",
-    "brand.version": "v0.19 · локальный контур",
+    "brand.version": "v{version} · локальный контур",
     "nav.development": "РАЗРАБОТКА",
     "nav.editor": "Редактор кода",
     "nav.workspace": "Рабочая папка",
@@ -48,7 +48,7 @@ _STRINGS_RU: dict[str, str] = {
 
 _STRINGS_EN: dict[str, str] = {
     "brand.subtitle": "LLM Studio",
-    "brand.version": "v0.19 · local workspace",
+    "brand.version": "v{version} · local workspace",
     "nav.development": "DEVELOPMENT",
     "nav.editor": "Code editor",
     "nav.workspace": "Workspace",

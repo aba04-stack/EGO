@@ -498,11 +498,13 @@ class SettingsPage(tk.Frame):
             return
         self.app.settings.hotkeys = changes
         self.app.save_settings()
+        self.app.rebind_hotkeys()
         conflicts = detect_conflicts(resolve_hotkeys(changes))
         note = (f"\nКонфликты: {conflicts}" if conflicts else "")
         messagebox.showinfo("Горячие клавиши",
-                            f"Сохранено изменённых комбинаций: {len(changes)}. "
-                            f"Перезапустите приложение.{note}", parent=self)
+                            f"Сохранено изменённых комбинаций: "
+                            f"{len(changes)}. Применено сразу.{note}",
+                            parent=self)
 
     def reset_hotkeys(self):
         from .hotkeys import DEFAULT_HOTKEYS
@@ -511,6 +513,7 @@ class SettingsPage(tk.Frame):
             var.set(DEFAULT_HOTKEYS[action_id].default_key)
         self.app.settings.hotkeys = {}
         self.app.save_settings()
+        self.app.rebind_hotkeys()
         messagebox.showinfo("Горячие клавиши",
                             "Возвращены комбинации по умолчанию.", parent=self)
 

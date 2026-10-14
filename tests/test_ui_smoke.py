@@ -1492,3 +1492,38 @@ def test_stage23_live_language_and_panel_dnd(fake_ui, tmp_path):
 
     app.settings.bottom_height = 320
     assert app.current_layout().bottom_height == 320
+
+
+def test_stage24_plugin_sandbox_catalog_ui(fake_ui, tmp_path):
+    """Settings page: catalog install, trust toggle, sandboxed by default."""
+    from alterego_training_hub.plugins import PluginManager
+
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    settings_page = app.pages["settings"]
+
+    # Hermetic plugin store for this test.
+    app.plugins = PluginManager(tmp_path / "plugins")
+    app._plugin_list = app.plugins.load_all()
+
+    # Catalog install works from the embedded builtin source.
+    settings_page._refresh_catalog_combo()
+    settings_page.catalog_choice.current = lambda *a: 0
+    settings_page.install_from_catalog()
+    hello = next(p for p in app._plugin_list if p.id == "hello")
+    assert hello.ok and hello.trusted is False
+    assert hello.tools and hello.tools[0].sandboxed is True
+
+    # Trust toggle via the UI persists and switches execution mode.
+    settings_page.plugin_choice.current = lambda *a: 0
+    settings_page.set_selected_plugin_trust(True)
+    hello = next(p for p in app._plugin_list if p.id == "hello")
+    assert hello.trusted is True and hello.tools[0].sandboxed is False
+    settings_page.set_selected_plugin_trust(False)
+    hello = next(p for p in app._plugin_list if p.id == "hello")
+    assert hello.trusted is False
+
+    # Uninstall via the UI.
+    settings_page.uninstall_selected_plugin()
+    assert app._plugin_list == [] or all(
+        p.id != "hello" or not p.ok for p in app._plugin_list)

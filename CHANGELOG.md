@@ -2,6 +2,21 @@
 
 Все заметные изменения проекта. Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.22.0] — 2026-10-14
+
+### Added
+- Plugin sandbox: plugins without `PLUGIN["trusted"] = True` are inspected
+  and executed in a restricted worker subprocess — import whitelist, no
+  `open`/`os`/`subprocess`/`socket`, wall-clock timeout and POSIX memory
+  cap. A hung or malicious plugin can no longer freeze or compromise the
+  app. Trust is detected statically (AST); user trust decisions persist in
+  `plugins_trust.json`.
+- Plugin catalog: curated installable plugins (`file:` and `https://`
+  sources, optional SHA-256 integrity check) with install/uninstall from
+  the Settings page; a bundled hello example installs offline.
+- Settings → plugins: per-plugin trust display (trusted/sandboxed), trust
+  toggle, catalog install and uninstall buttons.
+
 ## [0.21.0] — 2026-10-14
 
 ### Added

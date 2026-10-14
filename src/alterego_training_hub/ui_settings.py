@@ -253,7 +253,31 @@ class SettingsPage(tk.Frame):
                  justify="left").pack(anchor="w")
         ttk.Button(keys_card2, text=_t("platform.reload_plugins"),
                    command=self.reload_plugins).pack(anchor="w", pady=(4, 2))
+        plugin_row = tk.Frame(keys_card2, bg=C["panel"])
+        plugin_row.pack(fill="x", pady=(2, 2))
+        self.plugin_choice = ttk.Combobox(plugin_row, state="readonly",
+                                          width=44)
+        self.plugin_choice.pack(side="left")
+        ttk.Button(plugin_row, text=t('Доверять плагину'),
+                   command=lambda: self.set_selected_plugin_trust(True)
+                   ).pack(side="left", padx=6)
+        ttk.Button(plugin_row, text=t('Не доверять'),
+                   command=lambda: self.set_selected_plugin_trust(False)
+                   ).pack(side="left")
+        catalog_row = tk.Frame(keys_card2, bg=C["panel"])
+        catalog_row.pack(fill="x", pady=(2, 2))
+        tk.Label(catalog_row, text=t('Каталог плагинов'), bg=C["panel"],
+                 font=F_BASE).pack(side="left", padx=(0, 8))
+        self.catalog_choice = ttk.Combobox(catalog_row, state="readonly",
+                                           width=36)
+        self.catalog_choice.pack(side="left")
+        ttk.Button(catalog_row, text=t('Установить из каталога'),
+                   command=self.install_from_catalog).pack(side="left", padx=6)
+        ttk.Button(catalog_row, text=t('Удалить плагин'),
+                   style="Danger.TButton",
+                   command=self.uninstall_selected_plugin).pack(side="left")
         self._refresh_plugins_label()
+        self._refresh_catalog_combo()
 
         sync_section = Collapsible(self, t('Синхронизация настроек'))
         sync_section.pack(fill="x", padx=24, pady=(0, 12))
@@ -626,17 +650,92 @@ class SettingsPage(tk.Frame):
 
     def _refresh_plugins_label(self):
         lines = []
+        choices = []
         for plugin in getattr(self.app, "_plugin_list", []):
             mark = "✓" if plugin.ok and plugin.enabled else (
                 "⚠" if plugin.ok else "✗")
+            trust = t('доверенный') if plugin.trusted else t('песочница')
             tool_names = ", ".join(tool.name for tool in plugin.tools) or "—"
             lines.append(f"{mark} {plugin.name} v{plugin.version} "
-                         f"[{tool_names}]"
+                         f"[{tool_names}] ({trust})"
                          + (f" — {plugin.error}" if plugin.error else ""))
+            choices.append(f"{plugin.id} — {plugin.name} v{plugin.version}")
         directory = self.app.plugins.plugins_dir
         self.plugins_var.set(
             "\n".join(lines) if lines
             else t('Папка {directory} пуста — положите туда plugin.py с словарём PLUGIN (см. README).').format(directory=directory))
+        if hasattr(self, "plugin_choice"):
+            self.plugin_choice.configure(values=choices)
+            self._plugin_choices = [plugin.id for plugin
+                                    in getattr(self.app, "_plugin_list", [])]
+
+    def _refresh_catalog_combo(self):
+        from .plugin_catalog import BUILTIN_CATALOG
+
+        self._catalog_entries = list(BUILTIN_CATALOG)
+        labels = [f"{entry.name} v{entry.version} — {entry.description}"
+                  for entry in self._catalog_entries]
+        self.catalog_choice.configure(values=labels)
+        if labels:
+            self.catalog_choice.current(0)
+
+    def _combo_index(self, combo) -> int:
+        try:
+            index = combo.current()
+        except Exception:  # noqa: BLE001
+            index = None
+        return index if isinstance(index, int) else -1
+
+    def _selected_plugin_id(self) -> str:
+        index = self._combo_index(self.plugin_choice)
+        ids = getattr(self, "_plugin_choices", [])
+        if not (0 <= index < len(ids)):
+            messagebox.showinfo(t('Плагины'),
+                                t('Выберите плагин.'), parent=self)
+            return ""
+        return ids[index]
+
+    def set_selected_plugin_trust(self, trusted: bool):
+        plugin_id = self._selected_plugin_id()
+        if not plugin_id:
+            return
+        self.app.plugins.set_trust(plugin_id, trusted)
+        self.reload_plugins()
+        self.app.set_status(f"{plugin_id}: "
+                           + (t('доверенный') if trusted else t('песочница')))
+
+    def install_from_catalog(self):
+        from .plugin_catalog import CatalogError, install_entry
+
+        index = self._combo_index(self.catalog_choice)
+        entries = getattr(self, "_catalog_entries", [])
+        if not (0 <= index < len(entries)):
+            messagebox.showinfo(t('Каталог плагинов'),
+                                t('Выберите запись каталога.'), parent=self)
+            return
+        entry = entries[index]
+        try:
+            target = install_entry(entry, self.app.plugins.plugins_dir)
+        except CatalogError as exc:
+            messagebox.showerror(t('Каталог плагинов'), str(exc), parent=self)
+            return
+        self.reload_plugins()
+        self.app.set_status(t('Плагин установлен: ') + str(target))
+
+    def uninstall_selected_plugin(self):
+        from .plugin_catalog import uninstall
+
+        plugin_id = self._selected_plugin_id()
+        if not plugin_id:
+            return
+        if not messagebox.askyesno(t('Удалить плагин'),
+                                   t('Удалить «{v1}»?').format(v1=plugin_id),
+                                   parent=self):
+            return
+        removed = uninstall(plugin_id, self.app.plugins.plugins_dir)
+        self.reload_plugins()
+        self.app.set_status((t('Плагин удалён: ') if removed
+                              else t('Не удалось удалить: ')) + plugin_id)
 
     def save_access_role(self):
         from .roles import role_id_by_label

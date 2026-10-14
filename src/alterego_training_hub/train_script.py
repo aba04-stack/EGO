@@ -35,6 +35,13 @@ class ScriptConfig:
     epochs: int = 3
     seq_len: int = 1024
     warmup_pct: int = 3
+    seed: int = 42
+    grad_accum: int = 1
+    lora_r: int = 16
+    lora_alpha: int = 32
+    lora_dropout: float = 0.05
+    qlora: bool = False  # 4-bit base (bitsandbytes) — QLoRA
+    target_modules: str = "auto"  # auto | all-linear | q_proj,v_proj,...
     sample_every: int = 200  # steps between generation samples in the log
     eval_prompts: tuple[str, ...] = ("Привет! Расскажи о себе.",)
 
@@ -49,6 +56,12 @@ class ScriptConfig:
             problems.append("Для LoRA/рецепта укажите базовую модель (HF id).")
         if self.lr <= 0 or self.batch < 1 or self.epochs < 1:
             problems.append("lr/batch/эпохи должны быть положительными.")
+        if not 1 <= self.lora_r <= 256 or self.lora_alpha < 1:
+            problems.append("LoRA r должен быть 1..256, alpha >= 1.")
+        if not 0.0 <= self.lora_dropout < 1.0:
+            problems.append("LoRA dropout должен быть в [0, 1).")
+        if self.grad_accum < 1:
+            problems.append("Gradient accumulation должен быть >= 1.")
         return problems
 
 
@@ -69,7 +82,7 @@ import math
 import os
 import random
 
-CONFIG = {config_json}
+CONFIG = json.loads(r"""{config_json}""")
 
 '''
 
@@ -92,6 +105,11 @@ def _config_json(cfg: ScriptConfig) -> str:
         "epochs": cfg.epochs,
         "seq_len": cfg.seq_len,
         "warmup_pct": cfg.warmup_pct,
+        "seed": cfg.seed,
+        "grad_accum": cfg.grad_accum,
+        "lora": {"r": cfg.lora_r, "alpha": cfg.lora_alpha,
+                 "dropout": cfg.lora_dropout, "qlora": cfg.qlora,
+                 "target_modules": cfg.target_modules},
         "sample_every": cfg.sample_every,
         "eval_prompts": list(cfg.eval_prompts),
     }
@@ -137,7 +155,7 @@ def main() -> None:
     parser.add_argument("--epochs", type=int, default=CONFIG["epochs"])
     parser.add_argument("--lr", type=float, default=CONFIG["lr"])
     args = parser.parse_args()
-    random.seed(42)
+    random.seed(CONFIG["seed"])
     texts = [t for t in load_texts(args.dataset) if t.strip()]
     if not texts:
         raise SystemExit("Датасет пуст — проверьте путь и формат.")
@@ -272,15 +290,28 @@ def train_lora(args, texts: list[str]) -> None:
             "pip install transformers peft datasets accelerate") from exc
 
     base = CONFIG["base_model"]
-    print(f"Базовая модель: {base} · LoRA r=16, alpha=32", flush=True)
+    lora_cfg = CONFIG["lora"]
+    print(f"Базовая модель: {base} · LoRA r={lora_cfg['r']}, "
+          f"alpha={lora_cfg['alpha']}, QLoRA={lora_cfg['qlora']}", flush=True)
     tokenizer = AutoTokenizer.from_pretrained(base)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    model = AutoModelForCausalLM.from_pretrained(
-        base, torch_dtype=torch.bfloat16 if torch.cuda.is_available()
-        else torch.float32)
+    load_kwargs = {"torch_dtype": torch.bfloat16 if torch.cuda.is_available()
+                   else torch.float32}
+    if lora_cfg["qlora"]:
+        from transformers import BitsAndBytesConfig
+        load_kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_4bit=True, bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.bfloat16)
+    model = AutoModelForCausalLM.from_pretrained(base, **load_kwargs)
+    targets = lora_cfg["target_modules"]
     model = get_peft_model(model, LoraConfig(
-        r=16, lora_alpha=32, lora_dropout=0.05, task_type="CAUSAL_LM"))
+        r=lora_cfg["r"], lora_alpha=lora_cfg["alpha"],
+        lora_dropout=lora_cfg["dropout"],
+        target_modules=None if targets == "auto" else
+        ([t.strip() for t in targets.split(",") if t.strip()]
+         if targets != "all-linear" else "all-linear"),
+        task_type="CAUSAL_LM"))
     rows = [{"text": t} for t in texts]
     split = max(1, int(len(rows) * 0.9))
     train_ds, eval_ds = Dataset.from_list(rows[:split]), Dataset.from_list(rows[split:])
@@ -294,11 +325,12 @@ def train_lora(args, texts: list[str]) -> None:
         args=TrainingArguments(
             output_dir=args.output_dir,
             per_device_train_batch_size=CONFIG["batch"],
+            gradient_accumulation_steps=CONFIG["grad_accum"],
             num_train_epochs=args.epochs,
             learning_rate=args.lr,
             warmup_ratio=CONFIG["warmup_pct"] / 100.0,
             logging_steps=20, eval_strategy="epoch", save_strategy="epoch",
-            report_to=[], seed=42),
+            report_to=[], seed=CONFIG["seed"]),
         train_dataset=train_ds.map(tokenize, batched=True),
         eval_dataset=eval_ds.map(tokenize, batched=True),
     )

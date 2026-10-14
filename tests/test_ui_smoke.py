@@ -1896,3 +1896,13 @@ def test_stage40_semantic_search_button(fake_ui, tmp_path, monkeypatch):
     page.run_semantic()
     assert page.tree.get_children()
     assert page._results[0][1].name == "train.py"
+
+
+def test_stage41_wizard_lora_fields(fake_ui):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    page = app.pages["model"]
+    page.wizard_lora_r_var.set("8")
+    page.wizard_qlora_var.set(True)
+    cfg = page.train_script_config()
+    assert cfg.lora_r == 8 and cfg.qlora

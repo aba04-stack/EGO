@@ -180,6 +180,7 @@ This is a desktop control-plane MVP, not yet an end-to-end training orchestratio
 The next milestone is a typed remote training worker with resumable checkpoint/data transfers, explicit elapsed-time and total-cost guards, live logs, and end-to-end tests on a short disposable job.
 
 ## Releases
+- 1.1.0: stage 41 — configurable LoRA/QLoRA fine-tuning in the wizard and generated script, per-run reproducibility snapshots (git hash, pip freeze, config), CSV + MLflow export of run history.
 - 1.0.0: semantic code search (offline hash embeddings, cached chunk index, optional API embeddings), a real-Tk xvfb smoke job in CI, and the final audit — mypy on 19 modules, 369 tests, coverage 79%.
 - 0.36.0: distribution — in-app update check against GitHub Releases (Settings → diagnostics) and a tag-driven release pipeline publishing the Windows .exe, wheel and sdist together.
 - 0.35.0: resume after Stop (▶ picks the task up from the transcript) and

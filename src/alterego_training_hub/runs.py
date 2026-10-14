@@ -23,6 +23,8 @@ class RunRecord:
     best: dict[str, float] = field(default_factory=dict)
     anomalies: list[str] = field(default_factory=list)
     analysis_score: float | None = None
+    environment: dict = field(default_factory=dict)
+    config_snapshot: dict = field(default_factory=dict)
 
     @property
     def running(self) -> bool:
@@ -71,8 +73,13 @@ class RunStore:
         )
         tmp.replace(self.path)
 
-    def start(self, command: str, workspace: str, log_path: str = "") -> RunRecord:
-        record = RunRecord(command=command, workspace=workspace, log_path=log_path)
+    def start(self, command: str, workspace: str, log_path: str = "",
+              environment: dict | None = None,
+              config_snapshot: dict | None = None) -> RunRecord:
+        record = RunRecord(command=command, workspace=workspace,
+                           log_path=log_path,
+                           environment=dict(environment or {}),
+                           config_snapshot=dict(config_snapshot or {}))
         records = self._load()
         # Close any dangling "running" records — the process is gone by now.
         for old in records:

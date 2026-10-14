@@ -8,6 +8,7 @@ from tkinter import messagebox, ttk
 from .i18n import t
 from .metrics import brief as metrics_brief
 from .metrics import parse_log
+from .reproducibility import collect_environment
 from .training import TrainingError
 from .ui_common import (
     F_BASE,
@@ -118,6 +119,8 @@ class TrainingPage(tk.Frame):
                                     highlightthickness=0, bd=1, relief="solid",
                                     font=F_SMALL)
         self.runs_list.pack(fill="both", expand=True, pady=(6, 0))
+        ttk.Button(runs_box, text=t('Экспорт CSV / MLflow'),
+                   command=self.export_runs).pack(fill="x", pady=(6, 0))
         self.refresh_runs()
 
     # ------------------------------------------------------------- actions
@@ -136,7 +139,9 @@ class TrainingPage(tk.Frame):
         except TrainingError as exc:
             messagebox.showerror(t('Обучение'), str(exc), parent=self)
             return
-        record = self.app.runs.start(command, str(root), log_path)
+        record = self.app.runs.start(
+            command, str(root), log_path,
+            environment=collect_environment(root))
         self._current_run_id = record.id
         self.app.activity.log("training", t('Обучение запущено: {command}').format(command=command),
                               run_id=record.id, workspace=str(root))
@@ -270,3 +275,28 @@ class TrainingPage(tk.Frame):
             self.app.pages["chat"].send_preset(
                 t('Обучение завершилось с кодом {returncode}. Проанализируй лог, найди ошибку и предложи исправление.\n\n```\n{v3}\n```').format(returncode=returncode, v3=tail[-12000:])
             )
+
+
+    def export_runs(self):
+        """История прогонов -> CSV + MLflow file store в рабочей папке."""
+        from tkinter import messagebox
+
+        from .run_export import export_mlflow, to_csv
+
+        root = self.app.workspace_root()
+        if root is None:
+            messagebox.showinfo(t('Обучение'),
+                                t('Сначала выберите рабочую папку.'),
+                                parent=self)
+            return
+        records = self.app.runs.list(50)
+        out_dir = root / "exports"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        csv_path = out_dir / "runs.csv"
+        csv_path.write_text(to_csv(records), encoding="utf-8")
+        mlflow_path = export_mlflow(records, out_dir)
+        messagebox.showinfo(
+            t('Экспорт истории'),
+            t('CSV: {v1}').format(v1=csv_path) + "\n"
+            + t('MLflow: {v1}').format(v1=mlflow_path),
+            parent=self)

@@ -31,7 +31,7 @@ def test_generated_script_is_valid_python_with_formats():
 def test_lora_script_mentions_base_and_peft():
     code = generate_script(_cfg(path="lora", base_model="meta-llama/x"))
     assert "meta-llama/x" in code and "LoraConfig" in code
-    assert "r=16" in code
+    assert '"r": 16' in code and "lora_cfg" in code
 
 
 def test_validation_and_note():

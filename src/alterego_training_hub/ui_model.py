@@ -228,6 +228,27 @@ class ModelDashboardPage(tk.Frame):
         self.wizard_dataset_var = tk.StringVar(value="")
         tk.Entry(wiz_row2, textvariable=self.wizard_dataset_var, width=52,
                  bd=1, relief="solid", font=F_BASE).pack(side="left", padx=(4, 8))
+        wiz_lora = tk.Frame(wiz_card, bg=C["panel"])
+        wiz_lora.pack(fill="x", pady=(4, 2))
+        tk.Label(wiz_lora, text=t('LoRA r'), bg=C["panel"],
+                 font=F_BASE).pack(side="left")
+        self.wizard_lora_r_var = tk.StringVar(value="16")
+        tk.Entry(wiz_lora, textvariable=self.wizard_lora_r_var, width=5,
+                 bd=1, relief="solid", font=F_BASE).pack(side="left", padx=(4, 8))
+        tk.Label(wiz_lora, text=t('alpha'), bg=C["panel"],
+                 font=F_BASE).pack(side="left")
+        self.wizard_lora_alpha_var = tk.StringVar(value="32")
+        tk.Entry(wiz_lora, textvariable=self.wizard_lora_alpha_var, width=5,
+                 bd=1, relief="solid", font=F_BASE).pack(side="left", padx=(4, 8))
+        self.wizard_qlora_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(wiz_lora, text=t('QLoRA (4-bit)'),
+                       variable=self.wizard_qlora_var, bg=C["panel"],
+                       font=F_BASE).pack(side="left", padx=(0, 8))
+        tk.Label(wiz_lora, text=t('Grad accum'), bg=C["panel"],
+                 font=F_BASE).pack(side="left")
+        self.wizard_grad_accum_var = tk.StringVar(value="1")
+        tk.Entry(wiz_lora, textvariable=self.wizard_grad_accum_var, width=5,
+                 bd=1, relief="solid", font=F_BASE).pack(side="left", padx=(4, 0))
         wiz_row3 = tk.Frame(wiz_card, bg=C["panel"])
         wiz_row3.pack(fill="x", pady=(4, 2))
         ttk.Button(wiz_row3, text=t('Рассчитать план'), style="Accent.TButton",
@@ -293,6 +314,13 @@ class ModelDashboardPage(tk.Frame):
     def wizard_plan_text(self) -> str:
         return self._wizard_plan_obj()[2].render()
 
+    @staticmethod
+    def _wizard_int(var, fallback: int) -> int:
+        try:
+            return int(str(var.get()).strip())
+        except (TypeError, ValueError):
+            return fallback
+
     def train_script_config(self):
         from .train_script import ScriptConfig
 
@@ -303,7 +331,11 @@ class ModelDashboardPage(tk.Frame):
             dataset_path=self.wizard_dataset_var.get().strip(),
             base_model=str(getattr(self.app.settings, "mentor_model", "") or ""),
             lr=advice.lr, batch=advice.batch, epochs=advice.epochs,
-            seq_len=advice.seq_len, warmup_pct=advice.warmup_pct)
+            seq_len=advice.seq_len, warmup_pct=advice.warmup_pct,
+            lora_r=self._wizard_int(self.wizard_lora_r_var, 16),
+            lora_alpha=self._wizard_int(self.wizard_lora_alpha_var, 32),
+            qlora=bool(self.wizard_qlora_var.get()),
+            grad_accum=self._wizard_int(self.wizard_grad_accum_var, 1))
 
     def create_train_script(self):
         """Генерация train_llm.py из плана мастера в рабочую папку."""

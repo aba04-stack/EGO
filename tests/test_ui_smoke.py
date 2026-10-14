@@ -1832,3 +1832,32 @@ def test_stage37_interface_polish(fake_ui, tmp_path):
     chat.input.insert("end", "привет мир это тест")
     chat._update_composer()
     assert "ток." in chat.composer_var.get()
+
+
+def test_stage38_resume_and_night_verifier(fake_ui, tmp_path):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    chat = app.chat_panel
+    assert hasattr(chat, "resume_btn")
+
+    # --- night verifier: seed a good snapshot, then a degraded tail
+    from alterego_training_hub.config import app_data_dir
+    from alterego_training_hub.night_watch import WatchState, save_state
+
+    save_state(app_data_dir() / "night-watch-state.json",
+               WatchState(samples=[{"text": "хороший длинный текст"}],
+                          best_val_loss=1.0))
+    app.training.tail = lambda *a, **k: (
+        "epoch 2/3\neval: val_loss=3.0\n"
+        '{"sample": {"step": 5, "prompt": "p", "text": ""}}\n')
+
+    class _Reply:
+        text = "Есть деградация, проверьте lr."
+
+    class _Mentor:
+        def respond(self, messages, *, tools, max_tokens, temperature):
+            return _Reply()
+
+    app.mentor_client = lambda: _Mentor()
+    entry = app.run_night_check()
+    assert any("Деградация" in issue for issue in entry.issues), entry.issues

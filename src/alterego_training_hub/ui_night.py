@@ -64,6 +64,23 @@ def run_night_check(app):
     summary = parse_log(tail)
     issues = [issue.line() for issue in detect_issues(
         summary, running=app.training.status().running)]
+    # Верификатор (этап 38): сравнение с прошлым снимком — деградация
+    # генераций/val_loss попадает в замечания и утренний итог.
+    try:
+        from .config import app_data_dir as _data_dir
+        from .night_watch import (
+            degradation_issues,
+            load_state,
+            save_state,
+            state_from_tail,
+        )
+
+        _state_path = _data_dir() / "night-watch-state.json"
+        _current = state_from_tail(tail)
+        issues.extend(degradation_issues(load_state(_state_path), _current))
+        save_state(_state_path, _current)
+    except Exception:
+        pass
     dashboard = build_dashboard(summary, title=t('Ночной снимок'))
     entry = run_check(app.mentor_client(), tail=tail, dashboard=dashboard,
                       issues=issues)

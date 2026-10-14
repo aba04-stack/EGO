@@ -501,6 +501,8 @@ UI_MESSAGES: dict[str, str] = {
     "Прогресс и метрики": "Progress and metrics",
     "Прогресс наставнику": "Progress to mentor",
     "Прогресс обучения": "Training progress",
+    "Продолжи с места остановки. Посмотри транскрипт выше: что уже сделано, что осталось. Не повторяй завершённые шаги, довыполни оставшееся и проверь результат.": "Continue from where you stopped. Look at the transcript above: what is done, what remains. Do not repeat finished steps, complete the rest and verify the result.",
+    "Продолжить после остановки": "Resume after stop",
     "Проект": "Project",
     "Проект {name} создан": "Project {name} created",
     "Прозрачность и генерации": "Transparency & generations",

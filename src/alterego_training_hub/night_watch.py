@@ -190,3 +190,81 @@ def config_from_dict(raw: dict[str, Any]) -> WatchConfig:
         interval_minutes=int((raw or {}).get("interval_minutes") or 30))
     config.validate()
     return config
+
+
+# ------------------------------------------------- верификатор обучения (этап 38)
+@dataclass
+class WatchState:
+    """Previous night snapshot: samples + best val_loss for degradation diff."""
+
+    samples: list[dict[str, Any]] = field(default_factory=list)
+    best_val_loss: float | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"samples": list(self.samples),
+                "best_val_loss": self.best_val_loss}
+
+    @classmethod
+    def from_dict(cls, raw: Any) -> WatchState:
+        if not isinstance(raw, dict):
+            return cls()
+        samples = raw.get("samples")
+        best = raw.get("best_val_loss")
+        return cls(samples=list(samples) if isinstance(samples, list) else [],
+                   best_val_loss=float(best) if isinstance(best, (int, float))
+                   else None)
+
+
+def load_state(path: str | Path) -> WatchState:
+    try:
+        raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return WatchState()
+    return WatchState.from_dict(raw)
+
+
+def save_state(path: str | Path, state: WatchState) -> Path:
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(state.to_dict(), ensure_ascii=False),
+                      encoding="utf-8")
+    return target
+
+
+def state_from_tail(tail: str) -> WatchState:
+    """Snapshot (samples + best val_loss) from a training log tail."""
+    from .evaluation import build_eval_report
+    from .gen_preview import parse_samples
+
+    samples = parse_samples(tail or "")
+    report = build_eval_report(tail or "")
+    return WatchState(
+        samples=[{"step": s.step, "prompt": s.prompt, "text": s.text,
+                  "checkpoint": s.checkpoint} for s in samples[-3:]],
+        best_val_loss=report.best_val_loss)
+
+
+def degradation_issues(previous: WatchState, current: WatchState) -> list[str]:
+    """Compare two snapshots; human issues when generation quality drops."""
+    issues: list[str] = []
+    prev_best, cur_best = previous.best_val_loss, current.best_val_loss
+    if (prev_best not in (None, 0) and cur_best is not None
+            and cur_best > prev_best * 1.2):
+        issues.append(
+            f"Деградация: лучший val_loss ухудшился {prev_best:.3f} → "
+            f"{cur_best:.3f} (+{(cur_best / prev_best - 1) * 100:.0f}%).")
+    prev_texts = [str(s.get("text", "")).strip()
+                  for s in previous.samples if isinstance(s, dict)]
+    cur_texts = [str(s.get("text", "")).strip()
+                 for s in current.samples if isinstance(s, dict)]
+    if prev_texts and cur_texts:
+        if not cur_texts[-1] and prev_texts[-1]:
+            issues.append("Деградация: последний сэмпл генерации пуст, "
+                          "раньше модель генерировала текст.")
+        elif cur_texts[-1] and cur_texts[-1] == prev_texts[-1]:
+            issues.append("Сэмплы генерации повторяются дословно между "
+                          "проверками — похоже на зацикливание генерации.")
+        elif prev_texts[-1] and len(cur_texts[-1]) < 0.3 * len(prev_texts[-1]):
+            issues.append("Сэмплы генерации стали заметно короче "
+                          f"({len(prev_texts[-1])} → {len(cur_texts[-1])} симв.).")
+    return issues

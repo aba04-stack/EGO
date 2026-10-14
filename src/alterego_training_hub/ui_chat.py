@@ -138,6 +138,11 @@ class ChatPage(tk.Frame):
                                    command=self.stop_agent, state="disabled")
         self.stop_btn.pack(side="left", fill="y", padx=(6, 0))
         attach_tooltip(self.stop_btn, t('Остановить агента'))
+        self.resume_btn = ttk.Button(input_bar, text="▶", width=4,
+                                     command=self.resume_agent,
+                                     state="disabled")
+        self.resume_btn.pack(side="left", fill="y", padx=(6, 0))
+        attach_tooltip(self.resume_btn, t('Продолжить после остановки'))
 
         self.composer_var = tk.StringVar(value="")
         tk.Label(self, textvariable=self.composer_var, bg=C["panel"],
@@ -503,6 +508,15 @@ class ChatPage(tk.Frame):
             done = sum(1 for task in tasks if task.get("status") == "done")
             self.log_activity(t('план обновлён: {done}/{v3} шагов готово').format(done=done, v3=len(tasks)))
 
+    def resume_agent(self):
+        """Resume a stopped turn from the transcript (этап 38)."""
+        if self._busy:
+            return
+        self.send_preset(
+            t('Продолжи с места остановки. Посмотри транскрипт выше: что '
+              'уже сделано, что осталось. Не повторяй завершённые шаги, '
+              'довыполни оставшееся и проверь результат.'))
+
     def stop_agent(self):
         """Request cancellation of the running agent turn (этап 35)."""
         if self._cancel_event is not None:
@@ -615,6 +629,11 @@ class ChatPage(tk.Frame):
             self._maybe_save_report(reply.text)
             self._render_messages()
             self.refresh_sessions()
+            if "Остановлено пользователем" in (reply.text or ""):
+                try:
+                    self.resume_btn.configure(state="normal")
+                except Exception:
+                    pass
             if getattr(settings, "critic_enabled", False) and reply.text:
                 self.run_critique_last()
 

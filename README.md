@@ -180,6 +180,9 @@ This is a desktop control-plane MVP, not yet an end-to-end training orchestratio
 The next milestone is a typed remote training worker with resumable checkpoint/data transfers, explicit elapsed-time and total-cost guards, live logs, and end-to-end tests on a short disposable job.
 
 ## Releases
+- 0.35.0: resume after Stop (▶ picks the task up from the transcript) and
+  the night watch as a training verifier — it diffs generation samples and
+  best val_loss between checks and flags degradation in the morning report.
 - 0.34.0: interface polish, round two — palette quick-launch in the sidebar,
   persisted activity-bar mode, clickable status-bar badges incl. tokens
   today, breadcrumbs in page headers, live composer token counter.

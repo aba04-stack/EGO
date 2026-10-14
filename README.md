@@ -157,6 +157,8 @@ While training runs, a **watchdog** monitors the log: loss spikes, a rising loss
 
 **Cloud & collaboration**: a **RunPod job queue** for cloud training (submit with cost confirmation, live pod tracking), **full report export** (Markdown or print-ready HTML → PDF) with metrics/eval/watchdog/plan/activity, **session sharing** (Markdown/HTML/JSON export + JSON import), and **access roles** (owner / editor / guest — the guest role turns the agent and every tool strictly read-only).
 
+**Platform**: **plugins** — drop a `*.py` file with a `PLUGIN` dict into the app's `plugins/` folder to give the agent new tools (see `examples/hello_plugin.py`); named **layouts** (code / training / analytics / chat) one click away; **custom hotkeys** for 19 app actions with conflict detection; **RU/EN interface language** switch.
+
 Then use the **Наставник** panel on the right: talk to the mentor, ask it to read your project, find bugs, run tests, or fix code. It can only touch the folder you selected on the **Рабочая папка** page. In *Ассистент* mode every file change or command execution is shown for your confirmation before it happens; in *Режим агента* it acts towards your goal without step-by-step confirmations — review its work via the activity trail and backups (use Git to diff and roll back).
 
 Only use mentor outputs for model development if the selected API/model terms permit that use. Do not send private training data without checking the provider's data handling and terms.

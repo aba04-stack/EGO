@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 
@@ -45,6 +45,9 @@ class AppSettings:
     agent_system_extra: str = ""
     agent_profile: str = "full"  # preset id from agent_profiles
     access_role: str = "owner"  # owner | editor | viewer (guest, read-only)
+    ui_language: str = "ru"  # ru | en (i18n)
+    active_layout: str = "code"  # named layout from layouts.NAMED_LAYOUTS
+    hotkeys: dict = field(default_factory=dict)  # action id -> bind sequence
     gmail_from: str = ""
     training_command: str = "python -m pytest -q"
     runpod_cloud: str = "SECURE"

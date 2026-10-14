@@ -182,6 +182,83 @@ class SettingsPage(tk.Frame):
                  justify="left").pack(anchor="w", pady=(2, 0))
 
         # Keys for cloud
+        # ------------------------------------------------------- platform
+        from .hotkeys import DEFAULT_HOTKEYS, resolve_hotkeys
+        from .i18n import LANGUAGES, current_language, t as _t
+
+        platform_section = Collapsible(self, _t("platform.title"))
+        platform_section.pack(fill="x", padx=24, pady=(0, 12))
+        platform_section.set_hint("свернуть/развернуть")
+        platform_card = platform_section.body
+
+        row = tk.Frame(platform_card, bg=C["panel"])
+        row.pack(fill="x", pady=(2, 0))
+        tk.Label(row, text=_t("platform.language"), bg=C["panel"],
+                 font=F_BASE).pack(side="left", padx=(0, 6))
+        self.language_var = tk.StringVar(
+            value=LANGUAGES.get(current_language(), LANGUAGES["ru"]))
+        ttk.Combobox(row, textvariable=self.language_var,
+                     values=list(LANGUAGES.values()), state="readonly",
+                     width=12).pack(side="left", padx=(0, 8))
+        ttk.Button(row, text="OK", width=4,
+                   command=self.save_language).pack(side="left", padx=(0, 16))
+        tk.Label(row, text=_t("platform.layout"), bg=C["panel"],
+                 font=F_BASE).pack(side="left", padx=(0, 6))
+        from .layouts import layout_names
+
+        self.layout_var = tk.StringVar(
+            value=self.app.settings.active_layout or "code")
+        ttk.Combobox(row, textvariable=self.layout_var, values=layout_names(),
+                     state="readonly", width=14).pack(side="left", padx=(0, 8))
+        ttk.Button(row, text=_t("platform.apply_layout"),
+                   command=self.apply_layout_preset).pack(side="left", padx=(0, 8))
+        ttk.Button(row, text=_t("platform.save_layout"),
+                   command=self.save_current_layout).pack(side="left")
+        tk.Label(platform_card, text=_t("platform.language_note"),
+                 bg=C["panel"], fg=C["muted"], font=F_SMALL).pack(anchor="w",
+                                                                  pady=(4, 0))
+
+        keys_platform = Collapsible(self, _t("platform.keys_title"))
+        keys_platform.pack(fill="x", padx=24, pady=(0, 12))
+        keys_platform.set_hint("свернуть/развернуть")
+        keys_card2 = keys_platform.body
+        self.hotkey_vars: dict[str, tk.StringVar] = {}
+        bindings = resolve_hotkeys(self.app.settings.hotkeys)
+        grid = tk.Frame(keys_card2, bg=C["panel"])
+        grid.pack(fill="x")
+        for index, (action_id, action) in enumerate(DEFAULT_HOTKEYS.items()):
+            column = 0 if index < 10 else 1
+            row_index = index if index < 10 else index - 10
+            tk.Label(grid, text=action.label, bg=C["panel"], font=F_SMALL).grid(
+                row=row_index, column=column * 2, sticky="w",
+                padx=(0 if column == 0 else 16, 6), pady=1)
+            var = tk.StringVar(value=bindings.get(action_id,
+                                                  action.default_key))
+            self.hotkey_vars[action_id] = var
+            tk.Entry(grid, textvariable=var, width=18, bd=1, relief="solid",
+                     font=F_MONO).grid(row=row_index, column=column * 2 + 1,
+                                       sticky="w", pady=1)
+        hk_bar = tk.Frame(keys_card2, bg=C["panel"])
+        hk_bar.pack(fill="x", pady=(6, 0))
+        ttk.Button(hk_bar, text=_t("platform.save_hotkeys"),
+                   style="Accent.TButton",
+                   command=self.save_hotkeys).pack(side="left")
+        ttk.Button(hk_bar, text=_t("platform.reset_hotkeys"),
+                   command=self.reset_hotkeys).pack(side="left", padx=8)
+        tk.Label(keys_card2, text=_t("platform.hotkeys_hint"), bg=C["panel"],
+                 fg=C["muted"], font=F_SMALL, wraplength=860,
+                 justify="left").pack(anchor="w", pady=(4, 0))
+
+        tk.Label(keys_card2, text=_t("platform.plugins"), bg=C["panel"],
+                 font=F_BASE).pack(anchor="w", pady=(8, 2))
+        self.plugins_var = tk.StringVar(value="")
+        tk.Label(keys_card2, textvariable=self.plugins_var, bg=C["panel"],
+                 fg=C["muted"], font=F_SMALL, wraplength=860,
+                 justify="left").pack(anchor="w")
+        ttk.Button(keys_card2, text=_t("platform.reload_plugins"),
+                   command=self.reload_plugins).pack(anchor="w", pady=(4, 2))
+        self._refresh_plugins_label()
+
         keys_section = Collapsible(self, "Ключи облачных сервисов")
         keys_section.pack(fill="x", padx=24, pady=(0, 12))
         keys_card = keys_section.body
@@ -365,6 +442,96 @@ class SettingsPage(tk.Frame):
             )
         except Exception as exc:
             messagebox.showerror("ИИ-наставник", str(exc), parent=self)
+
+    # --------------------------------------------------------- platform
+    def save_language(self):
+        from .i18n import LANGUAGES, set_language
+
+        selected = self.language_var.get()
+        lang = next((code for code, label in LANGUAGES.items()
+                     if label == selected), "ru")
+        self.app.settings.ui_language = set_language(lang)
+        self.app.save_settings()
+        messagebox.showinfo("Язык",
+                            "Язык сохранён. Полностью интерфейс обновится "
+                            "после перезапуска.", parent=self)
+
+    def apply_layout_preset(self):
+        from .layouts import layout_info
+
+        try:
+            state = layout_info(self.layout_var.get())
+        except Exception as exc:
+            messagebox.showerror("Раскладка", str(exc), parent=self)
+            return
+        self.app.apply_layout(state)
+        self.app.settings.active_layout = self.layout_var.get()
+        self.app.save_settings()
+        messagebox.showinfo("Раскладка",
+                            f"Применена раскладка «{self.layout_var.get()}».",
+                            parent=self)
+
+    def save_current_layout(self):
+        from .layouts import save_layout
+
+        name = (self.layout_var.get() or "custom").strip() or "custom"
+        path = Path(self.app.model_registry().library_dir) / \
+            f"layout-{name}.json"
+        try:
+            save_layout(path, self.app.current_layout())
+        except Exception as exc:
+            messagebox.showerror("Раскладка", str(exc), parent=self)
+            return
+        messagebox.showinfo("Раскладка", f"Текущая раскладка сохранена: {path}",
+                            parent=self)
+
+    def save_hotkeys(self):
+        from .hotkeys import HotkeyError, detect_conflicts, resolve_hotkeys, \
+            save_hotkeys
+
+        try:
+            raw = {action_id: var.get().strip()
+                   for action_id, var in self.hotkey_vars.items()}
+            changes = save_hotkeys(raw)
+        except HotkeyError as exc:
+            messagebox.showerror("Горячие клавиши", str(exc), parent=self)
+            return
+        self.app.settings.hotkeys = changes
+        self.app.save_settings()
+        conflicts = detect_conflicts(resolve_hotkeys(changes))
+        note = (f"\nКонфликты: {conflicts}" if conflicts else "")
+        messagebox.showinfo("Горячие клавиши",
+                            f"Сохранено изменённых комбинаций: {len(changes)}. "
+                            f"Перезапустите приложение.{note}", parent=self)
+
+    def reset_hotkeys(self):
+        from .hotkeys import DEFAULT_HOTKEYS
+
+        for action_id, var in self.hotkey_vars.items():
+            var.set(DEFAULT_HOTKEYS[action_id].default_key)
+        self.app.settings.hotkeys = {}
+        self.app.save_settings()
+        messagebox.showinfo("Горячие клавиши",
+                            "Возвращены комбинации по умолчанию.", parent=self)
+
+    def reload_plugins(self):
+        self.app._plugin_list = self.app.plugins.load_all()
+        self._refresh_plugins_label()
+
+    def _refresh_plugins_label(self):
+        lines = []
+        for plugin in getattr(self.app, "_plugin_list", []):
+            mark = "✓" if plugin.ok and plugin.enabled else (
+                "⚠" if plugin.ok else "✗")
+            tool_names = ", ".join(tool.name for tool in plugin.tools) or "—"
+            lines.append(f"{mark} {plugin.name} v{plugin.version} "
+                         f"[{tool_names}]"
+                         + (f" — {plugin.error}" if plugin.error else ""))
+        directory = self.app.plugins.plugins_dir
+        self.plugins_var.set(
+            "\n".join(lines) if lines
+            else f"Папка {directory} пуста — положите туда plugin.py "
+                 "с словарём PLUGIN (см. README).")
 
     def save_access_role(self):
         from .roles import role_id_by_label

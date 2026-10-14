@@ -1378,3 +1378,68 @@ def test_stage19_reports_cloud_queue_roles(fake_ui, tmp_path):
     # Chat session export/import methods are wired (empty session → info).
     chat_page = app.pages["chat"]
     chat_page.export_session()  # empty → info dialog, no crash
+
+
+def test_stage20_platform_hotkeys_layouts_plugins(fake_ui, tmp_path):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    settings_page = app.pages["settings"]
+
+    # Language switch persists.
+    settings_page.language_var.set("English")
+    settings_page.save_language()
+    assert app.settings.ui_language == "en"
+    settings_page.language_var.set("Русский")
+    settings_page.save_language()
+    assert app.settings.ui_language == "ru"
+
+    # Custom hotkeys save and reset.
+    settings_page.hotkey_vars["page.chat"].set("<Control-t>")
+    settings_page.save_hotkeys()
+    assert app.settings.hotkeys == {"page.chat": "<Control-t>"}
+    settings_page.hotkey_vars["page.chat"].set("<Control-p>")  # conflict
+    settings_page.save_hotkeys()  # error dialog (faked), no crash
+    settings_page.reset_hotkeys()
+    assert app.settings.hotkeys == {}
+
+    # Named layout applies and custom layout snapshot saves.
+    settings_page.layout_var.set("analytics")
+    settings_page.apply_layout_preset()
+    assert app._current_page == "model"
+    settings_page.save_current_layout()
+    from pathlib import Path as _P
+
+    assert list(_P(app.model_registry().library_dir).glob("layout-*.json"))
+    state = app.current_layout()
+    assert state.page == "model"
+
+    # Plugin loads, merges into agent tools, and respects the guest role.
+    plugin_dir = app.plugins.plugins_dir
+    plugin_dir.mkdir(parents=True, exist_ok=True)
+    (plugin_dir / "hello.py").write_text(
+        "PLUGIN = {'id': 'hello', 'name': 'Hello', 'version': '1.0',\n"
+        "  'tools': {'hello_tool': {\n"
+        "    'schema': {'type': 'function', 'function': {\n"
+        "      'name': 'hello_tool', 'description': 'hi',\n"
+        "      'parameters': {'type': 'object', 'properties': {}}}},\n"
+        "    'handler': lambda args: {'ok': True, 'text': 'hi'},\n"
+        "    'mutation': False},\n"
+        "   'hello_write': {\n"
+        "    'schema': {'type': 'function', 'function': {\n"
+        "      'name': 'hello_write', 'description': 'm',\n"
+        "      'parameters': {'type': 'object', 'properties': {}}}},\n"
+        "    'handler': lambda args: {'ok': True},\n"
+        "    'mutation': True}}}\n",
+        encoding="utf-8")
+    settings_page.reload_plugins()
+    assert "Hello" in settings_page.plugins_var.get()
+    tools, schemas, mutations = app.agent_extra_tools()
+    assert "hello_tool" in tools and "hello_write" in mutations
+    assert tools["hello_tool"]({}) == {"ok": True, "text": "hi"}
+
+    app.settings.access_role = "viewer"
+    tools, _schemas, _mutations = app.agent_extra_tools()
+    result = tools["hello_write"]({})
+    assert result["ok"] is False and "Гостевой режим" in result["error"]
+    assert tools["hello_tool"]({})["ok"] is True  # read-only plugin tool
+    app.settings.access_role = "owner"

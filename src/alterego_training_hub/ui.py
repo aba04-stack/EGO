@@ -14,6 +14,7 @@ from .activity import ActivityLog
 from .agent import MODEL_TOOLS_SCHEMAS, TRAINING_CONTEXT_TOOL_SCHEMAS
 from .cloud_gpu import RunPodClient
 from .config import AppSettings, SecretStore, app_data_dir
+from .i18n import set_language, t
 from .connectors import ConnectorManager
 from .roles import can
 from .diagnostics import diagnostics_summary, diagnostics_text, run_diagnostics
@@ -39,6 +40,7 @@ class TrainingHubApp(tk.Tk):
         self.minsize(1180, 720)
 
         self.settings = AppSettings.load()
+        set_language(self.settings.ui_language)
         from .theme import PALETTES, set_palette
 
         set_palette(self.settings.ui_theme
@@ -58,6 +60,10 @@ class TrainingHubApp(tk.Tk):
         self.watchdog = TrainingWatchdog()
         self._watchdog_tail: tuple[int, float] = (0, 0.0)
         self._watchdog_started = False
+        from .plugins import PluginManager
+
+        self.plugins = PluginManager(app_data_dir() / "plugins")
+        self._plugin_list = self.plugins.load_all()
         self.executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="alterego-hub")
         self._closing = False
         self._nav_buttons: dict[str, tk.Label] = {}
@@ -100,25 +106,25 @@ class TrainingHubApp(tk.Tk):
                  font=("Segoe UI", 10)).pack(anchor="w")
 
         nav_groups = [
-            ("РАЗРАБОТКА", [
-                ("editor", "Редактор кода"),
-                ("workspace", "Рабочая папка"),
-                ("search", "Поиск"),
+            (t("nav.development"), [
+                ("editor", t("nav.editor")),
+                ("workspace", t("nav.workspace")),
+                ("search", t("nav.search")),
             ]),
-            ("БИБЛИОТЕКА", [
-                ("models", "Модели"),
-                ("datasets", "Датасеты"),
-                ("model", "Модель и прогресс"),
+            (t("nav.library"), [
+                ("models", t("nav.models")),
+                ("datasets", t("nav.datasets")),
+                ("model", t("nav.model")),
             ]),
-            ("ЭКСПЕРИМЕНТЫ", [
-                ("playground", "Playground"),
-                ("training", "Обучение"),
-                ("gpu", "Внешние GPU"),
+            (t("nav.experiments"), [
+                ("playground", t("nav.playground")),
+                ("training", t("nav.training")),
+                ("gpu", t("nav.gpu")),
             ]),
-            ("СИСТЕМА", [
-                ("servers", "Серверы"),
-                ("connectors", "Коннекторы"),
-                ("settings", "Настройки"),
+            (t("nav.system"), [
+                ("servers", t("nav.servers")),
+                ("connectors", t("nav.connectors")),
+                ("settings", t("nav.settings")),
             ]),
         ]
         for group_title, items in nav_groups:
@@ -128,7 +134,7 @@ class TrainingHubApp(tk.Tk):
             for key, label in items:
                 self._make_nav_item(sidebar, key, label)
 
-        tk.Label(sidebar, text="v0.5 · локальный контур", bg=C["sidebar"],
+        tk.Label(sidebar, text=t("brand.version"), bg=C["sidebar"],
                  fg="#5b6b85", font=F_NAV_SMALL).pack(side="bottom", pady=12)
 
         # ---- Right chat panel (docked) --------------------------------
@@ -222,7 +228,7 @@ class TrainingHubApp(tk.Tk):
         self._refresh_workspace_badge()
         self._bind_shortcuts()
         self._start_watchdog()
-        self.set_status("Готово · F1 — горячие клавиши")
+        self.set_status(t("status.ready"))
 
     def show_bottom(self, which: str):
         self._bottom_view = which
@@ -250,34 +256,67 @@ class TrainingHubApp(tk.Tk):
         else:
             self.bottom.pack_forget()
 
+    # ------------------------------------------------------------- layouts
+    def current_layout(self):
+        """Snapshot the current arrangement as a LayoutState."""
+        from .layouts import LayoutState
+
+        geometry = ""
+        try:
+            geometry = str(self.geometry() or "")
+        except Exception:  # noqa: BLE001
+            geometry = ""
+        return LayoutState(
+            page=self._current_page or "editor",
+            bottom_visible=bool(getattr(self, "_bottom_visible", True)),
+            bottom_view=self._bottom_view or "terminal",
+            geometry=geometry)
+
+    def apply_layout(self, state):
+        """Restore an arrangement saved earlier or a named preset."""
+        try:
+            self.show_page(state.page)
+            if bool(state.bottom_visible) != bool(
+                    getattr(self, "_bottom_visible", True)):
+                self.toggle_bottom()
+            if state.bottom_visible:
+                self.show_bottom(state.bottom_view or "terminal")
+            if state.geometry:
+                self.geometry(state.geometry)
+        except Exception:  # noqa: BLE001 - layout must not break startup
+            return
+        self.settings.active_layout = "custom"
+        self.save_settings()
+
     def _bind_shortcuts(self):
-        page_keys = ["editor", "workspace", "models", "datasets", "model",
-                     "playground", "training", "gpu", "servers"]
-        for index, key in enumerate(page_keys, start=1):
-            self.bind_all(f"<Control-Key-{index}>",
-                          lambda _e, k=key: self.show_page(k))
-        self.bind_all("<Control-Key-0>", lambda _e: self.show_page("settings"))
-        self.bind_all("<Control-k>", lambda _e: self.show_page("chat"))
-        self.bind_all("<Control-j>", lambda _e: self.toggle_bottom())
-        self.bind_all("<Control-Shift-M>",
-                      lambda _e: self.show_bottom("problems"))
-        self.bind_all("<Control-Shift-m>",
-                      lambda _e: self.show_bottom("problems"))
-        self.bind_all("<Control-Shift-G>",
-                      lambda _e: self.show_bottom("git"))
-        self.bind_all("<Control-Shift-g>",
-                      lambda _e: self.show_bottom("git"))
-        self.bind_all("<Control-p>", lambda _e: self.open_command_palette("files"))
-        self.bind_all("<Control-Shift-P>",
-                      lambda _e: self.open_command_palette("commands"))
-        self.bind_all("<Control-Shift-p>",
-                      lambda _e: self.open_command_palette("commands"))
-        self.bind_all("<Control-Shift-F>",
-                      lambda _e: self.show_page("search"))
-        self.bind_all("<Control-Shift-f>",
-                      lambda _e: self.show_page("search"))
-        self.bind_all("<F5>", lambda _e: self.refresh_current())
-        self.bind_all("<F1>", lambda _e: self.show_shortcuts_help())
+        from .hotkeys import resolve_hotkeys
+
+        actions = {
+            "page.editor": lambda _e: self.show_page("editor"),
+            "page.workspace": lambda _e: self.show_page("workspace"),
+            "page.models": lambda _e: self.show_page("models"),
+            "page.datasets": lambda _e: self.show_page("datasets"),
+            "page.model": lambda _e: self.show_page("model"),
+            "page.playground": lambda _e: self.show_page("playground"),
+            "page.training": lambda _e: self.show_page("training"),
+            "page.gpu": lambda _e: self.show_page("gpu"),
+            "page.servers": lambda _e: self.show_page("servers"),
+            "page.settings": lambda _e: self.show_page("settings"),
+            "page.chat": lambda _e: self.show_page("chat"),
+            "page.search": lambda _e: self.show_page("search"),
+            "panel.toggle": lambda _e: self.toggle_bottom(),
+            "panel.problems": lambda _e: self.show_bottom("problems"),
+            "panel.git": lambda _e: self.show_bottom("git"),
+            "palette.files": lambda _e: self.open_command_palette("files"),
+            "palette.commands": lambda _e: self.open_command_palette("commands"),
+            "app.refresh": lambda _e: self.refresh_current(),
+            "app.help": lambda _e: self.show_shortcuts_help(),
+        }
+        bindings = resolve_hotkeys(self.settings.hotkeys)
+        for action_id, handler in actions.items():
+            sequence = bindings.get(action_id)
+            if sequence:
+                self.bind_all(sequence, handler)
 
     def open_command_palette(self, mode: str = "commands"):
         from .ui_palette import open_command_palette
@@ -1243,18 +1282,6 @@ class TrainingHubApp(tk.Tk):
             "list_cloud_jobs": list_cloud_jobs,
             "submit_cloud_job": submit_cloud_job,
         }
-        if not can(self.settings.access_role, "mutate"):
-            # Guest role: every mutation is refused up-front (read-only agent).
-            def _denied(_args):
-                return {"ok": False,
-                        "error": "Гостевой режим (роль «гость»): действие недоступно."}
-
-            for name in ("start_training", "stop_training",
-                         "set_training_control", "prepare_dataset",
-                         "export_model", "quantize_model", "benchmark_model",
-                         "run_prompt_suite", "export_report",
-                         "submit_cloud_job"):
-                handlers[name] = _denied
         schemas = list(TRAINING_CONTEXT_TOOL_SCHEMAS) + list(MODEL_TOOLS_SCHEMAS) + [
             {"type": "function", "function": {
                 "name": "start_training",
@@ -1295,6 +1322,22 @@ class TrainingHubApp(tk.Tk):
             mutations |= set(srv_mutations)
         except Exception:  # noqa: BLE001 - servers must not break the agent
             pass
+
+        # Third-party plugin tools extend the agent without touching the core.
+        plugin_list = getattr(self, "_plugin_list", None)
+        if plugin_list is not None:
+            handlers.update(self.plugins.tool_handlers(plugin_list))
+            schemas.extend(self.plugins.tool_schemas(plugin_list))
+            mutations |= self.plugins.tool_mutations(plugin_list)
+
+        if not can(self.settings.access_role, "mutate"):
+            # Guest role: every mutation is refused up-front (read-only agent).
+            def _denied(_args):
+                return {"ok": False,
+                        "error": "Гостевой режим (роль «гость»): действие недоступно."}
+
+            for name in sorted(mutations):
+                handlers[name] = _denied
 
         return handlers, schemas, frozenset(mutations)
 

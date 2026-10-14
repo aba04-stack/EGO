@@ -1,10 +1,12 @@
 """Mentor agent loop: chat + workspace tools with explicit confirmation gates."""
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+import time
 from collections.abc import Callable
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from .mentor import ApiMentor, MentorReply, ToolCall
@@ -490,6 +492,7 @@ class MentorAgent:
         extra_schemas: list[dict[str, Any]] | None = None,
         extra_mutations: frozenset[str] | set[str] | None = None,
         autonomy: str = "assist",
+        loop_limit: int = 3,
     ):
         self.mentor = mentor
         self.workspace = workspace
@@ -498,6 +501,7 @@ class MentorAgent:
         self.extra_schemas = list(extra_schemas or [])
         self.extra_mutations = frozenset(extra_mutations or ())
         self.autonomy = autonomy if autonomy in {"assist", "agent"} else "assist"
+        self.loop_limit = max(2, int(loop_limit or 3))
         self.enable_tools = bool(enable_tools) and (
             workspace is not None or bool(self.extra_tools)
         )
@@ -548,6 +552,10 @@ class MentorAgent:
         ask_confirm = confirm or (lambda _name, _args, _desc: False)
         last_reply: MentorReply | None = None
         readonly_names = self._readonly_tool_names() if readonly else None
+        stats = TurnStats()
+        guard = LoopGuard(limit=getattr(self, "loop_limit", 3))
+        error_streak = 0
+        hint_given = False
 
         for step in range(self.max_steps):
             if self.enable_tools:
@@ -559,12 +567,24 @@ class MentorAgent:
                     ]
             else:
                 tool_schemas = None
-            reply = self.mentor.respond(
+            def _note_retry(_attempt: int, category: str) -> None:
+                stats.retries += 1
+                emit("retry", {"attempt": _attempt, "category": category,
+                               "step": step})
+
+            reply = respond_with_retry(
+                self.mentor,
                 compress_messages(messages),
                 tools=tool_schemas,
                 max_tokens=max_tokens,
                 temperature=temperature,
+                on_retry=_note_retry,
             )
+            stats.steps = step + 1
+            usage = reply.usage or {}
+            stats.prompt_tokens += int(usage.get("prompt_tokens", 0) or 0)
+            stats.completion_tokens += int(
+                usage.get("completion_tokens", 0) or 0)
             text, fallback_calls = extract_text_tool_calls(reply.text)
             calls = list(reply.tool_calls) or fallback_calls
             if fallback_calls and not reply.tool_calls:
@@ -574,7 +594,7 @@ class MentorAgent:
             emit("assistant", {"text": reply.text, "tool_calls": len(calls), "step": step})
 
             if not calls:
-                emit("finished", {"text": reply.text})
+                emit("finished", {"text": reply.text, "stats": stats.as_dict()})
                 return reply
 
             assistant_payload = _assistant_payload(reply, calls)
@@ -584,6 +604,30 @@ class MentorAgent:
             for index, call in enumerate(calls):
                 result = self._execute_call(call, index, ask_confirm, emit,
                                             readonly=readonly)
+                stats.tool_calls += 1
+                ok = bool(result.get("ok"))
+                if not ok:
+                    stats.tool_errors += 1
+                    error_streak += 1
+                else:
+                    error_streak = 0
+                if guard.check(call.name, call.arguments, ok):
+                    stats.loop_tripped = True
+                    emit("loop_detected", {"name": call.name,
+                                           "detail": guard.tripped})
+                    note = ("\n\n[Агент остановлен защитой от зацикливания: "
+                            + guard.tripped
+                            + " Уточните следующее действие.]")
+                    final = ((reply.text or "") + note).strip()
+                    emit("finished", {"text": final,
+                                      "stats": stats.as_dict()})
+                    return MentorReply(
+                        text=final, model=reply.model, usage=reply.usage,
+                        request_id=reply.request_id)
+                if error_streak >= 2 and not hint_given:
+                    messages.append({"role": "system", "content": RECOVERY_HINT})
+                    hint_given = True
+                    error_streak = 0
                 tool_payload = {
                     "role": "tool",
                     "tool_call_id": call.id or f"call-{step}-{index}",
@@ -596,7 +640,7 @@ class MentorAgent:
 
         note = "\n\n[Достигнут лимит шагов инструментов — уточните следующее действие.]"
         final_text = ((last_reply.text if last_reply else "") + note).strip()
-        emit("finished", {"text": final_text})
+        emit("finished", {"text": final_text, "stats": stats.as_dict()})
         return MentorReply(
             text=final_text,
             model=last_reply.model if last_reply else self.mentor.model,
@@ -812,3 +856,128 @@ def _summarize(result: dict[str, Any]) -> str:
     summary = json.dumps({k: v for k, v in result.items() if k != "content"},
                          ensure_ascii=False)
     return summary[:240]
+
+
+# ============================================================ этап 30: надёжность
+
+_TRANSIENT_MARKERS = (
+    "timeout", "timed out", "temporarily", "connection", "network",
+    "429", "rate limit", "502", "503", "504", "overloaded", "eof occurred",
+)
+_PERMISSION_MARKERS = ("permission", "403", "unauthorized", "401", "api key",
+                       "доступ запрещ", "отклонено пользователем")
+_NOT_FOUND_MARKERS = ("not found", "no such file", "404", "не найден", "не существует")
+_VALIDATION_MARKERS = ("invalid", "validation", "некоррект", "недопустим",
+                       "must be", "required", "обязател")
+
+
+def classify_error(exc_or_text: Any) -> str:
+    """Classify an error: transient|permission|not_found|validation|fatal."""
+    if isinstance(exc_or_text, (TimeoutError, ConnectionError)):
+        return "transient"
+    text = str((getattr(exc_or_text, "args", None) and exc_or_text) or exc_or_text).lower()
+    if any(marker in text for marker in _TRANSIENT_MARKERS):
+        return "transient"
+    if any(marker in text for marker in _PERMISSION_MARKERS):
+        return "permission"
+    if any(marker in text for marker in _NOT_FOUND_MARKERS):
+        return "not_found"
+    if any(marker in text for marker in _VALIDATION_MARKERS):
+        return "validation"
+    return "fatal"
+
+
+def is_transient(exc: Any) -> bool:
+    return classify_error(exc) == "transient"
+
+
+@dataclass
+class LoopGuard:
+    """Detects the agent repeating the same call with the same outcome."""
+
+    limit: int = 3
+    _counts: dict[str, int] = field(default_factory=dict)
+    tripped: str = ""
+
+    @staticmethod
+    def signature(name: str, arguments: dict[str, Any], ok: bool) -> str:
+        raw = json.dumps({"t": name, "a": arguments or {}, "ok": ok},
+                         ensure_ascii=False, sort_keys=True, default=str)
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+    def check(self, name: str, arguments: dict[str, Any], ok: bool) -> bool:
+        """Record one outcome; True when the repeat limit is exceeded."""
+        sig = self.signature(name, arguments, ok)
+        self._counts[sig] = self._counts.get(sig, 0) + 1
+        if self._counts[sig] >= max(2, int(self.limit)):
+            self.tripped = (f"Вызов {name} с теми же аргументами повторялся "
+                            f"{self._counts[sig]} раз с одинаковым исходом.")
+            return True
+        return False
+
+    def repeats(self) -> int:
+        return max(self._counts.values(), default=0)
+
+
+@dataclass
+class TurnStats:
+    """Measurable quality of one agent turn (этап 30)."""
+
+    steps: int = 0
+    tool_calls: int = 0
+    tool_errors: int = 0
+    retries: int = 0
+    loop_tripped: bool = False
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    started_at: float = field(default_factory=time.time)
+
+    @property
+    def seconds(self) -> float:
+        return round(time.time() - self.started_at, 2)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"steps": self.steps, "tool_calls": self.tool_calls,
+                "tool_errors": self.tool_errors, "retries": self.retries,
+                "loop_tripped": self.loop_tripped,
+                "prompt_tokens": self.prompt_tokens,
+                "completion_tokens": self.completion_tokens,
+                "seconds": self.seconds}
+
+    def render(self) -> str:
+        rows = (f"Шагов: {self.steps} · вызовов: {self.tool_calls} · "
+                f"ошибок: {self.tool_errors} · повторов сети: {self.retries} · "
+                f"токены: {self.prompt_tokens}→{self.completion_tokens} · "
+                f"{self.seconds:.1f} c")
+        return rows
+
+
+def respond_with_retry(mentor: Any, messages: list[dict[str, Any]], *,
+                       tools: Any = None, max_tokens: int = 1200,
+                       temperature: float = 0.2, attempts: int = 3,
+                       sleep: Callable[[float], None] | None = None,
+                       on_retry: Callable[[int, str], None] | None = None,
+                       ) -> MentorReply:
+    """mentor.respond with backoff on transient provider errors only."""
+    wait = sleep or time.sleep
+    last_exc: Exception | None = None
+    for attempt in range(max(1, int(attempts))):
+        try:
+            return mentor.respond(messages, tools=tools,
+                                  max_tokens=max_tokens, temperature=temperature)
+        except Exception as exc:
+            last_exc = exc
+            if not is_transient(exc) or attempt >= max(1, int(attempts)) - 1:
+                raise
+            if on_retry is not None:
+                on_retry(attempt + 1, classify_error(exc))
+            wait(min(8.0, 0.5 * (2 ** attempt)))
+    raise last_exc  # pragma: no cover - loop always returns or raises
+
+
+RECOVERY_HINT = (
+    "[Система: последние вызовы инструментов завершились ошибками. "
+    "Не повторяй тот же вызов. Перечитай релевантный файл/лог, проверь "
+    "аргументы и смени подход: другой инструмент, меньший шаг или уточни "
+    "у пользователя, если данных не хватает.]"
+)

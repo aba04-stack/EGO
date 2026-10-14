@@ -1698,3 +1698,15 @@ def test_stage28_ux_patterns_sidebar_status_chat(fake_ui, tmp_path):
     assert chat.filtered_session_titles()
     chat.session_search_var.set("")
     assert hasattr(chat, "attach_btn")
+
+
+def test_stage30_agent_benchmark_button_and_events(fake_ui, tmp_path):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    model_page = app.pages["model"]
+    text = model_page.agent_benchmark_text()
+    assert "5/5" in text
+    # chat renders reliability events without crashing
+    chat = app.chat_panel
+    chat.on_agent_event("retry", {"attempt": 1, "category": "transient"})
+    chat.on_agent_event("loop_detected", {"name": "read_file", "detail": "x"})

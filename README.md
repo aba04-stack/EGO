@@ -180,6 +180,10 @@ This is a desktop control-plane MVP, not yet an end-to-end training orchestratio
 The next milestone is a typed remote training worker with resumable checkpoint/data transfers, explicit elapsed-time and total-cost guards, live logs, and end-to-end tests on a short disposable job.
 
 ## Releases
+- 0.27.0: best-in-class agent hardening — loop guard against repeated
+  failing calls, transient-error retry with backoff, error classification,
+  recovery hints, per-turn stats, and an offline internal agent benchmark
+  (5 scripted scenarios on the real tool loop, “Benchmark” button).
 - 0.26.0: IDE-grade UX — activity-bar sidebar with badges, primary actions
   top-right in page headers, rich status bar (model/training, clickable),
   chat session search, 📎 file attach by the composer, palette coverage for

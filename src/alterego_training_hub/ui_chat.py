@@ -435,6 +435,15 @@ class ChatPage(tk.Frame):
         self.messages.see("end")
 
     def on_agent_event(self, kind: str, payload: dict):
+        if kind == "retry":
+            self.log_activity(
+                t('↻ повтор запроса к модели (попытка {v1})').format(
+                    v1=payload.get("attempt", "?")), "err")
+            return
+        if kind == "loop_detected":
+            self.log_activity(
+                "⚠ " + t('Защита от зацикливания: агент остановлен'), "err")
+            return
         if kind == "tool_start":
             self.log_activity(f"→ {payload.get('description', payload.get('name', ''))}",
                               "act")

@@ -1,0 +1,5 @@
+{
+    "Бенчмарк агента": "Agent benchmark",
+    "Защита от зацикливания: агент остановлен": "Loop guard: agent stopped",
+    "↻ повтор запроса к модели (попытка {v1})": "↻ retrying model request (attempt {v1})"
+}

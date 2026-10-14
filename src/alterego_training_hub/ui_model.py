@@ -186,6 +186,8 @@ class ModelDashboardPage(tk.Frame):
                        command=self.save_transparency).pack(side="left", padx=(12, 0))
         ttk.Button(trans_row, text=t('Сэмплы генерации'),
                    command=self.show_samples).pack(side="left", padx=8)
+        ttk.Button(trans_row, text=t('Бенчмарк агента'),
+                   command=self.run_agent_benchmark).pack(side="left")
         self.samples_var = tk.StringVar(value="")
         tk.Label(trans_card, textvariable=self.samples_var, bg=C["panel"],
                  fg=C["muted"], font=F_SMALL, wraplength=860,
@@ -341,6 +343,21 @@ class ModelDashboardPage(tk.Frame):
         text = self.before_after_text()
         self.wizard_var.set(text.splitlines()[0] if text else "")
         messagebox.showinfo(t('До / после'), text, parent=self)
+
+    def agent_benchmark_text(self) -> str:
+        from .agent_bench import run_benchmark
+
+        return run_benchmark().render()
+
+    def run_agent_benchmark(self):
+        from tkinter import messagebox
+
+        def done(text):
+            self.samples_var.set(text.splitlines()[0] if text else "")
+            messagebox.showinfo(t('Бенчмарк агента'), text, parent=self)
+
+        self.app.start_async(t('Бенчмарк агента'),
+                             self.agent_benchmark_text, done)
 
     def save_transparency(self):
         self.app.settings.thought_protocol = bool(self.thought_var.get())

@@ -191,8 +191,29 @@ class RunPodClient:
         created = self._request("POST", "/pods", payload=payload)
         if not created.get("id"):
             raise CloudGpuError("RunPod did not return a pod ID.")
-        return {**created, "confirmed_gpu_hourly_usd": current["gpu_hourly_usd"],
-                "cost_warning": current["warning"]}
+        # Подтверждаем, что под реально появился и не упал сразу; само
+        # ВЫПОЛНЕНИЕ dockerArgs API не подтверждает — честно помечаем.
+        pod_status = ""
+        try:
+            for pod in self.list_pods():
+                if str(pod.get("id")) == str(created["id"]):
+                    pod_status = str(pod.get("desiredStatus")
+                                     or pod.get("status") or "")
+                    break
+        except Exception:
+            pod_status = ""
+        if pod_status.upper() in {"FAILED", "ERROR"}:
+            raise CloudGpuError(
+                f"RunPod создал под {created['id']}, но он сразу в статусе "
+                f"{pod_status} — проверьте образ и dockerArgs.")
+        return {**created,
+                "confirmed_gpu_hourly_usd": current["gpu_hourly_usd"],
+                "cost_warning": current["warning"],
+                "pod_status": pod_status,
+                "command_status": (
+                    "dockerArgs отправлен как строка (формат RunPod API); "
+                    "API не подтверждает запуск команды внутри контейнера — "
+                    "проверьте логи/SSH пода")}
 
     def pod_action(self, pod_id: str, action: str, *, confirmed: bool = False) -> dict[str, Any]:
         if action not in {"start", "stop"}:

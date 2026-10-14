@@ -69,7 +69,12 @@ def _converge_epoch(summary: MetricsSummary, target: float) -> int | None:
     """First epoch whose loss reaches the shared target level."""
     if math.isnan(target):
         return None
-    for key in ("loss", "val_loss", "train_loss"):
+    # Сначала та метрика, по которой сравниваем качество (обычно val_loss),
+    # иначе скорость сходимости противоречит вердикту сравнения.
+    primary = _metric_name(summary)
+    keys = ([primary] if primary else []) + [
+        k for k in ("val_loss", "loss", "train_loss") if k != primary]
+    for key in keys:
         values = summary.series(key)
         if values:
             for index, value in enumerate(values, start=1):

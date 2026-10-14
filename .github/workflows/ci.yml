@@ -95,5 +95,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
           pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install "transformers==4.46.3" "peft==0.13.2" "datasets==3.1.0" "accelerate==1.1.1" "tokenizers==0.20.3"
       - name: Real training check (torch обязателен)
         run: python scripts/real_check.py --require-torch

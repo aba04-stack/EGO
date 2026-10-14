@@ -220,15 +220,55 @@ def train_scratch(args, texts: list[str]) -> None:
             "Нужен PyTorch: pip install torch (или образ runpod/pytorch).") from exc
 
     arch = CONFIG["arch"]
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    # Распределённый запуск (torchrun): каждый процесс — своё устройство
+    # и свой сэмплер; без этого DDP обучал бы все ранги на одном GPU
+    # одними и теми же батчами.
+    rank = int(os.environ.get("RANK", "0"))
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    world = int(os.environ.get("WORLD_SIZE", "1"))
+    distributed = world > 1
+    if distributed:
+        import torch.distributed as dist
+        dist.init_process_group(
+            "nccl" if torch.cuda.is_available() else "gloo")
+        if torch.cuda.is_available():
+            torch.cuda.set_device(local_rank)
+            device = f"cuda:{local_rank}"
+        else:
+            device = "cpu"
+    else:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    main_proc = rank == 0
     # Токенизатор: сгенерированный мастером BPE (library/tokenizers) — зачаток;
     # для простоты старта используем char-level словарь по корпусу.
     corpus = "\\n".join(texts)
     vocab = sorted(set(corpus))
     stoi = {ch: i + 1 for i, ch in enumerate(vocab)}
     itos = {i: ch for ch, i in stoi.items()}
+    # Resume: словарь берём из бандла чекпоинта, а не из текущего корпуса —
+    # иначе при изменившемся корпусе размеры эмбеддингов не совпадут
+    # и веса либо не загрузятся, либо лягут не на те символы.
+    resume_bundle = None
+    if args.resume and os.path.isfile(args.resume):
+        loaded = torch.load(args.resume, map_location="cpu")
+        if isinstance(loaded, dict) and isinstance(loaded.get("stoi"), dict):
+            resume_bundle = loaded
+            stoi = {str(ch): int(i) for ch, i in loaded["stoi"].items()}
+            itos = {int(i): str(ch) for ch, i in stoi.items()}
+            if main_proc:
+                print(f"Resume: словарь чекпоинта восстановлен "
+                      f"(vocab={len(stoi)})", flush=True)
+        elif isinstance(loaded, dict) and "state_dict" in loaded:
+            resume_bundle = loaded
     data = torch.tensor([stoi.get(ch, 0) for ch in corpus], dtype=torch.long)
     seq = min(CONFIG["seq_len"], 1024)  # char-модель: предел по памяти позиций
+    min_tokens = 4 * seq + 8
+    if len(data) < min_tokens:
+        raise SystemExit(
+            f"Датасет слишком мал для scratch: {len(data)} токенов, нужно "
+            f">= {min_tokens} при seq_len={seq} (train и val должны быть "
+            "разными и длиннее последовательности). Уменьшите seq_len "
+            "в мастере или добавьте данных.")
     print(f"Токенизатор: char-level, vocab={len(stoi)} (пресет "
           f"{arch['id']}: ~{arch['params_est'] / 1e6:.0f}M параметров)", flush=True)
 
@@ -268,18 +308,21 @@ def train_scratch(args, texts: list[str]) -> None:
     train_data, val_data = (data[:-n_val], data[-n_val:]) \
         if len(data) > 2 * seq else (data, data)
     model = TinyLM().to(device)
-    if CONFIG["gpus"] > 1 and "LOCAL_RANK" in os.environ:
-        import torch.distributed as dist
-        dist.init_process_group(
-            "nccl" if torch.cuda.is_available() else "gloo")
-        model = nn.parallel.DistributedDataParallel(model)
+    if distributed:
+        model = nn.parallel.DistributedDataParallel(
+            model,
+            device_ids=[local_rank] if torch.cuda.is_available() else None)
     if args.resume and os.path.isfile(args.resume):
-        bundle = torch.load(args.resume, map_location=device)
+        bundle = resume_bundle
+        if bundle is None:
+            bundle = torch.load(args.resume, map_location="cpu")
         state = bundle.get("state_dict", bundle) \
             if isinstance(bundle, dict) else bundle
-        model.load_state_dict(state)
-        print(f"Resume: веса из {args.resume} "
-              "(оптимизатор и шаг начнутся заново)", flush=True)
+        raw = model.module if hasattr(model, "module") else model
+        raw.load_state_dict(state)
+        if main_proc:
+            print(f"Resume: веса из {args.resume} "
+                  "(оптимизатор и шаг начнутся заново)", flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr)
 
     def _bundle():
@@ -293,9 +336,15 @@ def train_scratch(args, texts: list[str]) -> None:
     steps_per_epoch = max(1, (len(train_data) - seq) // (CONFIG["batch"] * seq))
     accum = max(1, CONFIG["grad_accum"])
 
-    def batch_from(source):
+    def batch_from(source, step_no=0):
+        if len(source) <= seq + 1:
+            raise SystemExit(
+                f"Выборка слишком коротка для батчей: {len(source)} токенов "
+                f"при seq={seq}.")
+        gen = torch.Generator().manual_seed(
+            1234 + step_no * max(1, world) + rank)
         starts = torch.randint(0, len(source) - seq - 1,
-                               (CONFIG["batch"],))
+                               (CONFIG["batch"],), generator=gen)
         x = torch.stack([source[i:i + seq] for i in starts]).to(device)
         y = torch.stack([source[i + 1:i + seq + 1] for i in starts]).to(device)
         return x, y
@@ -308,7 +357,7 @@ def train_scratch(args, texts: list[str]) -> None:
             opt.zero_grad()
             value = 0.0
             for _micro in range(accum):
-                batch, target = batch_from(train_data)
+                batch, target = batch_from(train_data, step)
                 logits = model(batch)
                 loss = nn.functional.cross_entropy(
                     logits.reshape(-1, logits.size(-1)),
@@ -351,11 +400,16 @@ def train_scratch(args, texts: list[str]) -> None:
                     text = "".join(itos.get(i, "") for i in out)
                 model.train()
                 log_sample(step, prompt, text, checkpoint=f"epoch-{epoch}")
-        os.makedirs(args.output_dir, exist_ok=True)
-        torch.save(_bundle(), os.path.join(
-            args.output_dir, f"checkpoint-epoch{epoch}.pt"))
-    torch.save(_bundle(), os.path.join(args.output_dir, "model.pt"))
-    print(f"Готово. Чекпоинт: {args.output_dir}/model.pt", flush=True)
+        if main_proc:
+            os.makedirs(args.output_dir, exist_ok=True)
+            torch.save(_bundle(), os.path.join(
+                args.output_dir, f"checkpoint-epoch{epoch}.pt"))
+    if main_proc:
+        torch.save(_bundle(), os.path.join(args.output_dir, "model.pt"))
+        print(f"Готово. Чекпоинт: {args.output_dir}/model.pt", flush=True)
+    if distributed:
+        import torch.distributed as dist
+        dist.destroy_process_group()
 
 '''
 
@@ -369,7 +423,8 @@ def train_lora(args, texts: list[str]) -> None:
         from datasets import Dataset
         from peft import LoraConfig, get_peft_model
         from transformers import (AutoModelForCausalLM, AutoTokenizer,
-                                  Trainer, TrainingArguments)
+                                  DataCollatorForSeq2Seq, Trainer,
+                                  TrainingArguments)
     except ImportError as exc:
         raise SystemExit(
             "Нужны transformers/peft/datasets: "
@@ -442,16 +497,25 @@ def train_lora(args, texts: list[str]) -> None:
         train_dataset=train_ds.map(tokenize, batched=True),
         eval_dataset=(eval_ds.map(tokenize, batched=True)
                       if eval_ds is not None else None),
+        # Динамический padding: примеры разной длины дополняются до
+        # максимума в батче, labels дополняются -100 (без этого коллатор
+        # по умолчанию падает на разной длине последовательностей).
+        data_collator=DataCollatorForSeq2Seq(
+            tokenizer, padding=True, label_pad_token_id=-100),
     )
     resume_ckpt = None
     if args.resume and os.path.isdir(args.resume):
         if os.path.exists(os.path.join(args.resume, "trainer_state.json")):
             resume_ckpt = args.resume  # полный resume: оптимизатор/шаг/планировщик
     trainer.train(resume_from_checkpoint=resume_ckpt)
-    metrics = trainer.evaluate()
-    val = metrics.get("eval_loss")
-    if val is not None:
-        print(f"eval: val_loss={val:.4f}", flush=True)
+    if eval_ds is not None:
+        metrics = trainer.evaluate()
+        val = metrics.get("eval_loss")
+        if val is not None:
+            print(f"eval: val_loss={val:.4f}", flush=True)
+    else:
+        print("eval: пропущен — в датасете одна строка, val-выборки нет",
+              flush=True)
     for prompt in CONFIG["eval_prompts"]:
         inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
         out = model.generate(**inputs, max_new_tokens=60, do_sample=False)

@@ -44,6 +44,7 @@ def blocked(name: str, reason: str) -> None:
 
 def main() -> int:
     quick = "--quick" in sys.argv
+    require_torch = "--require-torch" in sys.argv
     repo = Path(__file__).resolve().parents[1]
     tmp = Path(tempfile.mkdtemp(prefix="alterego-real-"))
     os.environ["XDG_CONFIG_HOME"] = str(tmp / "config")
@@ -365,6 +366,52 @@ def main() -> int:
         return (f"loss {losses[0]:.3f} → {losses[-1]:.3f}, "
                 "чекпоинт model.pt сохранён")
 
+    def _lora_training():
+        # Крошечная GPT-2 и токенизатор собираются ЛОКАЛЬНО (без HF Hub):
+        # настоящее LoRA-обучение сгенерированным скриптом.
+        import subprocess
+
+        from tokenizers import Tokenizer, models, pre_tokenizers, trainers
+        from transformers import GPT2Config, GPT2LMHeadModel, PreTrainedTokenizerFast
+
+        from alterego_training_hub.train_script import ScriptConfig, generate_script
+
+        work = tmp / "lora-train"
+        work.mkdir()
+        texts = ["кошка сидит на окне и смотрит на улицу",
+                 "собака бежит по парку и играет с мячом",
+                 "птица летит над лесом и поёт песню",
+                 "модель учится предсказывать следующее слово"] * 6
+        tok = Tokenizer(models.WordLevel(unk_token="<unk>"))
+        tok.pre_tokenizer = pre_tokenizers.Whitespace()
+        tok.train_from_iterator(texts, trainers.WordLevelTrainer(
+            special_tokens=["<unk>", "<pad>"]))
+        fast = PreTrainedTokenizerFast(tokenizer_object=tok,
+                                       unk_token="<unk>", pad_token="<pad>")
+        base = work / "base"
+        base.mkdir()
+        fast.save_pretrained(base)
+        GPT2LMHeadModel(GPT2Config(
+            vocab_size=len(fast), n_layer=2, n_embd=32, n_head=2,
+            n_positions=128,
+            pad_token_id=fast.pad_token_id)).save_pretrained(base)
+        data = work / "data.txt"
+        data.write_text("\n".join(texts) + "\n", encoding="utf-8")
+        cfg = ScriptConfig(path="lora", dataset_path=str(data),
+                           base_model=str(base), epochs=1, batch=4,
+                           seq_len=64, eval_prompts=("кошка сидит",))
+        script = work / "train_llm.py"
+        script.write_text(generate_script(cfg), encoding="utf-8")
+        done = subprocess.run(
+            [sys.executable, str(script), "--output-dir", str(work / "out")],
+            capture_output=True, text=True, timeout=600, cwd=work)
+        assert done.returncode == 0, done.stderr[-500:]
+        assert "val_loss=" in done.stdout, done.stdout[-300:]
+        assert any((work / "out").rglob("adapter_model.safetensors")) or \
+            any((work / "out").rglob("adapter_model.bin"))
+        val = [p for p in done.stdout.split() if p.startswith("val_loss=")]
+        return f"адаптер обучен и сохранён, {val[0] if val else ''}"
+
     try:
         import torch  # noqa: F401
     except ImportError:
@@ -373,12 +420,28 @@ def main() -> int:
                 "здесь проверен smoke-прогоном)")
     else:
         check("torch-обучение: настоящий скрипт учит модель", _torch_training)
+    try:
+        import peft  # noqa: F401
+        import transformers  # noqa: F401
+    except ImportError:
+        blocked("LoRA-обучение",
+                "нет transformers/peft (pip install transformers peft datasets)")
+    else:
+        check("LoRA-обучение: настоящий адаптер на локальной модели",
+              _lora_training)
 
     failed = [r for r in RESULTS if r[1] is False]
     blocked_n = [r for r in RESULTS if r[1] is None]
     passed = [r for r in RESULTS if r[1] is True]
     print(f"\nИтог: ✓ {len(passed)} · ✗ {len(failed)} · ⊘ {len(blocked_n)}")
-    return 1 if failed else 0
+    if failed:
+        return 1
+    if require_torch and any(name.startswith("torch")
+                             for name, ok, _ in RESULTS if ok is None):
+        print("✗ --require-torch: torch недоступен, реальное обучение "
+              "не проверено — это провал, а не пропуск")
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

@@ -37,6 +37,7 @@ class PodSpend:
 class BudgetLedger:
     path: Path = field(default_factory=lambda: app_data_dir() / "budget.json")
     pods: dict[str, PodSpend] = field(default_factory=dict)
+    load_error: str = ""  # повреждённый budget.json (копия .corrupt-* рядом)
 
     # ------------------------------------------------------------ persist
     @classmethod
@@ -44,7 +45,21 @@ class BudgetLedger:
         ledger = cls(path=Path(path) if path else app_data_dir() / "budget.json")
         try:
             raw = json.loads(ledger.path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+        except FileNotFoundError:
+            return ledger
+        except (OSError, ValueError) as exc:
+            # Повреждённый журнал расходов нельзя молча обнулять: иначе
+            # уже потраченное «исчезнет» из учёта. Сохраняем копию.
+            ledger.load_error = (f"budget.json повреждён "
+                                 f"({type(exc).__name__}); копия сохранена, "
+                                 "учёт начат заново")
+            try:
+                import time as _time
+                backup = ledger.path.with_name(
+                    f"budget.json.corrupt-{int(_time.time())}")
+                backup.write_bytes(ledger.path.read_bytes())
+            except OSError:
+                pass
             return ledger
         for item in raw.get("pods", []) if isinstance(raw, dict) else []:
             try:

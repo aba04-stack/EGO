@@ -130,7 +130,11 @@ class CloudJobQueue:
         raise CloudQueueError(f"Задание не найдено: {job_id}")
 
     def cancel(self, job_id: str, client=None) -> CloudJob:
-        """Cancel locally and, when a client is given, stop the cloud pod."""
+        """Cancel locally and, when a client is given, stop the cloud pod.
+
+        Если завершить под НЕ удалось, задание НЕ помечается cancelled:
+        расходы, скорее всего, продолжаются, и врать статусом нельзя.
+        """
         job = self.get(job_id)
         if job.status in {"done", "failed", "cancelled"}:
             raise CloudQueueError(f"Задание уже завершено: {job.status}.")
@@ -140,8 +144,17 @@ class CloudJobQueue:
                 client.terminate_pod(job.pod_id, confirmed=True)
                 note = f"pod {job.pod_id} завершён в облаке"
             except Exception as exc:
-                note = (f"⚠ не удалось завершить pod в облаке: "
-                        f"{type(exc).__name__}: {exc}")
+                self.update(job_id, error=(
+                    f"отмена не подтверждена: pod завершить не удалось "
+                    f"({type(exc).__name__}: {exc})"))
+                raise CloudQueueError(
+                    f"Не удалось завершить pod {job.pod_id} в облаке: "
+                    f"{type(exc).__name__}: {exc}. Задание НЕ отменено — "
+                    "расходы могут продолжаться, завершите pod вручную "
+                    "в консоли провайдера.") from None
+        elif job.pod_id:
+            note = ("⚠ клиент API недоступен: отменено только локально, "
+                    "pod в облаке может продолжать работать и тарифицироваться")
         return self.update(job_id, status="cancelled",
                            log=(job.log + "\n" + note).strip())
 
@@ -187,6 +200,19 @@ class CloudJobQueue:
             return self.update(job_id, status="failed",
                                error=f"{type(exc).__name__}: {exc}")
         pod_id = str(pod.get("id") or pod.get("podId") or "")
+        if pod_id:
+            try:
+                from .budget_guard import BudgetLedger
+
+                ledger = BudgetLedger.load()
+                ledger.observe(
+                    pod_id,
+                    float(pod.get("confirmed_gpu_hourly_usd")
+                          or job.max_gpu_hourly_usd or 0),
+                    managed=True)  # создан приложением — страж вправе стопорить
+                ledger.save()
+            except Exception:
+                pass
         return self.update(
             job_id, status="submitted", pod_id=pod_id,
             log=(f"pod создан: {pod_id}; команда передана как dockerArgs — "
@@ -208,7 +234,15 @@ class CloudJobQueue:
                 mapped = {"RUNNING": "running", "EXITED": "done",
                           "TERMINATED": "done", "FAILED": "failed"}.get(
                     desired.upper(), job.status)
-                return self.update(job_id, status=mapped, missing_polls=0)
+                changes: dict = {"status": mapped, "missing_polls": 0}
+                if mapped == "done" and job.status != "done":
+                    # EXITED означает лишь «контейнер завершился»: обучение
+                    # могло упасть внутри. Успех не выдумываем.
+                    changes["log"] = (
+                        job.log + "\n⚠ pod завершился (EXITED) — успешность "
+                        "обучения НЕ подтверждена: проверьте логи и метрики "
+                        "прогона перед использованием чекпоинтов").strip()
+                return self.update(job_id, **changes)
         # Один пропуск ответа API — ещё не смерть пода (пагинация/лаг):
         # failed только после двух подряд пустых опросов.
         missing = int(job.missing_polls or 0) + 1

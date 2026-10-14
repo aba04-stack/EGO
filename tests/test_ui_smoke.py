@@ -1966,3 +1966,14 @@ def test_stage45_bench_history_ui(fake_ui, tmp_path, monkeypatch):
     page = app.pages["model"]
     text = page.bench_history_text()
     assert "demo" in text and "3/4" in text
+
+
+def test_stage46_market_row_and_fonts(fake_ui, tmp_path, monkeypatch):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    settings_page = app.pages["settings"]
+    assert hasattr(settings_page, "connect_market")
+    settings_page.market_url_var.set("https://example/market.git")
+    from alterego_training_hub.theme import detect_fonts
+
+    assert detect_fonts(["Inter", "Consolas"])[0] == "Inter"

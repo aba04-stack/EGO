@@ -58,6 +58,7 @@ class AppSettings:
     sidebar_side: str = "left"   # left | right
     sidebar_compact: bool = False  # activity-bar (иконки) вместо подписей
     update_repo: str = "aba04-stack/-"  # GitHub repo для проверки обновлений
+    plugin_market_urls: list = field(default_factory=list)  # git-маркеты плагинов
     chat_side: str = "right"     # left | right
     bottom_height: int = 210     # px
     settings_sync_dir: str = ""

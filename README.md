@@ -180,6 +180,7 @@ This is a desktop control-plane MVP, not yet an end-to-end training orchestratio
 The next milestone is a typed remote training worker with resumable checkpoint/data transfers, explicit elapsed-time and total-cost guards, live logs, and end-to-end tests on a short disposable job.
 
 ## Releases
+- 1.6.0: git plugin market (catalog.json or per-folder plugins, clone/pull cache, one-click install) and modern font stacks — Inter/Segoe UI Variable UI font, JetBrains Mono/Cascadia code font, auto-detected at startup.
 - 1.5.0: benchmark history — live benches are persisted next to speed probes, with per-model delta trends, latest-per-model comparison and CSV export.
 - 1.4.0: stage 44 — multi-GPU via torchrun/DDP in the wizard and generated script, per-step VRAM in scratch logs, and a total cloud budget cap with a spend ledger and pod autostop.
 - 1.3.0: stage 43 — SFT format validation, near-duplicate deduplication and train/eval decontamination on the Datasets page; Ollama/vLLM probe and Ollama start/stop in Playground.

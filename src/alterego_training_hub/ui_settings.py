@@ -277,6 +277,16 @@ class SettingsPage(tk.Frame):
         ttk.Button(catalog_row, text=t('Удалить плагин'),
                    style="Danger.TButton",
                    command=self.uninstall_selected_plugin).pack(side="left")
+        market_row = tk.Frame(keys_card2, bg=C["panel"])
+        market_row.pack(fill="x", pady=(4, 2))
+        tk.Label(market_row, text=t('Маркет (git URL)'), bg=C["panel"],
+                 font=F_BASE).pack(side="left")
+        self.market_url_var = tk.StringVar()
+        tk.Entry(market_row, textvariable=self.market_url_var, bd=1,
+                 relief="solid", font=F_MONO, width=44).pack(
+                     side="left", padx=6)
+        ttk.Button(market_row, text=t('Подключить маркет'),
+                   command=self.connect_market).pack(side="left")
         self._refresh_plugins_label()
         self._refresh_catalog_combo()
 
@@ -695,7 +705,9 @@ class SettingsPage(tk.Frame):
     def _refresh_catalog_combo(self):
         from .plugin_catalog import BUILTIN_CATALOG
 
-        self._catalog_entries = list(BUILTIN_CATALOG)
+        self._catalog_entries = (
+            list(BUILTIN_CATALOG)
+            + list(self.__dict__.get("_market_entries", [])))
         labels = [f"{entry.name} v{entry.version} — {entry.description}"
                   for entry in self._catalog_entries]
         self.catalog_choice.configure(values=labels)
@@ -915,3 +927,36 @@ class SettingsPage(tk.Frame):
         chat = self.app.pages.get("chat")
         if chat is not None:
             chat.on_show()
+
+
+    # ------------------------------------------------------------- plugin market
+    def connect_market(self):
+        """Clone/pull a git plugin market and merge its catalog."""
+        from .plugin_market import load_market
+
+        url = self.market_url_var.get().strip()
+        if not url:
+            messagebox.showinfo(t('Маркет плагинов'),
+                                t('Укажите git URL репозитория маркета.'),
+                                parent=self)
+            return
+
+        def work():
+            return load_market(url)
+
+        def done(entries):
+            self._market_entries = list(entries)
+            urls = list(self.app.settings.plugin_market_urls or [])
+            if url not in urls:
+                urls.append(url)
+                self.app.settings.plugin_market_urls = urls
+                self.app.save_settings()
+            self._refresh_catalog_combo()
+            self.app.set_status(
+                t('Маркет подключён: плагинов {v1}').format(v1=len(entries)))
+
+        def failed(error):
+            messagebox.showerror(t('Маркет плагинов'), str(error),
+                                 parent=self)
+
+        self.app.start_async(t('Подключение маркета'), work, done, failed)

@@ -87,14 +87,51 @@ def color_map(old: dict[str, str], new: dict[str, str]) -> dict[str, str]:
     return mapping
 
 
-F_BASE = ("Segoe UI", 10)
-F_BOLD = ("Segoe UI", 10, "bold")
-F_TITLE = ("Segoe UI", 15, "bold")
-F_SUB = ("Segoe UI", 10)
-F_SMALL = ("Segoe UI", 9)
-F_MONO = ("Consolas", 9)
-F_NAV = ("Segoe UI", 10, "bold")
-F_NAV_SMALL = ("Segoe UI", 9)
+# Font stacks “like the modern editors”: Inter/Segoe UI Variable first,
+# JetBrains Mono/Cascadia for code.  ``detect_fonts`` picks the first
+# family actually installed; tuples are rebuilt by ``set_fonts``.
+UI_FONT_CANDIDATES = ("Inter", "Segoe UI Variable Text", "Segoe UI",
+                      "SF Pro Text", "Ubuntu", "Noto Sans", "DejaVu Sans")
+MONO_FONT_CANDIDATES = ("JetBrains Mono", "Cascadia Code", "Consolas",
+                        "SF Mono", "Menlo", "DejaVu Sans Mono")
+DEFAULT_UI_FONT = "Segoe UI"
+DEFAULT_MONO_FONT = "Consolas"
+
+
+def detect_fonts(families) -> tuple[str, str]:
+    """First installed family from each candidate stack."""
+    available = {str(f) for f in families or []}
+    ui = next((f for f in UI_FONT_CANDIDATES if f in available),
+              DEFAULT_UI_FONT)
+    mono = next((f for f in MONO_FONT_CANDIDATES if f in available),
+                DEFAULT_MONO_FONT)
+    return ui, mono
+
+
+F_BASE = (DEFAULT_UI_FONT, 10)
+F_BOLD = (DEFAULT_UI_FONT, 10, "bold")
+F_TITLE = (DEFAULT_UI_FONT, 16, "bold")
+F_SUB = (DEFAULT_UI_FONT, 10)
+F_SMALL = (DEFAULT_UI_FONT, 9)
+F_MONO = (DEFAULT_MONO_FONT, 10)
+F_NAV = (DEFAULT_UI_FONT, 10, "bold")
+F_NAV_SMALL = (DEFAULT_UI_FONT, 9)
+
+
+def set_fonts(ui_family: str, mono_family: str) -> dict[str, tuple]:
+    """Rebuild all F_* tuples for the chosen families; returns them."""
+    global F_BASE, F_BOLD, F_TITLE, F_SUB, F_SMALL, F_MONO, F_NAV, F_NAV_SMALL
+    F_BASE = (ui_family, 10)
+    F_BOLD = (ui_family, 10, "bold")
+    F_TITLE = (ui_family, 16, "bold")
+    F_SUB = (ui_family, 10)
+    F_SMALL = (ui_family, 9)
+    F_MONO = (mono_family, 10)
+    F_NAV = (ui_family, 10, "bold")
+    F_NAV_SMALL = (ui_family, 9)
+    return {"F_BASE": F_BASE, "F_BOLD": F_BOLD, "F_TITLE": F_TITLE,
+            "F_SUB": F_SUB, "F_SMALL": F_SMALL, "F_MONO": F_MONO,
+            "F_NAV": F_NAV, "F_NAV_SMALL": F_NAV_SMALL}
 
 # Syntax-highlighting palette for the dark code area (editor + mockups).
 SYNTAX = {

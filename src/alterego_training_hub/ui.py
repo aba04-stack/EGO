@@ -702,104 +702,31 @@ class TrainingHubApp(tk.Tk):
                 badge=self._nav_badges[key]))
 
     def refresh_status_badges(self):
-        """Right-side status badges: model/provider + training state."""
-        try:
-            from .ui_patterns import status_badges
+        from .ui_status import refresh_status_badges as _impl
 
-            training_text = ""
-            try:
-                status = self.training.status()
-                training_text = t('идёт') if status.running else ""
-            except Exception:
-                training_text = ""
-            badges = status_badges(
-                provider=str(getattr(self.settings, "llm_provider", "") or ""),
-                model=str(getattr(self.settings, "mentor_model", "") or ""),
-                training=training_text)
-            if hasattr(self, "model_badge"):
-                self.model_badge.set(badges[0] if badges else "")
-            if hasattr(self, "training_badge"):
-                self.training_badge.set(badges[1] if len(badges) > 1 else "")
-            self.set_nav_badge("training", "●" if training_text else "")
-        except Exception:
-            pass
+        return _impl(self)
 
     # ------------------------------------------------------- night watch
+    # ------------------------------------------------------- night watch
     def night_watch_log(self):
-        from .night_watch import NightWatchLog
+        from .ui_night import night_watch_log as _impl
 
-        return NightWatchLog(app_data_dir() / "night-watch.json")
+        return _impl(self)
 
     def _night_watch_maybe(self) -> None:
-        """Throttled tick: run a night check when the window/interval allow."""
-        if not getattr(self.settings, "night_watch_enabled", False):
-            return
-        now = time.time()
-        if now - float(getattr(self, "_night_tick_at", 0.0)) < 60.0:
-            return
-        self._night_tick_at = now
-        try:
-            from .night_watch import WatchConfig, due
+        from .ui_night import night_watch_maybe as _impl
 
-            config = WatchConfig(
-                enabled=True,
-                interval_minutes=int(
-                    getattr(self.settings, "night_watch_interval", 30) or 30))
-            if not config.in_window(now):
-                return
-            log = self.night_watch_log()
-            entries = log.entries()
-            last = entries[-1].at if entries else 0.0
-            if not due(last, now=now,
-                       interval_minutes=config.interval_minutes):
-                return
-        except Exception:
-            return
-        if getattr(self, "_night_running", False):
-            return
-        self._night_running = True
-
-        def work():
-            try:
-                return self.run_night_check()
-            finally:
-                self._night_running = False
-
-        self.start_async(t('Ночная проверка'), work)
+        return _impl(self)
 
     def run_night_check(self):
-        """Collect one snapshot and ask the mentor to analyse it."""
-        from .dashboard import build_dashboard
-        from .metrics import parse_log
-        from .night_watch import run_check
-        from .watchdog import detect_issues
+        from .ui_night import run_night_check as _impl
 
-        tail = self.training.tail()
-        summary = parse_log(tail)
-        issues = [issue.line() for issue in detect_issues(
-            summary, running=self.training.status().running)]
-        dashboard = build_dashboard(summary, title=t('Ночной снимок'))
-        entry = run_check(self.mentor_client(), tail=tail, dashboard=dashboard,
-                          issues=issues)
-        self.night_watch_log().add(entry)
-        self.activity.log("night", entry.line())
-        self.set_status(t('Ночная проверка: ') + entry.summary)
-        return entry
+        return _impl(self)
 
     def morning_report_text(self) -> str:
-        from .night_watch import morning_report
+        from .ui_night import morning_report_text as _impl
 
-        actions = []
-        chat = self.pages.get("chat")
-        session = getattr(chat, "session", None)
-        if session is not None:
-            try:
-                from .action_trace import action_entries_from_messages
-
-                actions = action_entries_from_messages(session.messages)
-            except Exception:
-                actions = []
-        return morning_report(self.night_watch_log().entries(), actions=actions)
+        return _impl(self)
 
     def _handle_event(self, kind: str, payload: dict):
         if kind == "confirm":

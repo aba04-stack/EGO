@@ -204,7 +204,7 @@ def parse_openai_response(raw: bytes, fallback_model: str) -> dict[str, Any]:
             if isinstance(part, dict) and part.get("type") == "text")
     if not isinstance(text, str):
         raise ProviderError("API вернул некорректный ответ.")
-    tool_calls = []
+    tool_calls: list[Any] = []
     for raw_call in message.get("tool_calls") or []:
         if not isinstance(raw_call, dict):
             continue
@@ -297,7 +297,8 @@ def parse_anthropic_response(raw: bytes, fallback_model: str) -> dict[str, Any]:
     text = "".join(text_parts).strip()
     if not text and not tool_calls:
         raise ProviderError("Anthropic API вернул пустой ответ.")
-    raw_usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
+    _usage_raw = data.get("usage")
+    raw_usage: dict[str, Any] = _usage_raw if isinstance(_usage_raw, dict) else {}
     usage = {
         "prompt_tokens": raw_usage.get("input_tokens"),
         "completion_tokens": raw_usage.get("output_tokens"),
@@ -377,8 +378,8 @@ def parse_gemini_response(raw: bytes, fallback_model: str) -> dict[str, Any]:
     text = "".join(text_parts).strip()
     if not text and not tool_calls:
         raise ProviderError("Gemini API вернул пустой ответ.")
-    raw_usage = data.get("usageMetadata") \
-        if isinstance(data.get("usageMetadata"), dict) else {}
+    _usage_raw = data.get("usageMetadata")
+    raw_usage: dict[str, Any] = _usage_raw if isinstance(_usage_raw, dict) else {}
     usage = {
         "prompt_tokens": raw_usage.get("promptTokenCount"),
         "completion_tokens": raw_usage.get("candidatesTokenCount"),

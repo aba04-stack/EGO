@@ -21,8 +21,12 @@ jobs:
         run: ruff check src tests scripts
       - name: Compile
         run: python -m compileall -q src run_app.py tests
-      - name: Tests (pytest)
-        run: python -m pytest -q
+      - name: Tests with coverage (ядро, порог из pyproject)
+        run: |
+          python -m coverage run -m pytest -q
+          python -m coverage report
+      - name: Types (mypy, чистые модули)
+        run: python -m mypy
 
   build:
     runs-on: ubuntu-latest

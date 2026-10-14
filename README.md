@@ -180,6 +180,9 @@ This is a desktop control-plane MVP, not yet an end-to-end training orchestratio
 The next milestone is a typed remote training worker with resumable checkpoint/data transfers, explicit elapsed-time and total-cost guards, live logs, and end-to-end tests on a short disposable job.
 
 ## Releases
+- 0.33.0: integrity audit closed — single canonical perplexity, ui.py split
+  (ui_night/ui_status), coverage 79% (gate 75) and mypy clean on core
+  modules in CI, complete sdist via MANIFEST.in.
 - 0.32.0: stop button for the agent — cooperative cancellation checked
   before every step and before executing a requested tool block, with an
   honest “[Stopped by user]” marker in the reply and transcript.

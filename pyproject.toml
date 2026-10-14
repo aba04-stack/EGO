@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alterego-training-hub-desktop"
-version = "0.32.1"
+version = "0.33.0"
 description = "Desktop control panel for AlterEgo training repositories, API mentors, and cloud GPUs"
 requires-python = ">=3.10"
 dependencies = ["keyring>=25.0", "paramiko>=3.4"]
@@ -13,7 +13,7 @@ dependencies = ["keyring>=25.0", "paramiko>=3.4"]
 alterego-llm-studio = "alterego_training_hub.ui:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "coverage>=7.0", "mypy>=1.10"]
 package = ["pyinstaller>=6.0"]
 
 [tool.setuptools.packages.find]
@@ -40,3 +40,34 @@ ignore = [
     "SIM108",  # ternaries hurt readability in several guarded UI spots
     "SIM102",  # nested guards in metrics/settings keep distinct semantics
 ]
+
+[tool.coverage.run]
+source = ["src/alterego_training_hub"]
+omit = ["src/alterego_training_hub/_l10n_ui.py"]
+
+[tool.coverage.report]
+fail_under = 75
+show_missing = false
+
+[tool.mypy]
+python_version = "3.11"
+files = [
+    "src/alterego_training_hub/agent.py",
+    "src/alterego_training_hub/agent_bench.py",
+    "src/alterego_training_hub/live_bench.py",
+    "src/alterego_training_hub/critique.py",
+    "src/alterego_training_hub/smoke_run.py",
+    "src/alterego_training_hub/train_script.py",
+    "src/alterego_training_hub/wizard_plan.py",
+    "src/alterego_training_hub/context_view.py",
+    "src/alterego_training_hub/thought_stream.py",
+    "src/alterego_training_hub/action_trace.py",
+    "src/alterego_training_hub/gen_preview.py",
+    "src/alterego_training_hub/data_audit.py",
+    "src/alterego_training_hub/resource_calc.py",
+    "src/alterego_training_hub/model_recipes.py",
+    "src/alterego_training_hub/tokenizer_train.py",
+    "src/alterego_training_hub/ui_patterns.py",
+]
+ignore_missing_imports = true
+warn_unused_ignores = false

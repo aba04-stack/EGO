@@ -838,7 +838,7 @@ class MentorAgent:
                     except Exception:
                         approved = False
                     if not approved:
-                        result: dict[str, Any] = {
+                        result = {
                             "ok": False, "error": "Действие отклонено пользователем."}
                     else:
                         result = self.extra_tools[call.name](call.arguments or {})
@@ -1061,7 +1061,8 @@ def respond_with_retry(mentor: Any, messages: list[dict[str, Any]], *,
             if on_retry is not None:
                 on_retry(attempt + 1, classify_error(exc))
             wait(min(8.0, 0.5 * (2 ** attempt)))
-    raise last_exc  # pragma: no cover - loop always returns or raises
+    assert last_exc is not None  # pragma: no cover - loop invariant
+    raise last_exc
 
 
 RECOVERY_HINT = (

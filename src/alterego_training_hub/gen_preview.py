@@ -43,17 +43,22 @@ class GenerationSample:
 
 
 def perplexity_from_loss(loss: float) -> float:
-    """exp(loss); inf for invalid/negative loss."""
+    """exp(loss); inf for invalid/negative loss.
+
+    Canonical implementation lives in :func:`evaluation.perplexity`
+    (single source of truth, этап 36); negative/invalid losses stay ``inf``
+    here because a generation sample with negative loss is meaningless.
+    """
     try:
         value = float(loss)
     except (TypeError, ValueError):
         return float("inf")
     if value < 0 or math.isnan(value) or value in (float("inf"), float("-inf")):
         return float("inf")
-    try:
-        return math.exp(value) if value < 30 else float("inf")
-    except OverflowError:  # pragma: no cover - guarded by the < 30 check
-        return float("inf")
+    from .evaluation import perplexity
+
+    result = perplexity(value)
+    return result if result == result else float("inf")
 
 
 def _sample_from_json(data: dict) -> GenerationSample | None:

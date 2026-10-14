@@ -16,9 +16,10 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, cast
 
 from .agent import MentorAgent
-from .mentor import MentorReply, ToolCall
+from .mentor import ApiMentor, MentorReply, ToolCall
 from .tools import WorkspaceTools
 
 
@@ -91,7 +92,8 @@ def _run(root: Path, script: list[MentorReply], *, readonly: bool = False,
     events: dict[str, list] = {}
     mentor = ScriptedMentor(script)
     tools = WorkspaceTools(root, backup_dir=root / ".backups")
-    agent = MentorAgent(mentor, tools, autonomy="agent", max_steps=max_steps)
+    agent = MentorAgent(cast(ApiMentor, mentor), tools,
+                        autonomy="agent", max_steps=max_steps)
     final = agent.run_turn(
         [{"role": "user", "content": "выполни задачу"}],
         confirm=lambda *_a: True,
@@ -111,7 +113,7 @@ def run_benchmark(workspace_factory: Callable[[str], Path] | None = None,
     factory = workspace_factory or default_factory
     report = BenchReport()
 
-    def scenario(name: str, setup: Callable[[Path], None],
+    def scenario(name: str, setup: Callable[[Path], Any],
                  script: list[MentorReply],
                  check: Callable[[Path, MentorReply, dict], tuple[bool, str]],
                  *, readonly: bool = False, max_steps: int = 8) -> None:

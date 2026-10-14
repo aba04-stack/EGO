@@ -223,7 +223,7 @@ class WorkspaceTools:
     # -- dispatch --------------------------------------------------------
     def execute(self, name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
         args = dict(arguments or {})
-        handler: Callable[..., dict[str, Any]] | None = {
+        handlers: dict[str, Callable[..., dict[str, Any]]] = {
             "list_files": self.list_files,
             "read_file": self.read_file,
             "search_files": self.search_files,
@@ -231,7 +231,8 @@ class WorkspaceTools:
             "replace_in_file": self.replace_in_file,
             "run_command": self.run_command,
             "diff_files": self.diff_files,
-        }.get(str(name))
+        }
+        handler = handlers.get(str(name))
         if handler is None:
             return {"ok": False, "error": f"Неизвестный инструмент: {name}"}
         import inspect

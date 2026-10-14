@@ -7,7 +7,8 @@ import tkinter as tk
 from tkinter import ttk
 
 from .metrics import brief as metrics_brief, parse_log
-from .ui_common import C, F_BASE, F_BOLD, F_SMALL, card, draw_line_chart, page_header
+from .ui_common import (C, F_BASE, F_BOLD, F_SMALL, Collapsible, card,
+                           draw_line_chart, page_header)
 
 
 class ModelDashboardPage(tk.Frame):
@@ -121,6 +122,66 @@ class ModelDashboardPage(tk.Frame):
         self.activity_text = tk.Text(activity, height=6, wrap="word", state="disabled",
                                      bd=0, bg=C["panel"], fg=C["text"], font=F_SMALL)
         self.activity_text.pack(fill="both", expand=True)
+
+        # ---- Night watch: overnight agent duty with a morning sum --------
+        night = Collapsible(self, t('Ночное дежурство'))
+        night.pack(fill="x", padx=24, pady=(0, 12))
+        night_card = night.body
+        tk.Label(night_card,
+                 text=t('Агент периодически проверяет обучение ночью и к утру готовит итог: состояние, риски и одно действие.'),
+                 bg=C["panel"], fg=C["muted"], font=F_SMALL, wraplength=860,
+                 justify="left").pack(anchor="w")
+        night_row = tk.Frame(night_card, bg=C["panel"])
+        night_row.pack(fill="x", pady=(6, 2))
+        self.night_enabled_var = tk.BooleanVar(
+            value=bool(getattr(self.app.settings, "night_watch_enabled", False)))
+        tk.Checkbutton(night_row, text=t('Включить дежурство'),
+                       variable=self.night_enabled_var, bg=C["panel"],
+                       font=F_BASE, command=self.save_night_watch).pack(
+            side="left")
+        tk.Label(night_row, text=t('Интервал (мин)'), bg=C["panel"],
+                 font=F_BASE).pack(side="left", padx=(12, 4))
+        self.night_interval_var = tk.StringVar(
+            value=str(getattr(self.app.settings, "night_watch_interval", 30)
+                      or 30))
+        tk.Entry(night_row, textvariable=self.night_interval_var, width=6,
+                 bd=1, relief="solid", font=F_BASE).pack(side="left")
+        ttk.Button(night_row, text=t('Проверить сейчас'),
+                   command=self.run_night_check_now).pack(side="left", padx=8)
+        ttk.Button(night_row, text=t('Итог утром'),
+                   command=self.show_morning_report).pack(side="left")
+        self.night_status_var = tk.StringVar(value="")
+        tk.Label(night_card, textvariable=self.night_status_var, bg=C["panel"],
+                 fg=C["muted"], font=F_SMALL, wraplength=860,
+                 justify="left").pack(anchor="w")
+
+    def save_night_watch(self):
+        enabled = bool(self.night_enabled_var.get())
+        try:
+            interval = max(5, min(1440, int(self.night_interval_var.get())))
+        except (TypeError, ValueError):
+            interval = 30
+            self.night_interval_var.set("30")
+        self.app.settings.night_watch_enabled = enabled
+        self.app.settings.night_watch_interval = interval
+        self.app.save_settings()
+        self.night_status_var.set(
+            t('Включено · интервал {v1} мин').format(v1=interval) if enabled
+            else t('Выключено'))
+
+    def run_night_check_now(self):
+        self.save_night_watch()
+        self.app.start_async(
+            t('Ночная проверка'),
+            lambda: self.app.run_night_check(),
+            lambda entry: self.night_status_var.set(
+                t('Последнее наблюдение:') + " " + entry.line()))
+
+    def show_morning_report(self):
+        from tkinter import messagebox
+
+        messagebox.showinfo(t('Итог утром'), self.app.morning_report_text(),
+                            parent=self)
 
     # -------------------------------------------------------------- refresh
     def on_show(self):

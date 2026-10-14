@@ -180,6 +180,9 @@ This is a desktop control-plane MVP, not yet an end-to-end training orchestratio
 The next milestone is a typed remote training worker with resumable checkpoint/data transfers, explicit elapsed-time and total-cost guards, live logs, and end-to-end tests on a short disposable job.
 
 ## Releases
+- 0.23.0: intelligence — overnight agent watch with a morning report,
+  metrics dashboards posted into chat, and Colab notebook export from the
+  cloud job queue.
 - 0.22.0: plugin sandbox (restricted subprocess, timeouts, trust levels)
   and plugin catalog with one-click install/uninstall.
 - 0.21.0: UX — drag-and-drop panel docking, resizable bottom panel, settings

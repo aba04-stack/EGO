@@ -60,6 +60,8 @@ class AppSettings:
     bottom_height: int = 210     # px
     settings_sync_dir: str = ""
     synced_at: float = 0.0
+    night_watch_enabled: bool = False
+    night_watch_interval: int = 30  # minutes between night checks
 
     @classmethod
     def load(cls, path: Path | None = None) -> AppSettings:

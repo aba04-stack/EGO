@@ -1527,3 +1527,57 @@ def test_stage24_plugin_sandbox_catalog_ui(fake_ui, tmp_path):
     settings_page.uninstall_selected_plugin()
     assert app._plugin_list == [] or all(
         p.id != "hello" or not p.ok for p in app._plugin_list)
+
+
+def test_stage25_night_watch_dashboard_colab(fake_ui, tmp_path):
+    """Night watch settings, morning report, chat dashboard, Colab export."""
+    from alterego_training_hub.cloud_queue import CloudJob, CloudJobQueue
+
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+
+    # --- night watch settings round-trip via the model page
+    model_page = app.pages["model"]
+    model_page.night_enabled_var.set(True)
+    model_page.night_interval_var.set("45")
+    model_page.save_night_watch()
+    assert app.settings.night_watch_enabled is True
+    assert app.settings.night_watch_interval == 45
+    assert "45" in model_page.night_status_var.get()
+
+    # --- morning report works with an empty log
+    text = app.morning_report_text()
+    assert "Ночных проверок не было" in text
+
+    # --- run_night_check with a fake mentor records a log entry
+    class _Reply:
+        text = "Обучение стабильно. Рисков нет. Оставить lr."
+
+    class _Mentor:
+        def respond(self, messages, *, tools, max_tokens, temperature):
+            return _Reply()
+
+    app.mentor_client = lambda: _Mentor()
+    entry = app.run_night_check()
+    assert entry.ok is True
+    assert app.night_watch_log().entries()
+    report = app.morning_report_text()
+    assert "Проверок: 1" in report
+
+    # --- chat dashboard post
+    chat = app.chat_panel
+    chat.post_dashboard()
+    assert any("📊" in message.content for message in chat.session.messages)
+
+    # --- Colab export from the cloud job queue
+    queue = CloudJobQueue(app.model_registry().library_dir)
+    queue.add(CloudJob(name="ночной запуск", command="python train.py"))
+    gpu_page = app.pages["gpu"]
+    gpu_page.refresh_jobs()
+    iids = list(gpu_page._jobs)
+    assert iids
+    gpu_page.job_tree.selection = lambda *a: iids[:1]
+    gpu_page.export_selected_job_to_colab()
+    exports = list((app.model_registry().library_dir / "exports").glob("*.ipynb"))
+    assert exports
+    assert "train.py" in exports[0].read_text(encoding="utf-8")

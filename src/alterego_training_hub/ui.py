@@ -633,7 +633,75 @@ class TrainingHubApp(tk.Tk):
                     self.set_status(t('Ошибка обработки события: {exc}').format(exc=exc))
         except queue.Empty:
             pass
+        self._night_watch_maybe()
         self.after(100, self._poll_events)
+
+    # ------------------------------------------------------- night watch
+    def night_watch_log(self):
+        from .night_watch import NightWatchLog
+
+        return NightWatchLog(app_data_dir() / "night-watch.json")
+
+    def _night_watch_maybe(self) -> None:
+        """Throttled tick: run a night check when the window/interval allow."""
+        if not getattr(self.settings, "night_watch_enabled", False):
+            return
+        now = time.time()
+        if now - float(getattr(self, "_night_tick_at", 0.0)) < 60.0:
+            return
+        self._night_tick_at = now
+        try:
+            from .night_watch import WatchConfig, due
+
+            config = WatchConfig(
+                enabled=True,
+                interval_minutes=int(
+                    getattr(self.settings, "night_watch_interval", 30) or 30))
+            if not config.in_window(now):
+                return
+            log = self.night_watch_log()
+            entries = log.entries()
+            last = entries[-1].at if entries else 0.0
+            if not due(last, now=now,
+                       interval_minutes=config.interval_minutes):
+                return
+        except Exception:  # noqa: BLE001 - the tick must never break the UI
+            return
+        if getattr(self, "_night_running", False):
+            return
+        self._night_running = True
+
+        def work():
+            try:
+                return self.run_night_check()
+            finally:
+                self._night_running = False
+
+        self.start_async(t('Ночная проверка'), work)
+
+    def run_night_check(self):
+        """Collect one snapshot and ask the mentor to analyse it."""
+        from .dashboard import build_dashboard
+        from .metrics import parse_log
+        from .night_watch import run_check
+        from .watchdog import detect_issues
+
+        tail = self.training.tail()
+        summary = parse_log(tail)
+        issues = [issue.line() for issue in detect_issues(
+            summary, running=self.training.status().running)]
+        dashboard = build_dashboard(summary, title=t('Ночной снимок'))
+        entry = run_check(self.mentor_client(), tail=tail, dashboard=dashboard,
+                          issues=issues)
+        self.night_watch_log().add(entry)
+        self.activity.log("night", entry.line())
+        self.set_status(t('Ночная проверка: ') + entry.summary)
+        return entry
+
+    def morning_report_text(self) -> str:
+        from .night_watch import morning_report
+
+        return morning_report(self.night_watch_log().entries())
 
     def _handle_event(self, kind: str, payload: dict):
         if kind == "confirm":

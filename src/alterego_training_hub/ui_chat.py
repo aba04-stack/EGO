@@ -44,6 +44,8 @@ class ChatPage(tk.Frame):
                    command=self.export_session).pack(side="left", padx=(8, 0))
         ttk.Button(row, text=t('Импорт'),
                    command=self.import_session).pack(side="left", padx=(3, 0))
+        ttk.Button(row, text=t('Метрики'),
+                   command=self.post_dashboard).pack(side="left", padx=(8, 0))
 
         mode_row = tk.Frame(top, bg=C["panel"])
         mode_row.pack(fill="x", pady=(6, 0))
@@ -237,6 +239,16 @@ class ChatPage(tk.Frame):
         self._render_messages()
         self.app.activity.log("share",
                               t('Сессия импортирована: {v1}').format(v1=session.title))
+
+    def post_dashboard(self):
+        """Post a compact metrics dashboard into the conversation."""
+        from .dashboard import build_dashboard
+        from .metrics import parse_log
+
+        summary = parse_log(self.app.training.tail())
+        text = build_dashboard(summary, title=t('Прогресс обучения'))
+        self.session.add("assistant", text)
+        self._render_messages()
 
     # --------------------------------------------------------------- render
     def _render_messages(self):

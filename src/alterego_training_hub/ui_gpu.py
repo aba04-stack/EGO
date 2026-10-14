@@ -163,6 +163,9 @@ class GpuPage(tk.Frame):
                    command=self.submit_selected_job).pack(side="left", padx=8)
         ttk.Button(job_buttons, text=t('Отменить'), style="Danger.TButton",
                    command=self.cancel_selected_job).pack(side="left")
+        ttk.Button(job_buttons, text=t('Colab'),
+                   command=self.export_selected_job_to_colab).pack(
+            side="left", padx=8)
         self.refresh_jobs()
 
         self.gpu_notes_var = tk.StringVar(
@@ -250,6 +253,23 @@ class GpuPage(tk.Frame):
             messagebox.showerror(t('Облачные задания'), str(exc), parent=self)
             return
         self.refresh_jobs()
+
+    def export_selected_job_to_colab(self):
+        from .colab_export import (ColabExportError, default_notebook_name,
+                                   save_notebook)
+
+        job = self._selected_job()
+        if job is None:
+            messagebox.showinfo(t('Облачные задания'), t('Выберите задание.'),
+                                parent=self)
+            return
+        out_dir = self.app.model_registry().library_dir / "exports"
+        try:
+            file = save_notebook(job, out_dir / default_notebook_name(job))
+        except ColabExportError as exc:
+            messagebox.showerror(t('Облачные задания'), str(exc), parent=self)
+            return
+        self.app.set_status(t('Ноутбук сохранён: ') + str(file))
 
     def _persist_gpu_settings(self):
         try:

@@ -63,6 +63,16 @@ class DatasetsPage(tk.Frame):
                  relief="solid", font=F_BASE).pack(side="left", padx=(0, 6))
         ttk.Button(tools_row, text=t('Фильтр и разбиение train/val/test'),
                    command=self.filter_split).pack(side="left")
+        sft_row = tk.Frame(toolbar_card, bg=C["panel"])
+        sft_row.pack(fill="x", pady=(6, 0))
+        tk.Label(sft_row, text="SFT", bg=C["panel"],
+                 font=F_BASE).pack(side="left", padx=(0, 6))
+        ttk.Button(sft_row, text=t('Валидация формата'),
+                   command=self.sft_validate).pack(side="left", padx=(0, 6))
+        ttk.Button(sft_row, text=t('Near-dup дедупликация'),
+                   command=self.dedupe_near).pack(side="left", padx=(0, 6))
+        ttk.Button(sft_row, text=t('Деконтаминация от eval…'),
+                   command=self.decontaminate).pack(side="left")
 
         table_card = card(self)
         table_card.pack(fill="both", expand=True, padx=24, pady=(0, 12))
@@ -259,3 +269,104 @@ class DatasetsPage(tk.Frame):
         set_text(self.preview_text,
                  "\n".join(_json.dumps(row, ensure_ascii=False)[:240] for row in rows)
                  or t('Файл пуст.'))
+
+
+    # ------------------------------------------------------------- SFT tools
+    def _selected_rows(self):
+        from .datasets import read_rows
+
+        entry = self._selected()
+        if entry is None:
+            messagebox.showinfo(t('Датасеты'),
+                                t('Выберите датасет в таблице.'),
+                                parent=self)
+            return None, None
+        source = Path(entry.location)
+        if not source.is_file():
+            messagebox.showerror(t('Датасеты'),
+                                 t('Файл не найден: {v1}').format(
+                                     v1=entry.location),
+                                 parent=self)
+            return None, None
+        return entry, read_rows(source, entry.format)
+
+    def _write_derived(self, entry, rows, suffix, label):
+        from .datasets import write_rows
+
+        source = Path(entry.location)
+        target = source.with_name(f"{source.stem}.{suffix}.{entry.format}")
+        write_rows(target, rows, entry.format)
+        self._library().add(DatasetEntry(
+            name=f"{entry.name}-{suffix}", format=entry.format,
+            location=str(target), rows=len(rows),
+            size_bytes=target.stat().st_size))
+        self.refresh()
+        self.app.activity.log(
+            "system", label + f": {target.name} ({len(rows)})")
+        return target
+
+    def sft_validate(self):
+        from .datasets import read_rows  # noqa: F401 - symmetry/readability
+        from .sft_data import validate_sft
+
+        entry, rows = self._selected_rows()
+        if entry is None:
+            return
+
+        def work():
+            return validate_sft(rows)
+
+        def done(report):
+            messagebox.showinfo(t('SFT-валидация'), report.render(),
+                                parent=self)
+
+        self.app.start_async(t('SFT-валидация'), work, done)
+
+    def dedupe_near(self):
+        from .sft_data import dedupe_near as _dedupe
+
+        entry, rows = self._selected_rows()
+        if entry is None:
+            return
+
+        def work():
+            return _dedupe(rows)
+
+        def done(result):
+            kept, removed = result
+            target = self._write_derived(entry, kept, "dedup",
+                                         t('Near-dup дедупликация'))
+            messagebox.showinfo(
+                t('Near-dup дедупликация'),
+                t('Удалено почти-дублей: {v1}; осталось {v2}').format(
+                    v1=removed, v2=len(kept)) + f"\n{target}",
+                parent=self)
+
+        self.app.start_async(t('Near-dup дедупликация'), work, done)
+
+    def decontaminate(self):
+        from tkinter import filedialog
+
+        from .datasets import read_rows
+        from .sft_data import decontaminate as _decontaminate
+
+        entry, rows = self._selected_rows()
+        if entry is None:
+            return
+        eval_path = filedialog.askopenfilename(
+            parent=self, title=t('Eval-датасет для деконтаминации'))
+        if not eval_path:
+            return
+        eval_rows = read_rows(Path(eval_path), entry.format)
+
+        def work():
+            return _decontaminate(rows, eval_rows)
+
+        def done(result):
+            target = self._write_derived(entry, result.cleaned, "clean",
+                                         t('Деконтаминация'))
+            messagebox.showinfo(
+                t('Деконтаминация'),
+                result.render() + f"\n{target}", parent=self)
+
+        self.app.start_async(t('Деконтаминация'), work, done)

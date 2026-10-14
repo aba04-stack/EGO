@@ -180,6 +180,7 @@ This is a desktop control-plane MVP, not yet an end-to-end training orchestratio
 The next milestone is a typed remote training worker with resumable checkpoint/data transfers, explicit elapsed-time and total-cost guards, live logs, and end-to-end tests on a short disposable job.
 
 ## Releases
+- 1.3.0: stage 43 — SFT format validation, near-duplicate deduplication and train/eval decontamination on the Datasets page; Ollama/vLLM probe and Ollama start/stop in Playground.
 - 1.2.0: stage 42 — Hugging Face Hub download/push from the Models page, and a checkpoints panel on the Training page (discovery, run binding, resume commands, keep-3 rotation).
 - 1.1.0: stage 41 — configurable LoRA/QLoRA fine-tuning in the wizard and generated script, per-run reproducibility snapshots (git hash, pip freeze, config), CSV + MLflow export of run history.
 - 1.0.0: semantic code search (offline hash embeddings, cached chunk index, optional API embeddings), a real-Tk xvfb smoke job in CI, and the final audit — mypy on 19 modules, 369 tests, coverage 79%.

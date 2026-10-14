@@ -64,6 +64,24 @@ class PlaygroundPage(tk.Frame):
         tk.Entry(row2, textvariable=self.tokens_var, width=8, bd=1, relief="solid",
                  font=F_BASE).pack(side="left")
 
+        local_row = tk.Frame(setup, bg=C["panel"])
+        local_row.pack(fill="x", pady=4)
+        tk.Label(local_row, text=t('Локальный сервер'), bg=C["panel"],
+                 font=F_BASE).pack(side="left", padx=(0, 8))
+        ttk.Button(local_row, text=t('Проверить Ollama/vLLM'),
+                   command=self.probe_local).pack(side="left", padx=(0, 6))
+        ttk.Button(local_row, text=t('Запустить Ollama'),
+                   command=self.start_local).pack(side="left", padx=(0, 6))
+        ttk.Button(local_row, text=t('Остановить'),
+                   command=self.stop_local).pack(side="left", padx=(0, 6))
+        self.local_status_var = tk.StringVar(
+            value=t('локальные серверы не проверены'))
+        tk.Label(local_row, textvariable=self.local_status_var,
+                 bg=C["panel"], fg=C["muted"], font=F_SMALL).pack(side="left")
+        from .local_inference import LocalServerManager
+
+        self._local_manager = LocalServerManager()
+
         prompt_card = card(self, t('Промпт'))
         prompt_card.pack(fill="x", padx=24, pady=(0, 12))
         self.prompt = tk.Text(prompt_card, height=3, wrap="word", font=F_BASE,
@@ -252,3 +270,29 @@ class PlaygroundPage(tk.Frame):
         ]
         set_text(self.out_a[1], "\n\n".join(lines))
         self.out_a[0].set(t('последние запуски'))
+
+
+    # ------------------------------------------------------------- local servers
+    def probe_local(self):
+        from .local_inference import probe_all
+
+        def work():
+            return probe_all()
+
+        def done(statuses):
+            self.local_status_var.set(
+                " · ".join(s.render() for s in statuses))
+
+        self.app.start_async(t('Проверка локальных серверов'), work, done)
+
+    def start_local(self):
+        status = self._local_manager.start("ollama")
+        self.local_status_var.set(status.render())
+        if status.up:
+            self.probe_local()
+
+    def stop_local(self):
+        stopped = self._local_manager.stop()
+        self.local_status_var.set(
+            t('локальный сервер остановлен') if stopped
+            else t('из приложения сервер не запущен'))

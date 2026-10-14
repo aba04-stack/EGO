@@ -1921,3 +1921,20 @@ def test_stage42_hf_and_checkpoints_ui(fake_ui, tmp_path, monkeypatch):
     training.checkpoints_list.selection_set(0)
     training.resume_checkpoint()
     assert "--resume" in training.cmd_var.get()
+
+
+def test_stage43_sft_and_local_ui(fake_ui, tmp_path, monkeypatch):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+
+    def sync_start(label, task, on_success=None, on_error=None):
+        value = task()
+        if on_success:
+            on_success(value)
+
+    monkeypatch.setattr(app, "start_async", sync_start)
+    playground = app.pages["playground"]
+    playground.stop_local()
+    assert "не запущен" in playground.local_status_var.get()
+    datasets = app.pages["datasets"]
+    assert hasattr(datasets, "sft_validate")

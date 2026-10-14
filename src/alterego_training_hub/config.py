@@ -51,6 +51,7 @@ class AppSettings:
     training_command: str = "python -m pytest -q"
     runpod_cloud: str = "SECURE"
     runpod_max_gpu_hourly_usd: float = 0.50
+    cloud_total_budget_usd: float = 0.0  # 0 = общий потолок выключен
     runpod_container_disk_gb: int = 30
     runpod_image: str = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1"
     # Panel docking (drag-and-drop) and settings sync

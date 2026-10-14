@@ -106,7 +106,7 @@ The **Диагностика** section on the settings page checks the environme
 
 **Cloud GPUs and security**
 - Browse the live RunPod GPU catalog and list GPU pods.
-- Preview GPU pricing against a configured GPU-only hourly limit. Creating, stopping, resuming, or deleting cloud resources requires explicit confirmation. The limit is not a total-bill cap.
+- Preview GPU pricing against a configured GPU-only hourly limit, plus a total budget cap with a spend ledger and pod autostop. Creating, stopping, resuming, or deleting cloud resources requires explicit confirmation. The limit is not a total-bill cap.
 - Store API keys in the operating-system credential store through `keyring`; keys are not written into the project settings file or Git repository.
 - Package as a Windows executable using PyInstaller.
 
@@ -180,6 +180,7 @@ This is a desktop control-plane MVP, not yet an end-to-end training orchestratio
 The next milestone is a typed remote training worker with resumable checkpoint/data transfers, explicit elapsed-time and total-cost guards, live logs, and end-to-end tests on a short disposable job.
 
 ## Releases
+- 1.4.0: stage 44 — multi-GPU via torchrun/DDP in the wizard and generated script, per-step VRAM in scratch logs, and a total cloud budget cap with a spend ledger and pod autostop.
 - 1.3.0: stage 43 — SFT format validation, near-duplicate deduplication and train/eval decontamination on the Datasets page; Ollama/vLLM probe and Ollama start/stop in Playground.
 - 1.2.0: stage 42 — Hugging Face Hub download/push from the Models page, and a checkpoints panel on the Training page (discovery, run binding, resume commands, keep-3 rotation).
 - 1.1.0: stage 41 — configurable LoRA/QLoRA fine-tuning in the wizard and generated script, per-run reproducibility snapshots (git hash, pip freeze, config), CSV + MLflow export of run history.

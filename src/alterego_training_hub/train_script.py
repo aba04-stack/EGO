@@ -37,6 +37,7 @@ class ScriptConfig:
     warmup_pct: int = 3
     seed: int = 42
     grad_accum: int = 1
+    gpus: int = 1  # >1 — torchrun/DDP
     lora_r: int = 16
     lora_alpha: int = 32
     lora_dropout: float = 0.05
@@ -62,6 +63,8 @@ class ScriptConfig:
             problems.append("LoRA dropout должен быть в [0, 1).")
         if self.grad_accum < 1:
             problems.append("Gradient accumulation должен быть >= 1.")
+        if not 1 <= self.gpus <= 64:
+            problems.append("Число GPU должно быть 1..64.")
         return problems
 
 
@@ -107,6 +110,7 @@ def _config_json(cfg: ScriptConfig) -> str:
         "warmup_pct": cfg.warmup_pct,
         "seed": cfg.seed,
         "grad_accum": cfg.grad_accum,
+        "gpus": cfg.gpus,
         "lora": {"r": cfg.lora_r, "alpha": cfg.lora_alpha,
                  "dropout": cfg.lora_dropout, "qlora": cfg.qlora,
                  "target_modules": cfg.target_modules},
@@ -158,6 +162,10 @@ def main() -> None:
                         help="чекпоинт для продолжения обучения")
     args = parser.parse_args()
     random.seed(CONFIG["seed"])
+    if CONFIG["gpus"] > 1 and "LOCAL_RANK" not in os.environ:
+        print(f"Подсказка: для {CONFIG['gpus']} GPU запустите через "
+              f"torchrun --nproc_per_node={CONFIG['gpus']} train_llm.py",
+              flush=True)
     texts = [t for t in load_texts(args.dataset) if t.strip()]
     if not texts:
         raise SystemExit("Датасет пуст — проверьте путь и формат.")
@@ -252,8 +260,10 @@ def train_scratch(args, texts: list[str]) -> None:
             step += 1
             if step % 20 == 0:
                 value = float(loss.detach())
+                mem = (f" mem={torch.cuda.max_memory_allocated() / 1e9:.2f}GB"
+                       if torch.cuda.is_available() else "")
                 print(f"loss={value:.4f} step={step} "
-                      f"ppl={math.exp(min(value, 20)):.2f}", flush=True)
+                      f"ppl={math.exp(min(value, 20)):.2f}{mem}", flush=True)
                 print(f"eval: val_loss={value:.4f}", flush=True)
             if step % max(1, CONFIG["sample_every"]) == 0:
                 model.eval()
@@ -334,6 +344,7 @@ def train_lora(args, texts: list[str]) -> None:
             output_dir=args.output_dir,
             per_device_train_batch_size=CONFIG["batch"],
             gradient_accumulation_steps=CONFIG["grad_accum"],
+            ddp_find_unused_parameters=False if CONFIG["gpus"] > 1 else None,
             num_train_epochs=args.epochs,
             learning_rate=args.lr,
             warmup_ratio=CONFIG["warmup_pct"] / 100.0,
@@ -364,6 +375,13 @@ def generate_script(cfg: ScriptConfig) -> str:
     header = _HEADER.format(recipe_name=cfg.recipe_name or cfg.path,
                             config_json=_config_json(cfg))
     return header + _common_helpers() + _scratch_body() + _lora_body() + _TAIL
+
+
+def distributed_launch_command(cfg: ScriptConfig) -> str:
+    """Command to launch the generated script (torchrun when multi-GPU)."""
+    if cfg.gpus > 1:
+        return f"torchrun --nproc_per_node={cfg.gpus} train_llm.py"
+    return "python train_llm.py"
 
 
 def script_filename(cfg: ScriptConfig) -> str:

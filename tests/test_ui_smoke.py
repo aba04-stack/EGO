@@ -1938,3 +1938,15 @@ def test_stage43_sft_and_local_ui(fake_ui, tmp_path, monkeypatch):
     assert "не запущен" in playground.local_status_var.get()
     datasets = app.pages["datasets"]
     assert hasattr(datasets, "sft_validate")
+
+
+def test_stage44_wizard_gpus_and_budget_field(fake_ui):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    model = app.pages["model"]
+    model.wizard_gpus_var.set("2")
+    assert model.train_script_config().gpus == 2
+    gpu_page = app.pages["gpu"]
+    assert hasattr(gpu_page, "_apply_budget_guard")
+    gpu_page.gpu_total_budget_var.set("25")
+    assert float(gpu_page.gpu_total_budget_var.get()) == 25.0

@@ -87,7 +87,10 @@ class GpuPage(tk.Frame):
             tk.Entry(create, textvariable=var, bd=1, relief="solid", font=F_BASE,
                      width=width).grid(row=row, column=col + 1, sticky="ew", padx=4, pady=3)
 
+        self.gpu_total_budget_var = tk.StringVar(
+            value=str(self.app.settings.cloud_total_budget_usd))
         entry(0, 0, t('Лимит цены GPU ($/час)'), self.gpu_budget_var, 12)
+        entry(2, 0, t('Общий потолок ($, 0=выкл)'), self.gpu_total_budget_var, 12)
         entry(0, 2, t('Контейнерный диск (GB)'), self.gpu_disk_var, 10)
         entry(1, 0, t('Имя ресурса'), self.gpu_name_var)
         entry(1, 2, t('Образ контейнера'), self.gpu_image_var, 38)
@@ -284,6 +287,11 @@ class GpuPage(tk.Frame):
             self.app.settings.runpod_max_gpu_hourly_usd = budget
             self.app.settings.runpod_container_disk_gb = disk
             self.app.settings.runpod_image = self.gpu_image_var.get().strip()
+            try:
+                total_cap = float(self.gpu_total_budget_var.get())
+            except (TypeError, ValueError):
+                total_cap = 0.0
+            self.app.settings.cloud_total_budget_usd = max(0.0, total_cap)
             self.app.save_settings()
             return budget, disk
         except ValueError as exc:
@@ -371,6 +379,7 @@ class GpuPage(tk.Frame):
                 gpu, str(cost),
             ))
         self.gpu_notes_var.set(t('Ресурсов в аккаунте: {v1}.').format(v1=len(items)))
+        self._apply_budget_guard(items)
 
     def create_gpu_pod(self):
         selected = self.gpu_tree.selection()
@@ -466,3 +475,47 @@ class GpuPage(tk.Frame):
                              lambda: client.terminate_pod(str(pod["id"]),
                                                           confirmed=True),
                              lambda _: self.refresh_pods())
+
+
+    def _apply_budget_guard(self, items):
+        """Общий потолок расходов: учёт подов и автостоп при превышении."""
+        from .budget_guard import BudgetLedger, check_budget
+
+        try:
+            client = self.app.runpod_client()
+        except Exception:
+            client = None
+        ledger = BudgetLedger.load()
+        active_ids = set()
+        for pod in items or []:
+            pod_id = str(pod.get("id") or "")
+            if not pod_id:
+                continue
+            status = str(pod.get("status") or "").upper()
+            cost = pod.get("cost", pod.get("costPerHr", 0))
+            try:
+                hourly = float(cost)
+            except (TypeError, ValueError):
+                hourly = 0.0
+            if status in {"RUNNING", "STARTING", "CREATED"}:
+                ledger.observe(pod_id, hourly)
+                active_ids.add(pod_id)
+            else:
+                ledger.mark_stopped(pod_id)
+        for spend in ledger.running():
+            if spend.pod_id not in active_ids:
+                ledger.mark_stopped(spend.pod_id)
+
+        def stopper(pod_id):
+            if client is None:
+                raise RuntimeError("no client")
+            client.pod_action(pod_id, "stop", confirmed=True)
+
+        cap = float(self.app.settings.cloud_total_budget_usd or 0.0)
+        verdict = check_budget(ledger, cap,
+                               stopper=stopper if cap > 0 else None)
+        ledger.save()
+        self.gpu_notes_var.set(
+            self.gpu_notes_var.get() + " · " + verdict.render())
+        if verdict.stopped:
+            self.refresh_pods()

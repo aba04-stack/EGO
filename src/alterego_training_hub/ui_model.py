@@ -248,6 +248,11 @@ class ModelDashboardPage(tk.Frame):
                  font=F_BASE).pack(side="left")
         self.wizard_grad_accum_var = tk.StringVar(value="1")
         tk.Entry(wiz_lora, textvariable=self.wizard_grad_accum_var, width=5,
+                 bd=1, relief="solid", font=F_BASE).pack(side="left", padx=(4, 8))
+        tk.Label(wiz_lora, text=t('GPU (шт)'), bg=C["panel"],
+                 font=F_BASE).pack(side="left")
+        self.wizard_gpus_var = tk.StringVar(value="1")
+        tk.Entry(wiz_lora, textvariable=self.wizard_gpus_var, width=5,
                  bd=1, relief="solid", font=F_BASE).pack(side="left", padx=(4, 0))
         wiz_row3 = tk.Frame(wiz_card, bg=C["panel"])
         wiz_row3.pack(fill="x", pady=(4, 2))
@@ -335,7 +340,8 @@ class ModelDashboardPage(tk.Frame):
             lora_r=self._wizard_int(self.wizard_lora_r_var, 16),
             lora_alpha=self._wizard_int(self.wizard_lora_alpha_var, 32),
             qlora=bool(self.wizard_qlora_var.get()),
-            grad_accum=self._wizard_int(self.wizard_grad_accum_var, 1))
+            grad_accum=self._wizard_int(self.wizard_grad_accum_var, 1),
+            gpus=self._wizard_int(self.wizard_gpus_var, 1))
 
     def create_train_script(self):
         """Генерация train_llm.py из плана мастера в рабочую папку."""

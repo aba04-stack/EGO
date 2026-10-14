@@ -55,6 +55,7 @@ class AppSettings:
     runpod_image: str = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1"
     # Panel docking (drag-and-drop) and settings sync
     sidebar_side: str = "left"   # left | right
+    sidebar_compact: bool = False  # activity-bar (иконки) вместо подписей
     chat_side: str = "right"     # left | right
     bottom_height: int = 210     # px
     settings_sync_dir: str = ""

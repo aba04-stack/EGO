@@ -180,6 +180,9 @@ This is a desktop control-plane MVP, not yet an end-to-end training orchestratio
 The next milestone is a typed remote training worker with resumable checkpoint/data transfers, explicit elapsed-time and total-cost guards, live logs, and end-to-end tests on a short disposable job.
 
 ## Releases
+- 0.34.0: interface polish, round two — palette quick-launch in the sidebar,
+  persisted activity-bar mode, clickable status-bar badges incl. tokens
+  today, breadcrumbs in page headers, live composer token counter.
 - 0.33.0: integrity audit closed — single canonical perplexity, ui.py split
   (ui_night/ui_status), coverage 79% (gate 75) and mypy clean on core
   modules in CI, complete sdist via MANIFEST.in.

@@ -793,6 +793,8 @@ UI_MESSAGES: dict[str, str] = {
     "цена не получена": "price not fetched",
     "— без сравнения —": "— no comparison —",
     "↻ повтор запроса к модели (попытка {v1})": "↻ retrying model request (attempt {v1})",
+    "≈ {v1} ток. · Ctrl+Enter — отправить": "≈ {v1} tok. · Ctrl+Enter — send",
+    "⌕ Поиск и команды…  Ctrl+Shift+P": "⌕ Search and commands…  Ctrl+Shift+P",
     "⏹ останавливаю агента…": "⏹ stopping the agent…",
     "▶ Выполнить": "▶ Run",
     "○ Ассистент — подтверждает действия": "○ Assistant — confirms actions",

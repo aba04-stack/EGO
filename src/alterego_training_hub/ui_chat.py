@@ -139,9 +139,26 @@ class ChatPage(tk.Frame):
         self.stop_btn.pack(side="left", fill="y", padx=(6, 0))
         attach_tooltip(self.stop_btn, t('Остановить агента'))
 
+        self.composer_var = tk.StringVar(value="")
+        tk.Label(self, textvariable=self.composer_var, bg=C["panel"],
+                 fg=C["muted"], font=F_SMALL, anchor="e").pack(
+                     fill="x", padx=10, pady=(0, 6))
+        self.input.bind("<KeyRelease>", lambda _e: self._update_composer())
+
         self._update_hint()
         self.refresh_sessions()
         self._render_messages()
+
+    def _update_composer(self):
+        from .context_view import estimate_tokens
+
+        try:
+            text = self.input.get("1.0", "end").strip()
+        except Exception:
+            text = ""
+        self.composer_var.set(
+            t('≈ {v1} ток. · Ctrl+Enter — отправить').format(
+                v1=estimate_tokens(text)) if text else "")
 
     def _render_mode(self):
         if self.autonomy_var.get() == "agent":
@@ -579,6 +596,17 @@ class ChatPage(tk.Frame):
             self._last_question = text
             self._last_answer = reply.text or ""
             self._last_usage = dict(getattr(reply, "usage", {}) or {})
+            try:
+                _total = int(self._last_usage.get("total_tokens", 0) or 0)
+                if not _total:
+                    _total = (int(self._last_usage.get("prompt_tokens", 0) or 0)
+                              + int(self._last_usage.get(
+                                  "completion_tokens", 0) or 0))
+                self.app._tokens_today = int(
+                    getattr(self.app, "_tokens_today", 0) or 0) + _total
+                self.app.refresh_status_badges()
+            except Exception:
+                pass
             self._last_model = str(getattr(reply, "model", "") or "")
             for item in transcript:
                 self.session.messages.append(ChatMessage.from_dict(item))

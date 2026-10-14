@@ -1809,3 +1809,26 @@ def test_stage36_entry_points(fake_ui, tmp_path):
     parsed = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
     assert parsed["project"]["scripts"]["alterego-llm-studio"] \
         == "alterego_training_hub.ui:main"
+
+
+def test_stage37_interface_polish(fake_ui, tmp_path):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+
+    # quick-launch + compactness persisted
+    assert app.toggle_sidebar_compact() is True
+    assert app.settings.sidebar_compact is True
+    assert app.toggle_sidebar_compact() is False
+    assert app.settings.sidebar_compact is False
+
+    # tokens badge wired through chat accounting helpers
+    app._tokens_today = 1500
+    app.settings.mentor_model = "gpt-4o"
+    app.refresh_status_badges()
+    assert "1500" in app.tokens_badge.get()
+
+    # composer counter exists and updates
+    chat = app.chat_panel
+    chat.input.insert("end", "привет мир это тест")
+    chat._update_composer()
+    assert "ток." in chat.composer_var.get()

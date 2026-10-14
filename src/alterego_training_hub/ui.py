@@ -72,6 +72,7 @@ class TrainingHubApp(tk.Tk):
         self._nav_meta: dict[str, tuple[str, str]] = {}
         self._nav_badges: dict[str, str] = {}
         self._sidebar_compact = False
+        self._tokens_today = 0
         self.pages: dict[str, tk.Frame] = {}
 
         ui_common.apply_theme(self)
@@ -88,18 +89,29 @@ class TrainingHubApp(tk.Tk):
                  fg=C["muted"], font=ui_common.F_SMALL, anchor="w",
                  padx=12).pack(side="left", fill="x", expand=True)
         self.workspace_badge = tk.StringVar(value=t('папка не выбрана'))
-        tk.Label(self.status_bar, textvariable=self.workspace_badge,
-                 bg=C["statusbar"],
-                 fg=C["muted"], font=ui_common.F_SMALL, padx=12).pack(side="right")
+        _wb = tk.Label(self.status_bar, textvariable=self.workspace_badge,
+                       bg=C["statusbar"],
+                       fg=C["muted"], font=ui_common.F_SMALL, padx=12,
+                       cursor="hand2")
+        _wb.pack(side="right")
+        _wb.bind("<Button-1>", lambda _e: self.show_page("workspace"))
         self.git_badge = tk.StringVar(value="")
-        tk.Label(self.status_bar, textvariable=self.git_badge, bg=C["statusbar"],
-                 fg=C["muted"], font=ui_common.F_SMALL, padx=12).pack(side="right")
+        _gb = tk.Label(self.status_bar, textvariable=self.git_badge,
+                       bg=C["statusbar"],
+                       fg=C["muted"], font=ui_common.F_SMALL, padx=12,
+                       cursor="hand2")
+        _gb.pack(side="right")
+        _gb.bind("<Button-1>", lambda _e: self.show_bottom("git"))
         self.model_badge = tk.StringVar(value="")
         _mb = tk.Label(self.status_bar, textvariable=self.model_badge,
                        bg=C["statusbar"], fg=C["muted"], font=ui_common.F_SMALL,
                        padx=12, cursor="hand2")
         _mb.pack(side="right")
         _mb.bind("<Button-1>", lambda _e: self.show_page("model"))
+        self.tokens_badge = tk.StringVar(value="")
+        tk.Label(self.status_bar, textvariable=self.tokens_badge,
+                 bg=C["statusbar"], fg=C["muted"], font=ui_common.F_SMALL,
+                 padx=12).pack(side="right")
         self.training_badge = tk.StringVar(value="")
         _tb = tk.Label(self.status_bar, textvariable=self.training_badge,
                        bg=C["statusbar"], fg=C["muted"], font=ui_common.F_SMALL,
@@ -129,6 +141,13 @@ class TrainingHubApp(tk.Tk):
         self._compact_btn.bind("<Button-1>",
                                lambda _e: self.toggle_sidebar_compact())
 
+        _quick = tk.Label(sidebar, text=t('⌕ Поиск и команды…  Ctrl+Shift+P'),
+                          bg=C["sidebar"], fg=C["sidebar_fg"], font=F_NAV_SMALL,
+                          anchor="w", padx=16, pady=6, cursor="hand2")
+        _quick.pack(fill="x", pady=(2, 4))
+        _quick.bind("<Button-1>",
+                    lambda _e: self.open_command_palette("commands"))
+
         nav_groups = [
             (t("nav.development"), [
                 ("editor", t("nav.editor")),
@@ -157,6 +176,13 @@ class TrainingHubApp(tk.Tk):
                                                                  pady=(10, 2))
             for key, label in items:
                 self._make_nav_item(sidebar, key, label)
+
+        if bool(getattr(self.settings, "sidebar_compact", False)):
+            self._sidebar_compact = True
+            try:
+                sidebar.configure(width=64)
+            except Exception:
+                pass
 
         from . import __version__
 
@@ -572,7 +598,9 @@ class TrainingHubApp(tk.Tk):
         accent.pack(side="left", fill="y")
         from .ui_patterns import nav_label as _nav_label
 
-        btn = tk.Label(row, text=_nav_label(key, label, compact=False),
+        btn = tk.Label(row, text=_nav_label(
+            key, label,
+            compact=bool(getattr(self.settings, "sidebar_compact", False))),
                        bg=C["sidebar"], fg=C["sidebar_fg"],
                        font=F_NAV, anchor="w", padx=8, pady=8, cursor="hand2")
         btn.pack(side="left", fill="x", expand=True)
@@ -676,6 +704,11 @@ class TrainingHubApp(tk.Tk):
         from .ui_patterns import nav_label as _nav_label
 
         self._sidebar_compact = not self._sidebar_compact
+        try:
+            self.settings.sidebar_compact = bool(self._sidebar_compact)
+            self.save_settings()
+        except Exception:
+            pass
         try:
             self._sidebar_frame.configure(
                 width=64 if self._sidebar_compact else 200)

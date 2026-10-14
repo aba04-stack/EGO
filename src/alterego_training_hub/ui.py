@@ -701,7 +701,17 @@ class TrainingHubApp(tk.Tk):
     def morning_report_text(self) -> str:
         from .night_watch import morning_report
 
-        return morning_report(self.night_watch_log().entries())
+        actions = []
+        chat = self.pages.get("chat")
+        session = getattr(chat, "session", None)
+        if session is not None:
+            try:
+                from .action_trace import action_entries_from_messages
+
+                actions = action_entries_from_messages(session.messages)
+            except Exception:  # noqa: BLE001 - report must not die on odd data
+                actions = []
+        return morning_report(self.night_watch_log().entries(), actions=actions)
 
     def _handle_event(self, kind: str, payload: dict):
         if kind == "confirm":

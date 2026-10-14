@@ -146,8 +146,14 @@ def run_check(mentor, *, tail: str, dashboard: str,
                           issues=problems + [str(exc)[:120]], ok=False)
 
 
-def morning_report(entries: list[WatchEntry], *, title: str = "") -> str:
-    """Fold night entries into one summary block."""
+def morning_report(entries: list[WatchEntry], *, title: str = "",
+                   actions: list | None = None) -> str:
+    """Fold night entries into one summary block.
+
+    ``actions`` (optional :class:`~alterego_training_hub.action_trace.ActionEntry`
+    items) appends a «Действия агента за ночь» section so the morning summary
+    links to what the agent actually did, not just what it concluded.
+    """
     items = list(entries or [])
     lines = [f"🌅 {title or 'Итог ночного дежурства'}"]
     if not items:
@@ -166,6 +172,9 @@ def morning_report(entries: list[WatchEntry], *, title: str = "") -> str:
     if distinct:
         lines.append("Замечания за ночь:")
         lines.extend(f"  — {issue}" for issue in distinct[:8])
+    if actions:
+        lines.append("Действия агента за ночь:")
+        lines.extend(f"  {entry.line()}" for entry in list(actions)[-8:])
     return "\n".join(lines)
 
 

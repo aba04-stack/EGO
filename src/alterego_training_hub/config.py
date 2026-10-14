@@ -62,6 +62,9 @@ class AppSettings:
     synced_at: float = 0.0
     night_watch_enabled: bool = False
     night_watch_interval: int = 30  # minutes between night checks
+    # Прозрачность ЛЛМ (этап 26)
+    thought_protocol: bool = True   # структурный протокол «Мысль/Действие/Ответ»
+    critic_enabled: bool = False    # самопроверка ответов («Критик»)
 
     @classmethod
     def load(cls, path: Path | None = None) -> AppSettings:

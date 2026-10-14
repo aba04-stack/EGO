@@ -1581,3 +1581,58 @@ def test_stage25_night_watch_dashboard_colab(fake_ui, tmp_path):
     exports = list((app.model_registry().library_dir / "exports").glob("*.ipynb"))
     assert exports
     assert "train.py" in exports[0].read_text(encoding="utf-8")
+
+
+def test_stage26_transparency_thoughts_actions_context_critic(fake_ui, tmp_path):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    chat = app.chat_panel
+
+    # --- transparency buttons exist and text helpers work on empty session
+    assert "нет ответов" in chat.last_thought_text()
+    assert "не вызывал" in chat.actions_text()
+    context = chat.context_text()
+    assert "Модель:" in context and "Системный промпт" in context
+
+    # --- thought protocol renders as steps, answer stays clean
+    chat.session.add(
+        "assistant",
+        "Мысль: смотрю лог\nДействие: читаю метрики\nОтвет: Всё стабильно.")
+    thoughts = chat.last_thought_text()
+    assert "💭 Мысль: смотрю лог" in thoughts
+    assert "⚙ Действие: читаю метрики" in thoughts
+    chat._render_messages()
+    rendered = chat.messages.get("1.0", "end") or ""
+    assert "Всё стабильно." in rendered
+
+    # --- action trace from tool messages + explain prompt
+    chat.session.add("tool", '{"ok": true, "summary": "прочитано 12 строк"}',
+                     name="read_file")
+    actions = chat.actions_text()
+    assert "read_file" in actions and "прочитано" in actions
+    entries = chat.action_entries()
+    assert entries and entries[-1].ok
+
+    # --- model page: transparency toggles persist + samples hint
+    model_page = app.pages["model"]
+    model_page.thought_var.set(False)
+    model_page.critic_var.set(True)
+    model_page.save_transparency()
+    assert app.settings.thought_protocol is False
+    assert app.settings.critic_enabled is True
+    assert "Сэмплов в логе" in model_page.samples_text()
+
+    # --- critic via fake mentor posts a verdict into the chat
+    class _Reply:
+        text = "ВЕРДИКТ: ок\nУВЕРЕННОСТЬ: 0.9\nПРОБЛЕМЫ: —"
+        usage = {}
+        model = "fake"
+
+    class _Mentor:
+        def respond(self, messages, *, tools=None, max_tokens=0, temperature=0.0):
+            return _Reply()
+
+    app.mentor_client = lambda: _Mentor()
+    app.start_async = lambda label, task, done=None, failed=None: done(task())
+    chat.run_critique_last()
+    assert any("Критик" in m.content for m in chat.session.messages)

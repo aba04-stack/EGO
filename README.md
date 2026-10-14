@@ -180,6 +180,9 @@ This is a desktop control-plane MVP, not yet an end-to-end training orchestratio
 The next milestone is a typed remote training worker with resumable checkpoint/data transfers, explicit elapsed-time and total-cost guards, live logs, and end-to-end tests on a short disposable job.
 
 ## Releases
+- 0.24.0: LLM transparency — thought protocol («Thought → Action → Answer»),
+  action trace of every tool call, context/token/cost view, second-pass
+  answer critic, and generation samples parsed from training logs.
 - 0.23.0: intelligence — overnight agent watch with a morning report,
   metrics dashboards posted into chat, and Colab notebook export from the
   cloud job queue.

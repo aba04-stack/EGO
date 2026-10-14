@@ -23,6 +23,10 @@ class ChatPage(tk.Frame):
         self.session = ChatSession()
         self._sessions_cache: list[ChatSession] = []
         self._busy = False
+        self._last_usage: dict = {}
+        self._last_model: str = ""
+        self._last_question: str = ""
+        self._last_answer: str = ""
         self._build()
 
     # ------------------------------------------------------------------ UI
@@ -250,6 +254,102 @@ class ChatPage(tk.Frame):
         self.session.add("assistant", text)
         self._render_messages()
 
+    # ------------------------------------------------- прозрачность (этап 26)
+    def last_thought_text(self) -> str:
+        """Protocol («Мысль → Действие → Ответ») of the last assistant reply."""
+        from .thought_stream import parse_thought_block, render_thoughts_or_hint
+
+        for message in reversed(self.session.messages):
+            if message.role == "assistant" and message.content:
+                record = parse_thought_block(message.content)
+                return render_thoughts_or_hint(
+                    record,
+                    hint=t('Модель не использовала структурный протокол в последнем ответе. Включите «Протокол мыслей» на странице «Модель» — тогда каждый ответ будет раскрываться в цепочку «Мысль → Действие → Ответ».'))
+        return t('Пока нет ответов наставника.')
+
+    def show_thoughts(self):
+        messagebox.showinfo(t('Мысли агента'), self.last_thought_text(),
+                            parent=self)
+
+    def action_entries(self):
+        from .action_trace import action_entries_from_messages
+
+        return action_entries_from_messages(self.session.messages)
+
+    def actions_text(self) -> str:
+        entries = self.action_entries()
+        if not entries:
+            return t('Агент пока не вызывал инструментов в этом диалоге.')
+        return "\n".join(entry.line() for entry in entries[-20:])
+
+    def show_actions(self):
+        messagebox.showinfo(t('Что агент сделал'), self.actions_text(),
+                            parent=self)
+
+    def explain_last_action(self):
+        """Ask the agent to explain its most recent tool call."""
+        from .action_trace import explain_prompt
+
+        entries = self.action_entries()
+        if not entries:
+            messagebox.showinfo(t('Действия'), self.actions_text(), parent=self)
+            return
+        self.send_preset(explain_prompt(entries[-1]))
+
+    def context_text(self) -> str:
+        from .agent import DEFAULT_AGENT_SYSTEM_PROMPT
+        from .context_view import build_context_view
+
+        system_extra = str(getattr(self.app.settings, "agent_system_extra", "") or "")
+        system = DEFAULT_AGENT_SYSTEM_PROMPT
+        if system_extra:
+            system += "\n\nAdditional user instructions:\n" + system_extra[:2000]
+        view = build_context_view(
+            system_prompt=system,
+            messages=self.session.history_for_api(),
+            model=self._last_model or self.app.settings.mentor_model,
+            last_usage=self._last_usage)
+        return view.render()
+
+    def show_context(self):
+        messagebox.showinfo(t('Контекст модели'), self.context_text(),
+                            parent=self)
+
+    def run_critique_last(self):
+        """Second read-only pass: check the last answer against evidence."""
+        from .critique import run_critic
+
+        answer = self._last_answer
+        if not answer:
+            for message in reversed(self.session.messages):
+                if message.role == "assistant" and message.content:
+                    answer = message.content
+                    break
+        if not answer:
+            messagebox.showinfo(t('Критик'), t('Пока нет ответов для проверки.'),
+                                parent=self)
+            return
+        try:
+            mentor = self.app.mentor_client()
+        except MentorError as exc:
+            messagebox.showerror(t('Критик'), str(exc), parent=self)
+            return
+        evidence = self.actions_text()
+        if "не вызывал" in evidence:
+            evidence = ""
+
+        def work():
+            return run_critic(mentor, question=self._last_question,
+                              answer=answer, evidence=evidence)
+
+        def done(report):
+            self.session.add("assistant", "🔍 " + t('Критик') + ": "
+                             + report.flag() + "\n" + report.render())
+            self.store.save(self.session)
+            self._render_messages()
+
+        self.app.start_async(t('Проверка ответа'), work, done)
+
     # --------------------------------------------------------------- render
     def _render_messages(self):
         set_text(self.messages, "")
@@ -265,8 +365,16 @@ class ChatPage(tk.Frame):
                 self._insert_bubble(t('Вы'), message.content, "user", message.created_at)
             elif message.role == "assistant":
                 if message.content:
-                    self._insert_bubble(t('Наставник'), message.content, "assistant",
-                                        message.created_at)
+                    from .thought_stream import parse_thought_block
+
+                    record = parse_thought_block(message.content)
+                    if record.has_protocol:
+                        for step in record.steps:
+                            self.messages.insert("end", step.line() + "\n", "sys")
+                    self._insert_bubble(
+                        t('Наставник'),
+                        record.answer if record.has_protocol else message.content,
+                        "assistant", message.created_at)
                 for call in message.tool_calls:
                     fn = call.get("function", {})
                     self.messages.insert("end",
@@ -374,6 +482,10 @@ class ChatPage(tk.Frame):
             self._busy = False
             self.send_btn.configure(state="normal")
             reply = value
+            self._last_question = text
+            self._last_answer = reply.text or ""
+            self._last_usage = dict(getattr(reply, "usage", {}) or {})
+            self._last_model = str(getattr(reply, "model", "") or "")
             for item in transcript:
                 self.session.messages.append(ChatMessage.from_dict(item))
             self.session.add("assistant", reply.text)
@@ -381,6 +493,8 @@ class ChatPage(tk.Frame):
             self._maybe_save_report(reply.text)
             self._render_messages()
             self.refresh_sessions()
+            if getattr(settings, "critic_enabled", False) and reply.text:
+                self.run_critique_last()
 
         def failed(_error: str):
             self._busy = False

@@ -155,6 +155,60 @@ class ModelDashboardPage(tk.Frame):
                  fg=C["muted"], font=F_SMALL, wraplength=860,
                  justify="left").pack(anchor="w")
 
+        # ---- Прозрачность ЛЛМ и генерации при обучении (этап 26) ---------
+        trans = Collapsible(self, t('Прозрачность и генерации'))
+        trans.pack(fill="x", padx=24, pady=(0, 12))
+        trans_card = trans.body
+        tk.Label(trans_card,
+                 text=t('Протокол «Мысль → Действие → Ответ» раскрывает, почему агент ответил так; «Критик» вторым проходом сверяет ответ с действиями и метриками; сэмплы показывают, что модель реально генерирует при обучении.'),
+                 bg=C["panel"], fg=C["muted"], font=F_SMALL, wraplength=860,
+                 justify="left").pack(anchor="w")
+        trans_row = tk.Frame(trans_card, bg=C["panel"])
+        trans_row.pack(fill="x", pady=(6, 2))
+        self.thought_var = tk.BooleanVar(
+            value=bool(getattr(self.app.settings, "thought_protocol", True)))
+        tk.Checkbutton(trans_row, text=t('Протокол мыслей'),
+                       variable=self.thought_var, bg=C["panel"], font=F_BASE,
+                       command=self.save_transparency).pack(side="left")
+        self.critic_var = tk.BooleanVar(
+            value=bool(getattr(self.app.settings, "critic_enabled", False)))
+        tk.Checkbutton(trans_row, text=t('Критик ответов'),
+                       variable=self.critic_var, bg=C["panel"], font=F_BASE,
+                       command=self.save_transparency).pack(side="left", padx=(12, 0))
+        ttk.Button(trans_row, text=t('Сэмплы генерации'),
+                   command=self.show_samples).pack(side="left", padx=8)
+        self.samples_var = tk.StringVar(value="")
+        tk.Label(trans_card, textvariable=self.samples_var, bg=C["panel"],
+                 fg=C["muted"], font=F_SMALL, wraplength=860,
+                 justify="left").pack(anchor="w")
+
+    def save_transparency(self):
+        self.app.settings.thought_protocol = bool(self.thought_var.get())
+        self.app.settings.critic_enabled = bool(self.critic_var.get())
+        self.app.save_settings()
+        self.samples_var.set(t('Сохранено: протокол — {v1}, критик — {v2}').format(
+            v1=t('вкл') if self.thought_var.get() else t('выкл'),
+            v2=t('вкл') if self.critic_var.get() else t('выкл')))
+
+    def samples_text(self) -> str:
+        from .gen_preview import format_samples, parse_samples
+
+        try:
+            tail = self.app.training.tail(20000)
+        except Exception:  # noqa: BLE001 - page must not die on odd logs
+            tail = ""
+        samples = parse_samples(tail or "")
+        if not samples:
+            return t('Сэмплов в логе обучения пока нет. Добавьте в команду обучения печать строк вида {"sample": {"step": 100, "prompt": "…", "text": "…"}} или блоков ### sample @100 — и они появятся здесь.')
+        return format_samples(samples)
+
+    def show_samples(self):
+        from tkinter import messagebox
+
+        text = self.samples_text()
+        self.samples_var.set(text.splitlines()[0] if text else "")
+        messagebox.showinfo(t('Сэмплы генерации'), text, parent=self)
+
     def save_night_watch(self):
         enabled = bool(self.night_enabled_var.get())
         try:

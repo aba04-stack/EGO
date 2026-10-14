@@ -45,3 +45,12 @@ def test_release_api_url():
         "repos/aba04-stack/-/releases/latest")
     assert release_api_url("/owner/repo/").endswith(
         "repos/owner/repo/releases/latest")
+
+
+def test_no_releases_is_friendly():
+    def not_found(_url):
+        raise OSError("HTTP Error 404: Not Found")
+
+    report = check_update("1.8.0", fetcher=not_found)
+    assert report.error == "no_releases"
+    assert "Релизов пока не опубликовано" in report.render()

@@ -180,6 +180,7 @@ This is a desktop control-plane MVP, not yet an end-to-end training orchestratio
 The next milestone is a typed remote training worker with resumable checkpoint/data transfers, explicit elapsed-time and total-cost guards, live logs, and end-to-end tests on a short disposable job.
 
 ## Releases
+- 1.8.1: stabilization from a no-mocks real check (scripts/real_check.py, also in CI) — fixed near-dup/decontamination on messages-format datasets and the update check's 404 message; real torch training of the generated script verified end to end.
 - 1.8.0: background budget daemon — the total cloud cap is enforced every two minutes without opening the GPU page; autostopped pods are logged to the activity feed.
 - 1.7.0: provider embeddings for semantic search when configured (cache invalidates per embedder/model), and Inter + JetBrains Mono fonts bundled and auto-registered on startup.
 - 1.6.0: git plugin market (catalog.json or per-folder plugins, clone/pull cache, one-click install) and modern font stacks — Inter/Segoe UI Variable UI font, JetBrains Mono/Cascadia code font, auto-detected at startup.

@@ -42,6 +42,9 @@ class UpdateReport:
     error: str = ""
 
     def render(self) -> str:
+        if self.error == "no_releases":
+            return ("Релизов пока не опубликовано — вы на свежей сборке "
+                    f"{self.current}.")
         if self.error:
             return f"Не удалось проверить обновления: {self.error}"
         if not self.latest:
@@ -73,6 +76,8 @@ def check_update(current: str, *, repo: str = DEFAULT_REPO,
     try:
         data = fetch(release_api_url(repo))
     except Exception as exc:
+        if "404" in str(exc):
+            return UpdateReport(current=current, error="no_releases")
         return UpdateReport(current=current,
                             error=f"{type(exc).__name__}: {exc}"[:200])
     tag = str(data.get("tag_name") or data.get("name") or "").strip()

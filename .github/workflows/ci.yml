@@ -27,6 +27,8 @@ jobs:
           python -m coverage report
       - name: Types (mypy, чистые модули)
         run: python -m mypy
+      - name: Real end-to-end check (без моков)
+        run: python scripts/real_check.py --quick
 
   build:
     runs-on: ubuntu-latest

@@ -17,10 +17,18 @@ def _text_of(row) -> str:
     if isinstance(row, str):
         return row
     if isinstance(row, dict):
+        messages = row.get("messages")
+        if isinstance(messages, list):
+            parts = [str(m.get("content", "")) for m in messages
+                     if isinstance(m, dict) and m.get("content")]
+            if parts:
+                return "\n".join(parts)
         for key in ("text", "prompt", "instruction", "question", "input", "content"):
             value = row.get(key)
             if isinstance(value, str) and value.strip():
-                return value
+                answer = row.get("output") or row.get("completion") \
+                    or row.get("response") or ""
+                return value + (f"\n{answer}" if answer else "")
         return " ".join(str(v) for v in row.values() if isinstance(v, str))
     return str(row or "")
 

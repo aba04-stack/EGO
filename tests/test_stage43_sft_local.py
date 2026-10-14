@@ -41,8 +41,8 @@ def test_near_dup_and_dedupe():
     ]
     pairs = near_duplicate_pairs(rows, threshold=0.6)
     assert pairs and pairs[0][0] == 0 and pairs[0][1] == 1
-    kept, removed = dedupe_near(rows, threshold=0.6)
-    assert removed == 1 and len(kept) == 2
+    _kept, removed = dedupe_near(rows, threshold=0.6)
+    assert removed == 1 and len(_kept) == 2
 
 
 def test_decontamination_removes_leakage():
@@ -85,3 +85,16 @@ def test_local_manager_with_fake_runner():
         li.shutil.which = original
     assert status.up and manager.running
     assert manager.stop() and not manager.running
+
+
+def test_messages_format_text_extraction():
+    rows = [
+        {"messages": [{"role": "user", "content": "Обучение нейросети требует данных"},
+                      {"role": "assistant", "content": "Да, и времени"}]},
+        {"messages": [{"role": "user", "content": "Обучение нейросети требует данных!"},
+                      {"role": "assistant", "content": "Да, и времени!"}]},
+    ]
+    _kept, removed = dedupe_near(rows, threshold=0.5)
+    assert removed == 1
+    result = decontaminate(rows, [rows[0]], threshold=0.5)
+    assert len(result.contaminated) == 2

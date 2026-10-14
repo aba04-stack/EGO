@@ -1,0 +1,17 @@
+{
+    "Ночное дежурство": "Night watch",
+    "Агент периодически проверяет обучение ночью и к утру готовит итог: состояние, риски и одно действие.": "The agent checks training overnight and prepares a morning sum: state, risks and one action.",
+    "Включить дежурство": "Enable night watch",
+    "Интервал (мин)": "Interval (min)",
+    "Проверить сейчас": "Check now",
+    "Итог утром": "Morning report",
+    "Включено · интервал {v1} мин": "Enabled · interval {v1} min",
+    "Выключено": "Disabled",
+    "Последнее наблюдение:": "Last observation:",
+    "Ночная проверка": "Night check",
+    "Ночная проверка: ": "Night check: ",
+    "Ночной снимок": "Night snapshot",
+    "Метрики": "Metrics",
+    "Colab": "Colab",
+    "Ноутбук сохранён: ": "Notebook saved: "
+}

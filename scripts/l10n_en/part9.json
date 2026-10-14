@@ -1,0 +1,14 @@
+{
+    "Доверять плагину": "Trust plugin",
+    "Не доверять": "Untrust",
+    "Каталог плагинов": "Plugin catalog",
+    "Установить из каталога": "Install from catalog",
+    "Удалить плагин": "Delete plugin",
+    "Выберите плагин.": "Select a plugin.",
+    "Выберите запись каталога.": "Select a catalog entry.",
+    "Плагин установлен: ": "Plugin installed: ",
+    "Плагин удалён: ": "Plugin deleted: ",
+    "доверенный": "trusted",
+    "песочница": "sandboxed",
+    "Плагины": "Plugins"
+}

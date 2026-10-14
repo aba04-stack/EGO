@@ -56,7 +56,7 @@ def repo_name_from_url(url: str) -> str:
     else:
         path = urlsplit(safe_url).path
     name = path.rstrip("/").rsplit("/", 1)[-1]
-    return name[:-4] if name.endswith(".git") else name
+    return name.removesuffix(".git")
 
 
 class GitRepositoryManager:
@@ -170,6 +170,79 @@ class GitRepositoryManager:
         except GitRepositoryError:
             pass
         return RepositoryStatus(str(root), branch, remote_display, changes, ahead_behind)
+
+    def _safe_path(self, root: Path, rel: str | Path) -> Path:
+        candidate = (root / rel).resolve() if str(rel) else root
+        if candidate != root and not candidate.is_relative_to(root):
+            raise GitRepositoryError("Path escapes the repository folder.")
+        return candidate
+
+    def _rel_paths(self, root: Path, paths: list[str | Path]) -> list[str]:
+        if not paths:
+            raise GitRepositoryError("Select at least one file.")
+        rels: list[str] = []
+        for path in paths:
+            target = self._safe_path(root, path)
+            rels.append(str(target.relative_to(root)) if target != root else ".")
+        return rels
+
+    def stage(self, repo: str | Path, paths: list[str | Path]) -> str:
+        root = self.connect_local(repo)
+        self._git(["add", "--", *self._rel_paths(root, paths)], cwd=root)
+        return self.status(root).branch
+
+    def unstage(self, repo: str | Path, paths: list[str | Path]) -> str:
+        root = self.connect_local(repo)
+        self._git(["restore", "--staged", "--", *self._rel_paths(root, paths)],
+                  cwd=root)
+        return self.status(root).branch
+
+    def discard_file(self, repo: str | Path, path: str | Path) -> None:
+        """Discard worktree changes for one file (deletes untracked files)."""
+        root = self.connect_local(repo)
+        target = self._safe_path(root, path)
+        rel = str(target.relative_to(root))
+        if not target.exists():
+            raise GitRepositoryError(f"File does not exist: {rel}")
+        if target.is_dir():
+            raise GitRepositoryError("Refusing to discard a folder.")
+        tracked = self._git(["ls-files", "--", rel], cwd=root)
+        if tracked:
+            self._git(["restore", "--worktree", "--", rel], cwd=root)
+        else:
+            target.unlink()
+
+    def commit(self, repo: str | Path, message: str) -> str:
+        root = self.connect_local(repo)
+        message = str(message).strip()
+        if not message:
+            raise GitRepositoryError("Commit message cannot be empty.")
+        if "\x00" in message:
+            raise GitRepositoryError("Commit message contains invalid characters.")
+        return self._git(["commit", "-m", message], cwd=root)
+
+    def push(self, repo: str | Path) -> str:
+        root = self.connect_local(repo)
+        return self._git(["push"], cwd=root) or "Push completed."
+
+    def diff_text(self, repo: str | Path, *, path: str | Path | None = None,
+                  staged: bool = False, against_head: bool = False) -> str:
+        root = self.connect_local(repo)
+        args = ["diff", "--no-color"]
+        if against_head:
+            args.append("HEAD")
+        elif staged:
+            args.append("--cached")
+        if path is not None:
+            args.extend(["--", str(self._safe_path(root, path).relative_to(root))])
+        return self._git(args, cwd=root)
+
+    def numstat(self, repo: str | Path, *, staged: bool = False) -> str:
+        root = self.connect_local(repo)
+        args = ["diff", "--numstat"]
+        if staged:
+            args.append("--cached")
+        return self._git(args, cwd=root)
 
     def _remote_exists(self, root: Path) -> bool:
         result = subprocess.run(

@@ -1,0 +1,16 @@
+{
+    "Baseline снят: ": "Baseline saved: ",
+    "Датасет (файл)": "Dataset (file)",
+    "До / после": "Before / after",
+    "Мастер «Своя ЛЛМ»": "“Your own LLM” wizard",
+    "Обучить токенизатор": "Train tokenizer",
+    "План «Своя ЛЛМ»": "“Your own LLM” plan",
+    "Пресет": "Preset",
+    "Путь": "Path",
+    "Путь от своих данных до обученной модели: выберите путь и пресет, укажите датасет — мастер проверит данные, посчитает GPU/часы/цену до старта и даст рекомендации.": "From your data to a trained model: pick a path and a preset, point at a dataset — the wizard audits the data, estimates GPU/hours/price before start and gives recommendations.",
+    "Рассчитать план": "Calculate plan",
+    "Снять baseline": "Save baseline",
+    "Сравнить до/после": "Compare before/after",
+    "Токенизатор сохранён: {v1} · словарь {v3}, {v5} симв/токен": "Tokenizer saved: {v1} · vocab {v3}, {v5} chars/token",
+    "Укажите текстовый датасет для токенизатора.": "Point at a text dataset for the tokenizer."
+}

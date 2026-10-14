@@ -4,9 +4,8 @@ from __future__ import annotations
 import json
 import os
 import sys
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
 
 
 APP_NAME = "AlterEgoTrainingHub"
@@ -32,13 +31,43 @@ class AppSettings:
     mentor_provider: str = "OpenAI-compatible"
     mentor_base_url: str = ""
     mentor_model: str = ""
+    mentor_temperature: float = 0.2
+    mentor_max_tokens: int = 1200
+    model_library_path: str = ""
+    active_model_id: str = ""
+    chat_autonomy: str = "assist"  # "assist" | "agent"
+    ui_theme: str = "light"  # "light" | "dark"
+    llm_provider: str = "openai"  # id from llm_providers.PROVIDERS
+    agent_max_steps: int = 20
+    agent_verify: bool = True
+    agent_subagents: bool = True
+    agent_reasoning: str = "medium"  # off | low | medium | high
+    agent_system_extra: str = ""
+    agent_profile: str = "full"  # preset id from agent_profiles
+    access_role: str = "owner"  # owner | editor | viewer (guest, read-only)
+    ui_language: str = "ru"  # ru | en (i18n)
+    active_layout: str = "code"  # named layout from layouts.NAMED_LAYOUTS
+    hotkeys: dict = field(default_factory=dict)  # action id -> bind sequence
+    gmail_from: str = ""
+    training_command: str = "python -m pytest -q"
     runpod_cloud: str = "SECURE"
     runpod_max_gpu_hourly_usd: float = 0.50
     runpod_container_disk_gb: int = 30
     runpod_image: str = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1"
+    # Panel docking (drag-and-drop) and settings sync
+    sidebar_side: str = "left"   # left | right
+    chat_side: str = "right"     # left | right
+    bottom_height: int = 210     # px
+    settings_sync_dir: str = ""
+    synced_at: float = 0.0
+    night_watch_enabled: bool = False
+    night_watch_interval: int = 30  # minutes between night checks
+    # Прозрачность ЛЛМ (этап 26)
+    thought_protocol: bool = True   # структурный протокол «Мысль/Действие/Ответ»
+    critic_enabled: bool = False    # самопроверка ответов («Критик»)
 
     @classmethod
-    def load(cls, path: Path | None = None) -> "AppSettings":
+    def load(cls, path: Path | None = None) -> AppSettings:
         settings_path = path or (app_data_dir() / "settings.json")
         if not settings_path.exists():
             return cls()

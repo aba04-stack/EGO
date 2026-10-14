@@ -77,3 +77,54 @@ def test_checkout_refuses_to_discard_dirty_work(tmp_path):
     (repo / "README.md").write_text("modified\n", encoding="utf-8")
     with pytest.raises(GitRepositoryError, match="uncommitted"):
         GitRepositoryManager().checkout_branch(repo, "main")
+
+
+def test_stage_unstage_commit_flow(tmp_path):
+    repo = tmp_path / "model"
+    _make_repo(repo)
+    manager = GitRepositoryManager()
+    (repo / "train.py").write_text("print('hi')\n", encoding="utf-8")
+
+    manager.stage(repo, ["train.py"])
+    status = manager.status(repo)
+    assert any("train.py" in line for line in status.changes)
+    assert "+print" in manager.diff_text(repo, staged=True)
+
+    manager.unstage(repo, ["train.py"])
+    status = manager.status(repo)
+    assert any(line.startswith("??") and "train.py" in line
+               for line in status.changes)
+
+    manager.stage(repo, ["train.py"])
+    manager.commit(repo, "add train script")
+    status = manager.status(repo)
+    assert status.changes == ()
+    assert manager.numstat(repo) == ""
+    assert manager.diff_text(repo, against_head=True) == ""
+
+
+def test_discard_file_restores_tracked_and_deletes_untracked(tmp_path):
+    repo = tmp_path / "model"
+    _make_repo(repo)
+    manager = GitRepositoryManager()
+    (repo / "README.md").write_text("modified\n", encoding="utf-8")
+    manager.discard_file(repo, "README.md")
+    assert (repo / "README.md").read_text(encoding="utf-8") == "test\n"
+
+    (repo / "scratch.txt").write_text("x", encoding="utf-8")
+    manager.discard_file(repo, "scratch.txt")
+    assert not (repo / "scratch.txt").exists()
+
+
+def test_commit_and_stage_safety_checks(tmp_path):
+    repo = tmp_path / "model"
+    _make_repo(repo)
+    manager = GitRepositoryManager()
+    with pytest.raises(GitRepositoryError):
+        manager.commit(repo, "   ")
+    with pytest.raises(GitRepositoryError):
+        manager.stage(repo, [])
+    with pytest.raises(GitRepositoryError):
+        manager.stage(repo, ["../outside.txt"])
+    with pytest.raises(GitRepositoryError):
+        manager.discard_file(repo, "missing.txt")

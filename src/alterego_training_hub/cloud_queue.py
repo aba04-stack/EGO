@@ -156,7 +156,7 @@ class CloudJobQueue:
         }
         try:
             pod = client.create_pod(plan, confirmed=True)
-        except Exception as exc:  # noqa: BLE001 - recorded, queue stays usable
+        except Exception as exc:
             return self.update(job_id, status="failed",
                                error=f"{type(exc).__name__}: {exc}")
         pod_id = str(pod.get("id") or pod.get("podId") or "")
@@ -170,7 +170,7 @@ class CloudJobQueue:
             return job
         try:
             pods = client.list_pods()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return self.update(job_id, error=f"сбой опроса: {exc}")
         for pod in pods:
             if str(pod.get("id") or "") == job.pod_id:

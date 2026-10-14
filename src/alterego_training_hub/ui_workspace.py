@@ -1,13 +1,13 @@
 """Workspace page: choose the working folder and manage the Git repository."""
 from __future__ import annotations
-from .i18n import t
 
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from .git_manager import GitRepositoryError
-from .ui_common import C, F_BASE, F_SMALL, card, page_header, set_text
+from .i18n import t
+from .ui_common import F_BASE, F_SMALL, C, card, page_header, set_text
 
 
 class WorkspacePage(tk.Frame):

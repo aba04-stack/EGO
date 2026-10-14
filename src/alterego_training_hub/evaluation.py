@@ -20,7 +20,7 @@ def perplexity(loss: float) -> float:
         value = float(loss)
     except (TypeError, ValueError):
         return float("nan")
-    if value != value:  # NaN
+    if math.isnan(value):  # NaN
         return float("nan")
     return math.exp(min(value, 20.0))
 

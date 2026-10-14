@@ -1,13 +1,13 @@
 """Servers page: connect remote machines over SSH, inspect and run commands."""
 from __future__ import annotations
-from .i18n import t
 
 import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+from .i18n import t
 from .servers import ServerEntry, ServerError, ServerManager
-from .ui_common import C, F_BASE, F_MONO, F_SMALL, Collapsible, page_header, set_text
+from .ui_common import F_BASE, F_MONO, F_SMALL, C, Collapsible, page_header, set_text
 
 
 class ServersPage(tk.Frame):
@@ -227,7 +227,7 @@ class ServersPage(tk.Frame):
     def test_connection(self):
         entry = self._selected_entry()
         if entry is not None:
-            task = lambda: self._manager().test_connection(entry.id)  # noqa: E731
+            task = lambda: self._manager().test_connection(entry.id)
             label = entry.name
         else:
             try:
@@ -236,7 +236,7 @@ class ServersPage(tk.Frame):
             except (ServerError, ValueError) as exc:
                 messagebox.showerror(t('Серверы'), str(exc), parent=self)
                 return
-            task = lambda: self._test_unsaved(entry)  # noqa: E731
+            task = lambda: self._test_unsaved(entry)
             label = entry.name or entry.host
 
         def done(result):

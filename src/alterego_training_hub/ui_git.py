@@ -1,13 +1,13 @@
 """Bottom-panel source control: changed files, diff preview, commit/push."""
 from __future__ import annotations
-from .i18n import t
 
 import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, ttk
 
 from .git_manager import GitRepositoryError
-from .ui_common import C, F_BASE, F_MONO, F_SMALL
+from .i18n import t
+from .ui_common import F_BASE, F_MONO, F_SMALL, C
 from .vcs import classify_diff_lines, parse_numstat, parse_porcelain
 
 

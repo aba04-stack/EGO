@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from dataclasses import replace
-from typing import Any, Callable
+from typing import Any
 
 from .mentor import ApiMentor, MentorReply, ToolCall
 from .tools import TOOL_NAMES, WORKSPACE_TOOL_SCHEMAS, WorkspaceTools
@@ -701,7 +702,7 @@ class MentorAgent:
                 if self.needs_confirmation(call.name):
                     try:
                         approved = bool(confirm(call.name, call.arguments, description))
-                    except Exception:  # noqa: BLE001 - a broken dialog must not run mutations
+                    except Exception:
                         approved = False
                     if not approved:
                         result: dict[str, Any] = {
@@ -712,7 +713,7 @@ class MentorAgent:
                     result = self.extra_tools[call.name](call.arguments or {})
                 if not isinstance(result, dict):
                     result = {"ok": True, "result": str(result)}
-            except Exception as exc:  # noqa: BLE001 - tool boundary must not crash
+            except Exception as exc:
                 result = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
         elif call.name not in TOOL_NAMES:
             result = {"ok": False, "error": f"Неизвестный инструмент: {call.name}"}
@@ -721,7 +722,7 @@ class MentorAgent:
         elif self.needs_confirmation(call.name):
             try:
                 approved = bool(confirm(call.name, call.arguments, description))
-            except Exception:  # noqa: BLE001 - a broken dialog must not run mutations
+            except Exception:
                 approved = False
             if not approved:
                 result = {"ok": False, "error": "Действие отклонено пользователем."}

@@ -140,8 +140,7 @@ def models_endpoint(base_url: str, api_style: str) -> str:
         else:
             value += "/v1"
         return value + "/models"
-    if value.endswith("/chat/completions"):
-        value = value[: -len("/chat/completions")]
+    value = value.removesuffix("/chat/completions")
     return value + "/models"
 
 

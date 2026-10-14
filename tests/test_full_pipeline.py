@@ -14,8 +14,7 @@ from alterego_training_hub.cloud_queue import CloudJob, CloudJobQueue
 from alterego_training_hub.evaluation import build_eval_report
 from alterego_training_hub.hparam_tuning import apply_suggestions, suggest_fixes
 from alterego_training_hub.metrics import parse_log
-from alterego_training_hub.report_export import (ReportContext, _inline,
-                                                 save_report)
+from alterego_training_hub.report_export import ReportContext, _inline, save_report
 from alterego_training_hub.templates import create_project
 from alterego_training_hub.training import read_control, write_control
 from alterego_training_hub.watchdog import TrainingWatchdog
@@ -135,8 +134,7 @@ def test_hotkey_case_variants_cover_shift_letters():
 
 def test_version_is_templated_and_package_version_readable():
     from alterego_training_hub import __version__
-    from alterego_training_hub.i18n import (current_language, set_language,
-                                            t)
+    from alterego_training_hub.i18n import current_language, set_language, t
 
     assert __version__.count(".") >= 2
     previous = current_language()

@@ -141,9 +141,9 @@ def run_check(mentor, *, tail: str, dashboard: str,
         return WatchEntry(summary=text.splitlines()[0][:200] if text
                           else "пустой ответ наставника",
                           issues=problems, ok=bool(text))
-    except Exception as exc:  # noqa: BLE001 - overnight loop must survive
+    except Exception as exc:
         return WatchEntry(summary=f"ошибка опроса: {type(exc).__name__}",
-                          issues=problems + [str(exc)[:120]], ok=False)
+                          issues=[*problems, str(exc)[:120]], ok=False)
 
 
 def morning_report(entries: list[WatchEntry], *, title: str = "",

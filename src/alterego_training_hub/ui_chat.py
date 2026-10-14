@@ -1,6 +1,5 @@
 """Right-side chat panel: mentor assistant or autonomous agent with tools."""
 from __future__ import annotations
-from .i18n import t
 
 import time
 import tkinter as tk
@@ -8,9 +7,10 @@ from tkinter import messagebox, ttk
 
 from .agent import MentorAgent
 from .chat import ChatMessage, ChatSession, ChatStore
+from .i18n import t
 from .mentor import MentorError
 from .tools import WorkspaceTools
-from .ui_common import C, F_BASE, F_MONO, F_SMALL, set_text
+from .ui_common import F_BASE, F_MONO, F_SMALL, C, set_text
 
 
 class ChatPage(tk.Frame):
@@ -163,7 +163,7 @@ class ChatPage(tk.Frame):
     def focus_input(self):
         try:
             self.input.focus_set()
-        except Exception:  # noqa: BLE001 - widget may be gone during shutdown
+        except Exception:
             pass
 
     def on_show(self):
@@ -184,7 +184,7 @@ class ChatPage(tk.Frame):
         if var is not None:
             try:
                 query = var.get()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 query = ""
         titles = [session.title for session in self._sessions_cache]
         return filter_titles(titles, query) or [t('Новый диалог')]

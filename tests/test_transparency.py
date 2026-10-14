@@ -2,19 +2,37 @@
 import json
 
 from alterego_training_hub.action_trace import (
-    ActionEntry, ActionTrace, action_entries_from_messages, explain_prompt)
+    ActionEntry,
+    ActionTrace,
+    action_entries_from_messages,
+    explain_prompt,
+)
 from alterego_training_hub.chat import ChatMessage
 from alterego_training_hub.context_view import (
-    build_context_view, estimate_cost, estimate_tokens, format_usage,
-    price_for_model)
+    build_context_view,
+    estimate_cost,
+    estimate_tokens,
+    format_usage,
+    price_for_model,
+)
 from alterego_training_hub.critique import (
-    build_critic_messages, parse_critique, run_critic)
+    build_critic_messages,
+    parse_critique,
+    run_critic,
+)
 from alterego_training_hub.gen_preview import (
-    compare_samples, format_sample, format_samples, parse_samples,
-    perplexity_from_loss, GenerationSample)
+    GenerationSample,
+    compare_samples,
+    format_sample,
+    format_samples,
+    parse_samples,
+    perplexity_from_loss,
+)
 from alterego_training_hub.night_watch import WatchEntry, morning_report
 from alterego_training_hub.thought_stream import (
-    parse_thought_block, render_thoughts_or_hint)
+    parse_thought_block,
+    render_thoughts_or_hint,
+)
 
 
 # ---------------------------------------------------------------- thoughts

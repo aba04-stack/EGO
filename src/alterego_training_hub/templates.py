@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-
 class TemplateError(RuntimeError):
     """Scaffolding input error safe to display."""
 

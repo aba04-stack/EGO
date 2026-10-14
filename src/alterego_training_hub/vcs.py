@@ -35,7 +35,7 @@ def parse_porcelain(text: str) -> list[dict]:
             continue
         index, worktree, rest = line[0], line[1], line[2:]
         # Porcelain pads the status with one space before the path.
-        rest = rest[1:] if rest.startswith(" ") else rest
+        rest = rest.removeprefix(" ")
         original = ""
         if " -> " in rest:
             original, rest = rest.split(" -> ", 1)

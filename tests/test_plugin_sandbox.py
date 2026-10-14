@@ -1,8 +1,11 @@
 """Tests for the plugin sandbox: isolation, timeouts, trust levels."""
 from __future__ import annotations
 
-from alterego_training_hub.plugin_sandbox import (describe_plugin, run_tool,
-                                                  static_trusted)
+from alterego_training_hub.plugin_sandbox import (
+    describe_plugin,
+    run_tool,
+    static_trusted,
+)
 from alterego_training_hub.plugins import PluginManager
 
 SAFE_PLUGIN = '''

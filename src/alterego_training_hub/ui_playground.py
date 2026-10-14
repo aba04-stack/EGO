@@ -1,14 +1,14 @@
 """Playground page: probe models and compare answers side by side (A/B)."""
 from __future__ import annotations
-from .i18n import t
 
 import time
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+from .i18n import t
 from .mentor import MentorError
 from .playground import PlaygroundClient, PlaygroundStore
-from .ui_common import C, F_BASE, F_SMALL, Collapsible, card, page_header, set_text
+from .ui_common import F_BASE, F_SMALL, C, Collapsible, card, page_header, set_text
 
 
 class PlaygroundPage(tk.Frame):
@@ -116,7 +116,7 @@ class PlaygroundPage(tk.Frame):
     def refresh_models(self):
         choices = list(self._model_choices())
         self.combo_a.configure(values=choices)
-        self.combo_b.configure(values=[t('— без сравнения —')] + choices)
+        self.combo_b.configure(values=[t('— без сравнения —'), *choices])
         if choices and not self.model_a.get():
             self.model_a.set(choices[0])
         if not self.model_b.get():

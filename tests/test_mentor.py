@@ -1,4 +1,5 @@
 import json
+from typing import ClassVar
 
 import pytest
 
@@ -24,7 +25,7 @@ def test_api_mentor_parses_compatible_response(monkeypatch):
     mentor = ApiMentor("https://api.example.test/v1", "mentor-test", "test-key")
 
     class FakeResponse:
-        headers = {"x-request-id": "request-test"}
+        headers: ClassVar[dict] = {"x-request-id": "request-test"}
 
         def __enter__(self):
             return self
@@ -77,7 +78,7 @@ def test_respond_parses_native_tool_calls(monkeypatch):
     mentor = ApiMentor("https://api.example.test/v1", "mentor-test", "test-key")
 
     class FakeResponse:
-        headers = {}
+        headers: ClassVar[dict] = {}
 
         def __enter__(self):
             return self
@@ -126,7 +127,7 @@ def test_models_endpoint_and_list_models(monkeypatch):
     mentor = ApiMentor("https://api.example.test/v1", "mentor-test", "test-key")
 
     class FakeResponse:
-        headers = {}
+        headers: ClassVar[dict] = {}
 
         def __enter__(self):
             return self

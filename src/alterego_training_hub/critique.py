@@ -116,7 +116,7 @@ def run_critic(mentor: Any, *, question: str = "", answer: str,
         reply = mentor.respond(messages, tools=None, max_tokens=400,
                                temperature=0.0)
         text = getattr(reply, "text", "") or ""
-    except Exception as exc:  # noqa: BLE001 - critic must not break the UI
+    except Exception as exc:
         return CritiqueReport(verdict="suspect", confidence=0.0,
                               issues=(f"ошибка проверки: {exc}",),
                               text=str(exc))

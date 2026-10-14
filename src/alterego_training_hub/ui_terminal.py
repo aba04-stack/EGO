@@ -1,13 +1,13 @@
 """Bottom terminal panel: run commands locally or on a connected server."""
 from __future__ import annotations
-from .i18n import t
 
 import time
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+from .i18n import t
 from .tools import WorkspaceTools
-from .ui_common import C, F_MONO, F_SMALL
+from .ui_common import F_MONO, F_SMALL, C
 
 LOCAL_TARGET = t('Локально')
 
@@ -75,7 +75,7 @@ class TerminalPanel(tk.Frame):
         names = [LOCAL_TARGET]
         try:
             names += [entry.name for entry in self.app.server_manager().list()]
-        except Exception:  # noqa: BLE001 - registry problems must not break UI
+        except Exception:
             pass
         current = self.target.get() or LOCAL_TARGET
         self.target.configure(values=names)

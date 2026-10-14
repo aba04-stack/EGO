@@ -1,13 +1,22 @@
 """Connectors page: GitHub, Hugging Face, Gmail — status, secrets, test actions."""
 from __future__ import annotations
-from .i18n import t
 
 import json
 import tkinter as tk
 from tkinter import messagebox, ttk
 
 from .connectors import ConnectorManager
-from .ui_common import C, F_BASE, F_MONO, F_SMALL, Collapsible, card, page_header, set_text
+from .i18n import t
+from .ui_common import (
+    F_BASE,
+    F_MONO,
+    F_SMALL,
+    C,
+    Collapsible,
+    card,
+    page_header,
+    set_text,
+)
 
 
 class ConnectorsPage(tk.Frame):

@@ -6,10 +6,15 @@ import json
 import pytest
 
 from alterego_training_hub.config import AppSettings
-from alterego_training_hub.settings_sync import (SettingsSyncError,
-                                                apply_bundle, bundle,
-                                                export_settings,
-                                                import_bundle, pull, push)
+from alterego_training_hub.settings_sync import (
+    SettingsSyncError,
+    apply_bundle,
+    bundle,
+    export_settings,
+    import_bundle,
+    pull,
+    push,
+)
 
 
 def test_bundle_round_trip(tmp_path):

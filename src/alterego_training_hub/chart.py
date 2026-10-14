@@ -5,8 +5,9 @@ tested without a display lives here.
 """
 from __future__ import annotations
 
+import math
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Sequence
 
 CHART_PAD = 8.0
 
@@ -27,7 +28,7 @@ def _valid(values: Sequence[float]) -> list[float]:
             number = float(value)
         except (TypeError, ValueError):
             continue
-        if number == number and number not in (float("inf"), float("-inf")):
+        if not math.isnan(number) and number not in (float("inf"), float("-inf")):
             out.append(number)
     return out
 
@@ -57,7 +58,7 @@ def chart_points(values: Sequence[float], width: float, height: float, *,
         if vmin == vmax:
             vmin, vmax = vmin - 1.0, vmax + 1.0
     if vmax <= vmin:
-        vmin, vmax = vmin, vmin + 1.0
+        vmax = vmin + 1.0
     inner_w = width - 2 * pad
     inner_h = height - 2 * pad
     step = inner_w / max(1, len(data) - 1)

@@ -1,15 +1,15 @@
 """Settings page: mentor provider, model list, API keys, folders."""
 from __future__ import annotations
-from .i18n import t
 
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from .diagnostics import diagnostics_summary, diagnostics_text, run_diagnostics
+from .i18n import t
 from .logging_setup import log_file, tail_log
 from .mentor import MentorError
-from .ui_common import C, F_BASE, F_MONO, F_SMALL, Collapsible, page_header, set_text
+from .ui_common import F_BASE, F_MONO, F_SMALL, C, Collapsible, page_header, set_text
 
 
 class SettingsPage(tk.Frame):
@@ -180,7 +180,8 @@ class SettingsPage(tk.Frame):
         # Keys for cloud
         # ------------------------------------------------------- platform
         from .hotkeys import DEFAULT_HOTKEYS, resolve_hotkeys
-        from .i18n import LANGUAGES, current_language, t as _t
+        from .i18n import LANGUAGES, current_language
+        from .i18n import t as _t
 
         platform_section = Collapsible(self, _t("platform.title"))
         platform_section.pack(fill="x", padx=24, pady=(0, 12))
@@ -614,8 +615,12 @@ class SettingsPage(tk.Frame):
                             parent=self)
 
     def save_hotkeys(self):
-        from .hotkeys import HotkeyError, detect_conflicts, resolve_hotkeys, \
-            save_hotkeys
+        from .hotkeys import (
+            HotkeyError,
+            detect_conflicts,
+            resolve_hotkeys,
+            save_hotkeys,
+        )
 
         try:
             raw = {action_id: var.get().strip()
@@ -682,7 +687,7 @@ class SettingsPage(tk.Frame):
     def _combo_index(self, combo) -> int:
         try:
             index = combo.current()
-        except Exception:  # noqa: BLE001
+        except Exception:
             index = None
         return index if isinstance(index, int) else -1
 

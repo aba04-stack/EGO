@@ -93,7 +93,7 @@ def test_format_patterns_parse():
                      if name and name.isidentifier()]
             if slots:
                 key.format(**{name: Anything() for name in slots})
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             broken.append((key[:40], str(exc)))
     assert broken == []
 

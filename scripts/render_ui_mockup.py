@@ -15,7 +15,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from alterego_training_hub.theme import C, SYNTAX  # noqa: E402
+from alterego_training_hub.theme import SYNTAX, C
 
 S = 1.5
 VW, VH = 1480, 860
@@ -89,7 +89,7 @@ def collapsible_header(c: Canvas, x, y, w, title, *, open_=True, hint=""):
     return y + 30
 
 
-import re  # noqa: E402
+import re
 
 _TOKEN_RE = re.compile(
     r"(?P<comment>#[^\n]*)|(?P<string>\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*')"

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import sys
 import types
+from typing import ClassVar
 
 import pytest
 
@@ -144,7 +145,6 @@ class _Combobox(_Widget):
     def configure(self, **kwargs):
         if "values" in kwargs:
             self._values = tuple(kwargs["values"])
-        return None
 
     def config(self, **kwargs):
         return self.configure(**kwargs)
@@ -441,7 +441,7 @@ def test_terminal_and_connectors_pages(fake_ui, monkeypatch, tmp_path):
     def sync_start(label, task, on_success=None, on_error=None):
         try:
             value = task()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             if on_error:
                 on_error(str(exc))
             return
@@ -501,7 +501,7 @@ def test_chat_send_and_reset(fake_ui, monkeypatch):
     def sync_start(label, task, on_success=None, on_error=None):
         try:
             value = task()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             if on_error:
                 on_error(str(exc))
             return
@@ -643,7 +643,7 @@ def test_servers_page_collapsible_and_terminal(fake_ui, monkeypatch, tmp_path):
     def sync_start(label, task, on_success=None, on_error=None):
         try:
             value = task()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             if on_error:
                 on_error(str(exc))
             return
@@ -680,7 +680,7 @@ def test_shortcuts_and_diagnostics_settings(fake_ui, monkeypatch):
     def sync_start(label, task, on_success=None, on_error=None):
         try:
             value = task()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             if on_error:
                 on_error(str(exc))
             return
@@ -759,7 +759,7 @@ def test_editor_tabs_palette_and_search(fake_ui, monkeypatch, tmp_path):
     def sync_start(label, task, on_success=None, on_error=None):
         try:
             value = task()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             if on_error:
                 on_error(str(exc))
             return
@@ -1112,7 +1112,7 @@ def test_update_plan_profiles_watchdog_and_chart(fake_ui, tmp_path):
     app = app_module.TrainingHubApp()
 
     # update_plan stores tasks and notifies the chat panel.
-    tools, schemas, mutations = app.agent_extra_tools()
+    tools, schemas, _mutations = app.agent_extra_tools()
     assert any(schema["function"]["name"] == "update_plan" for schema in schemas)
     result = tools["update_plan"]({"steps": [
         {"title": "прочитать метрики", "status": "done"},
@@ -1433,7 +1433,7 @@ def test_stage20_platform_hotkeys_layouts_plugins(fake_ui, tmp_path):
         encoding="utf-8")
     settings_page.reload_plugins()
     assert "Hello" in settings_page.plugins_var.get()
-    tools, schemas, mutations = app.agent_extra_tools()
+    tools, _schemas, mutations = app.agent_extra_tools()
     assert "hello_tool" in tools and "hello_write" in mutations
     assert tools["hello_tool"]({}) == {"ok": True, "text": "hi"}
 
@@ -1625,7 +1625,7 @@ def test_stage26_transparency_thoughts_actions_context_critic(fake_ui, tmp_path)
     # --- critic via fake mentor posts a verdict into the chat
     class _Reply:
         text = "ВЕРДИКТ: ок\nУВЕРЕННОСТЬ: 0.9\nПРОБЛЕМЫ: —"
-        usage = {}
+        usage: ClassVar[dict] = {}
         model = "fake"
 
     class _Mentor:

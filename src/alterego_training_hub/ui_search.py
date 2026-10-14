@@ -1,13 +1,13 @@
 """Search page: regex search across the workspace with jump-to-line results."""
 from __future__ import annotations
-from .i18n import t
 
 import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, ttk
 
+from .i18n import t
 from .tools import WorkspaceTools
-from .ui_common import C, F_BASE, F_MONO, F_SMALL, Collapsible, card, page_header
+from .ui_common import F_BASE, F_MONO, F_SMALL, C, Collapsible, card, page_header
 
 MAX_RESULTS = 300
 

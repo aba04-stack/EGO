@@ -21,7 +21,7 @@ def current_word(text: str, cursor: int) -> tuple[str, int]:
 def _count_chars(widget, index) -> int:
     try:
         result = widget.count("1.0", index, "chars")
-    except Exception:  # noqa: BLE001 - fake widgets
+    except Exception:
         return 0
     if isinstance(result, (tuple, list)):
         result = result[0] if result else 0

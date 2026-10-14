@@ -4,7 +4,7 @@ from __future__ import annotations
 import tkinter as tk
 
 from .completion import _count_chars, collect_candidates, current_word
-from .ui_common import C, F_MONO
+from .ui_common import F_MONO, C
 
 
 class CompletionPopup:
@@ -22,7 +22,7 @@ class CompletionPopup:
         if self._window is not None:
             try:
                 self._window.destroy()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
         self._window = None
         self._listbox = None
@@ -35,7 +35,7 @@ class CompletionPopup:
             cursor_index = editor.index("insert")
             text = editor.get("1.0", "end-1c")
             line_start = int(str(cursor_index).split(".", 1)[0])
-        except Exception:  # noqa: BLE001 - fake widgets / odd state
+        except Exception:
             self.hide()
             return
         cursor_offset = _count_chars(editor, cursor_index)
@@ -60,7 +60,7 @@ class CompletionPopup:
                     exportselection=False)
                 self._listbox.pack(fill="both", expand=True)
                 self._listbox.bind("<ButtonRelease-1>", lambda _e: self.accept())
-            except Exception:  # noqa: BLE001
+            except Exception:
                 self.hide()
                 return
         assert self._listbox is not None
@@ -79,7 +79,7 @@ class CompletionPopup:
                 y += int(bbox[1]) + int(bbox[3]) + 2
             self._window.geometry(f"+{x}+{y}")
             self._window.lift()
-        except Exception:  # noqa: BLE001
+        except Exception:
             self.hide()
             return
         self.visible = True
@@ -92,7 +92,7 @@ class CompletionPopup:
             if not selection:
                 return None
             return str(self._listbox.get(selection[0]))
-        except Exception:  # noqa: BLE001
+        except Exception:
             return None
 
     def move(self, step: int):
@@ -105,7 +105,7 @@ class CompletionPopup:
             self._listbox.selection_clear(0, "end")
             self._listbox.selection_set(target)
             self._listbox.activate(target)
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
     def accept(self) -> bool:
@@ -116,7 +116,7 @@ class CompletionPopup:
         try:
             editor.delete(f"1.0+{self._replace_start}c", f"1.0+{self._replace_end}c")
             editor.insert(f"1.0+{self._replace_start}c", word)
-        except Exception:  # noqa: BLE001
+        except Exception:
             return False
         self.hide()
         return True

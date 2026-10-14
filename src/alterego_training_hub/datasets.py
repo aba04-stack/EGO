@@ -148,8 +148,8 @@ def split_rows(rows: list[dict[str, Any]], *, train: float = 0.8,
 
     random.Random(int(seed)).shuffle(order)
     n = len(order)
-    n_train = max(1, int(round(n * train_r)))
-    n_val = int(round(n * val_r))
+    n_train = max(1, round(n * train_r))
+    n_val = round(n * val_r)
     if n_train + n_val > n:
         n_val = max(0, n - n_train)
     train_idx = order[:n_train]

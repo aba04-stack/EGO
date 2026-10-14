@@ -3,8 +3,14 @@ from __future__ import annotations
 
 import pytest
 
-from alterego_training_hub.layouts import (LayoutError, LayoutState, docked,
-                                           edge_drop, load_layout, save_layout)
+from alterego_training_hub.layouts import (
+    LayoutError,
+    LayoutState,
+    docked,
+    edge_drop,
+    load_layout,
+    save_layout,
+)
 
 
 def test_edge_drop_zones():

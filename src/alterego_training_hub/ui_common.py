@@ -4,15 +4,15 @@ Color/font tokens live in :mod:`alterego_training_hub.theme` so that design
 tools (e.g. the mockup renderer) can reuse them without importing Tk.
 """
 from __future__ import annotations
-from .i18n import t
 
 import threading
 import tkinter as tk
+from collections.abc import Callable
 from tkinter import ttk
-from typing import Any, Callable
+from typing import Any
 
+from .i18n import t
 from .theme import (  # noqa: F401  (re-exported for page modules)
-    C,
     F_BASE,
     F_BOLD,
     F_MONO,
@@ -21,6 +21,7 @@ from .theme import (  # noqa: F401  (re-exported for page modules)
     F_SMALL,
     F_SUB,
     F_TITLE,
+    C,
 )
 
 
@@ -105,35 +106,35 @@ def recolor_widgets(root, old: dict[str, str], new: dict[str, str]) -> None:
 
     try:
         widgets = list(root.winfo_all() or ())
-    except Exception:  # noqa: BLE001 - fake widgets / destroyed root
+    except Exception:
         return
     for widget in widgets:
         for option in _RECOLOR_OPTIONS:
             try:
                 current = widget.cget(option)
-            except Exception:  # noqa: BLE001 - option not supported
+            except Exception:
                 continue
             replacement = swap(current)
             if replacement != current:
                 try:
                     widget.configure(**{option: replacement})
-                except Exception:  # noqa: BLE001 - ttk rejects colour options
+                except Exception:
                     pass
         try:
             tag_names = widget.tag_names()
-        except Exception:  # noqa: BLE001 - no tags (plain widgets / fakes)
+        except Exception:
             tag_names = ()
         for tag in tag_names:
             for option in _TAG_OPTIONS:
                 try:
                     current = widget.tag_cget(tag, option)
-                except Exception:  # noqa: BLE001
+                except Exception:
                     continue
                 replacement = swap(current)
                 if replacement != current:
                     try:
                         widget.tag_configure(tag, **{option: replacement})
-                    except Exception:  # noqa: BLE001
+                    except Exception:
                         pass
 
 
@@ -171,7 +172,7 @@ def attach_tooltip(widget, text: str) -> None:
             tk.Label(tip, text=text, bg="#1f2733", fg="#ffffff",
                      font=F_SMALL, padx=8, pady=4).pack()
             widget._tooltip_tip = tip
-        except Exception:  # noqa: BLE001 - tooltips are decoration only
+        except Exception:
             pass
 
     def hide(_event=None):
@@ -179,14 +180,14 @@ def attach_tooltip(widget, text: str) -> None:
         if tip is not None:
             try:
                 tip.destroy()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
             widget._tooltip_tip = None
 
     try:
         widget.bind("<Enter>", show, add="+")
         widget.bind("<Leave>", hide, add="+")
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
 
 

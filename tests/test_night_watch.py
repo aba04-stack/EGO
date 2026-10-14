@@ -5,11 +5,17 @@ import time
 
 import pytest
 
-from alterego_training_hub.night_watch import (NightWatchError, NightWatchLog,
-                                               WatchConfig, WatchEntry,
-                                               config_from_dict,
-                                               config_to_dict, due,
-                                               morning_report, run_check)
+from alterego_training_hub.night_watch import (
+    NightWatchError,
+    NightWatchLog,
+    WatchConfig,
+    WatchEntry,
+    config_from_dict,
+    config_to_dict,
+    due,
+    morning_report,
+    run_check,
+)
 
 
 class FakeReply:

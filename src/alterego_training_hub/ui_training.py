@@ -1,14 +1,26 @@
 """Training page: run training in the workspace, watch progress, involve the mentor."""
 from __future__ import annotations
-from .i18n import t
 
 import time
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from .metrics import brief as metrics_brief, parse_log
+from .i18n import t
+from .metrics import brief as metrics_brief
+from .metrics import parse_log
 from .training import TrainingError
-from .ui_common import C, F_BASE, F_BOLD, F_MONO, F_SMALL, Collapsible, card, draw_line_chart, page_header, set_text
+from .ui_common import (
+    F_BASE,
+    F_BOLD,
+    F_MONO,
+    F_SMALL,
+    C,
+    Collapsible,
+    card,
+    draw_line_chart,
+    page_header,
+    set_text,
+)
 
 
 class TrainingPage(tk.Frame):
@@ -172,7 +184,8 @@ class TrainingPage(tk.Frame):
         """A/B: overlay the last two run logs and print the verdict."""
         from pathlib import Path
 
-        from .compare import compare_runs as _compare, overlay_series
+        from .compare import compare_runs as _compare
+        from .compare import overlay_series
 
         records = [record for record in self.app.runs.list(10)
                    if record.log_path and Path(record.log_path).is_file()]
@@ -229,7 +242,7 @@ class TrainingPage(tk.Frame):
                     if was_running:
                         self._on_finished(status.returncode)
                 self._was_running = status.running
-        except Exception:  # noqa: BLE001 - the ticker must survive any UI hiccup
+        except Exception:
             pass
         self.after(1200, self._tick)
 

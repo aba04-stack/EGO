@@ -1,4 +1,5 @@
 import json
+from typing import ClassVar
 
 from alterego_training_hub.playground import (
     PlaygroundClient,
@@ -8,7 +9,7 @@ from alterego_training_hub.playground import (
 
 
 class FakeResponse:
-    headers = {}
+    headers: ClassVar[dict] = {}
 
     def __init__(self, payload):
         self._payload = payload

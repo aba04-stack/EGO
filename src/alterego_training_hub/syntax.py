@@ -51,7 +51,7 @@ def configure_tags(widget) -> None:
         color = SYNTAX.get("key" if name == "key" else name, SYNTAX["comment"])
         try:
             widget.tag_configure(name, foreground=color)
-        except Exception:  # noqa: BLE001 - fake widgets in tests
+        except Exception:
             pass
 
 
@@ -63,12 +63,12 @@ def highlight(widget, language: str) -> int:
     """Colourise the widget buffer; returns the number of tagged regions."""
     try:
         text = widget.get("1.0", "end-1c")
-    except Exception:  # noqa: BLE001
+    except Exception:
         return 0
     for tag in _TAG_ORDER:
         try:
             widget.tag_remove(tag, "1.0", "end")
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
     count = 0
@@ -78,7 +78,7 @@ def highlight(widget, language: str) -> int:
         try:
             widget.tag_add(tag, f"1.0+{start}c", f"1.0+{end}c")
             count += 1
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
     comments = [(m.start(), m.end()) for m in _COMMENT_RE.finditer(text)] \

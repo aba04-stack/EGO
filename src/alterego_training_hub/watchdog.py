@@ -5,6 +5,7 @@ mentor can read the same issues through its tools.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 from .metrics import MetricsSummary
@@ -63,7 +64,7 @@ def detect_issues(summary: MetricsSummary, *,
     # Loss spike: last loss jumped several times above the previous one.
     if len(losses) >= 2:
         previous, last = losses[-2], losses[-1]
-        if (previous == previous and last == last and previous > 0
+        if (not math.isnan(previous) and not math.isnan(last) and previous > 0
                 and last > previous * LOSS_SPIKE_RATIO):
             issues.append(Issue(
                 "spike", "warn", f"Всплеск loss: {previous:.3f} → {last:.3f}",

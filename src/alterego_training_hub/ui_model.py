@@ -1,14 +1,23 @@
 """Model dashboard: model card, training progress, mentor assessment, actions."""
 from __future__ import annotations
-from .i18n import t
 
 import time
 import tkinter as tk
 from tkinter import ttk
 
-from .metrics import brief as metrics_brief, parse_log
-from .ui_common import (C, F_BASE, F_BOLD, F_SMALL, Collapsible, card,
-                           draw_line_chart, page_header)
+from .i18n import t
+from .metrics import brief as metrics_brief
+from .metrics import parse_log
+from .ui_common import (
+    F_BASE,
+    F_BOLD,
+    F_SMALL,
+    C,
+    Collapsible,
+    card,
+    draw_line_chart,
+    page_header,
+)
 
 
 class ModelDashboardPage(tk.Frame):
@@ -258,7 +267,7 @@ class ModelDashboardPage(tk.Frame):
                     if fmt == "txt":
                         rows = [line for line in
                                 file.read_text(encoding="utf-8", errors="replace").splitlines()]
-                except Exception:  # noqa: BLE001 - wizard must not die on odd files
+                except Exception:
                     rows = []
         return audit_rows(rows)
 
@@ -310,7 +319,7 @@ class ModelDashboardPage(tk.Frame):
         target.parent.mkdir(parents=True, exist_ok=True)
         try:
             tail = self.app.training.tail(20000)
-        except Exception:  # noqa: BLE001
+        except Exception:
             tail = ""
         target.write_text(tail or "", encoding="utf-8")
         self.wizard_var.set(t('Baseline снят: ') + target.name)
@@ -322,7 +331,7 @@ class ModelDashboardPage(tk.Frame):
         before = target.read_text(encoding="utf-8") if target.is_file() else ""
         try:
             after = self.app.training.tail(20000)
-        except Exception:  # noqa: BLE001
+        except Exception:
             after = ""
         return compare_before_after(before, after or "").render()
 
@@ -346,7 +355,7 @@ class ModelDashboardPage(tk.Frame):
 
         try:
             tail = self.app.training.tail(20000)
-        except Exception:  # noqa: BLE001 - page must not die on odd logs
+        except Exception:
             tail = ""
         samples = parse_samples(tail or "")
         if not samples:
@@ -402,7 +411,7 @@ class ModelDashboardPage(tk.Frame):
     def refresh(self):
         try:
             self._refresh_inner()
-        except Exception as exc:  # noqa: BLE001 - dashboard must not die on odd data
+        except Exception as exc:
             self.app.set_status(t('Не удалось обновить дашборд: {exc}').format(exc=exc))
 
     def _refresh_inner(self):
@@ -481,7 +490,7 @@ class ModelDashboardPage(tk.Frame):
                 issue.line() for issue in detect_issues(
                     summary, running=status.running)]
             self.watchdog_var.set("\n".join(report_lines[:4]))
-        except Exception:  # noqa: BLE001 - watchdog must never break the page
+        except Exception:
             self.watchdog_var.set("")
 
     def _schedule_poll(self):
@@ -494,11 +503,11 @@ class ModelDashboardPage(tk.Frame):
     def _poll_once(self):
         try:
             self.refresh()
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
         try:
             self.after(5000, self._poll_once)
-        except Exception:  # noqa: BLE001 - no display server in tests
+        except Exception:
             self._poll_running = False
 
     def _render_assessment(self):

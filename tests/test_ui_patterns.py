@@ -1,7 +1,13 @@
 """Этап 28: UX-паттерны — иконки, primary-действия, фильтры, статус-бейджи."""
 from alterego_training_hub.ui_patterns import (
-    NAV_ICONS, filter_titles, nav_icon, nav_label, primary_action,
-    status_badges, tooltip_text)
+    NAV_ICONS,
+    filter_titles,
+    nav_icon,
+    nav_label,
+    primary_action,
+    status_badges,
+    tooltip_text,
+)
 
 
 def test_nav_icons_and_labels():

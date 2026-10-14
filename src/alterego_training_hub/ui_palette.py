@@ -1,12 +1,13 @@
 """Command palette and quick file open — the Ctrl+P / Ctrl+Shift+P experience."""
 from __future__ import annotations
-from .i18n import t
 
 import tkinter as tk
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from .ui_common import C, F_BASE, F_MONO
+from .i18n import t
+from .ui_common import F_BASE, F_MONO, C
 from .ui_editor import list_workspace_files
 
 MAX_ITEMS = 400
@@ -37,7 +38,7 @@ class CommandPalette(tk.Toplevel):
             self.transient(app)
             self.geometry("680x420")
             self.grab_set()
-        except Exception:  # noqa: BLE001 - window manager quirks
+        except Exception:
             pass
         self.configure(bg=C["bg"])
 
@@ -60,7 +61,7 @@ class CommandPalette(tk.Toplevel):
         self.refresh()
         try:
             self.query.focus_set()
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
     # ---------------------------------------------------------------- items
@@ -145,7 +146,7 @@ class CommandPalette(tk.Toplevel):
     def refresh(self):
         try:
             query = self.query.get()
-        except Exception:  # noqa: BLE001
+        except Exception:
             query = ""
         self.listbox.delete(0, "end")
         self._filtered = []
@@ -157,7 +158,7 @@ class CommandPalette(tk.Toplevel):
             try:
                 self.listbox.selection_set(0)
                 self.listbox.activate(0)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
 
     def _move(self, step: int):
@@ -170,13 +171,13 @@ class CommandPalette(tk.Toplevel):
             target = (current + step) % size
             self.listbox.selection_set(target)
             self.listbox.activate(target)
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
     def run_selected(self):
         try:
             selection = self.listbox.curselection()
-        except Exception:  # noqa: BLE001
+        except Exception:
             selection = ()
         position = selection[0] if selection else 0
         if not self._filtered or position >= len(self._filtered):
@@ -194,7 +195,7 @@ class CommandPalette(tk.Toplevel):
     def close(self):
         try:
             self.destroy()
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
 

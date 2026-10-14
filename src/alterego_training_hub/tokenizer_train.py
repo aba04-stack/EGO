@@ -6,6 +6,7 @@ and to *understand* tokenization; swap in HF tokenizers for production.
 """
 from __future__ import annotations
 
+import itertools
 import json
 import re
 from pathlib import Path
@@ -20,7 +21,7 @@ class ByteBPE:
 
     # ------------------------------------------------------------- training
     def train(self, text: str, *, vocab_size: int = 1000,
-              min_pair_freq: int = 2) -> "ByteBPE":
+              min_pair_freq: int = 2) -> ByteBPE:
         words: list[list[bytes]] = []
         for chunk in _TOKEN_RE.findall(text or ""):
             words.append([bytes([b]) for b in chunk.encode("utf-8")])
@@ -30,7 +31,7 @@ class ByteBPE:
         while len(self.vocab) < target:
             counts: dict[tuple[bytes, bytes], int] = {}
             for word in words:
-                for a, b in zip(word, word[1:]):
+                for a, b in itertools.pairwise(word):
                     counts[(a, b)] = counts.get((a, b), 0) + 1
             if not counts:
                 break
@@ -96,7 +97,7 @@ class ByteBPE:
         return target
 
     @classmethod
-    def load(cls, path: str | Path) -> "ByteBPE":
+    def load(cls, path: str | Path) -> ByteBPE:
         raw = json.loads(Path(path).read_text(encoding="utf-8"))
         tok = cls()
         tok.merges = []

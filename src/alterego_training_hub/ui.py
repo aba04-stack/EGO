@@ -14,20 +14,21 @@ from .activity import ActivityLog
 from .agent import MODEL_TOOLS_SCHEMAS, TRAINING_CONTEXT_TOOL_SCHEMAS
 from .cloud_gpu import RunPodClient
 from .config import AppSettings, SecretStore, app_data_dir
-from .i18n import set_language, t
 from .connectors import ConnectorManager
-from .roles import can
 from .diagnostics import diagnostics_summary, diagnostics_text, run_diagnostics
 from .git_manager import GitRepositoryManager
+from .i18n import set_language, t
 from .logging_setup import install_excepthook, log_worker_error, setup_logging
 from .mentor import ApiMentor, MentorError
-from .metrics import brief as metrics_brief, parse_log
+from .metrics import brief as metrics_brief
+from .metrics import parse_log
 from .models_registry import ModelRegistry, default_library_dir
 from .report import REPORT_PROMPT_TEMPLATE, ReportStore
+from .roles import can
 from .runs import RunStore
 from .servers import ServerManager, ServerStore
 from .training import TrainingRun
-from .ui_common import C, F_NAV, F_NAV_SMALL, confirm_from_worker
+from .ui_common import F_NAV, F_NAV_SMALL, C, confirm_from_worker
 
 
 class TrainingHubApp(tk.Tk):
@@ -180,6 +181,7 @@ class TrainingHubApp(tk.Tk):
         self.pages_host = tk.Frame(center, bg=C["bg"])
         self.pages_host.pack(fill="both", expand=True)
 
+        from .ui_connectors import ConnectorsPage
         from .ui_datasets import DatasetsPage
         from .ui_editor import EditorPage
         from .ui_gpu import GpuPage
@@ -192,7 +194,6 @@ class TrainingHubApp(tk.Tk):
         from .ui_terminal import TerminalPanel
         from .ui_training import TrainingPage
         from .ui_workspace import WorkspacePage
-        from .ui_connectors import ConnectorsPage
 
         page_classes = [
             ("editor", EditorPage),
@@ -392,7 +393,7 @@ class TrainingHubApp(tk.Tk):
         if editor is not None and hasattr(editor, "snapshot"):
             try:
                 editor_snap = editor.snapshot()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 editor_snap = None
         chat = getattr(self, "chat_panel", None)
         chat_session = getattr(chat, "session", None)
@@ -419,7 +420,7 @@ class TrainingHubApp(tk.Tk):
         if editor_snap and new_editor is not None and hasattr(new_editor, "restore"):
             try:
                 new_editor.restore(editor_snap)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
         new_chat = getattr(self, "chat_panel", None)
         if new_chat is not None and chat_session is not None:
@@ -430,7 +431,7 @@ class TrainingHubApp(tk.Tk):
             if callable(render):
                 try:
                     render()
-                except Exception:  # noqa: BLE001
+                except Exception:
                     pass
 
     # ------------------------------------------------------------- layouts
@@ -441,7 +442,7 @@ class TrainingHubApp(tk.Tk):
         geometry = ""
         try:
             geometry = str(self.geometry() or "")
-        except Exception:  # noqa: BLE001
+        except Exception:
             geometry = ""
         try:
             bottom_height = int(self.settings.bottom_height or 210)
@@ -475,7 +476,7 @@ class TrainingHubApp(tk.Tk):
                 height=max(80, min(800, int(state.bottom_height or 210))))
             if state.geometry:
                 self.geometry(state.geometry)
-        except Exception:  # noqa: BLE001 - layout must not break startup
+        except Exception:
             return
         self.settings.active_layout = "custom"
         self.save_settings()
@@ -538,8 +539,8 @@ class TrainingHubApp(tk.Tk):
 
     def toggle_theme(self, name: str | None = None):
         """Switch between the light and dark palettes live."""
-        from .theme import C as live_colors
         from .theme import PALETTES, current_theme, set_palette
+        from .theme import C as live_colors
 
         old = dict(live_colors)
         target = name or ("dark" if current_theme() == "light" else "light")
@@ -590,9 +591,8 @@ class TrainingHubApp(tk.Tk):
         self._nav_buttons[key] = btn
         self._nav_accent[key] = accent
         self._nav_meta[key] = (key, label)
-        from .ui_common import attach_tooltip
-
         from .hotkeys import DEFAULT_HOTKEYS
+        from .ui_common import attach_tooltip
 
         _action = DEFAULT_HOTKEYS.get(f"page.{key}")
         attach_tooltip(btn, _nav_label(key, label, compact=False)
@@ -641,7 +641,7 @@ class TrainingHubApp(tk.Tk):
                 result = task()
                 self.post_event("result", {"ok": True, "label": label, "value": result,
                                            "callback": on_success})
-            except Exception as exc:  # noqa: BLE001 - shown to the user in a dialog
+            except Exception as exc:
                 log_worker_error("worker", exc)
                 self.post_event("result", {"ok": False, "label": label, "error": str(exc),
                                            "on_error": on_error})
@@ -662,7 +662,7 @@ class TrainingHubApp(tk.Tk):
                 kind, payload = self.events.get_nowait()
                 try:
                     self._handle_event(kind, payload)
-                except Exception as exc:  # noqa: BLE001 - one bad event must not kill the loop
+                except Exception as exc:
                     self.set_status(t('Ошибка обработки события: {exc}').format(exc=exc))
         except queue.Empty:
             pass
@@ -681,7 +681,7 @@ class TrainingHubApp(tk.Tk):
                 width=64 if self._sidebar_compact else 200)
             self._compact_btn.configure(
                 text="»" if self._sidebar_compact else "«")
-        except Exception:  # noqa: BLE001 - fake/headless widgets
+        except Exception:
             pass
         for key, btn in self._nav_buttons.items():
             _k, label = self._nav_meta.get(key, (key, key))
@@ -710,7 +710,7 @@ class TrainingHubApp(tk.Tk):
             try:
                 status = self.training.status()
                 training_text = t('идёт') if status.running else ""
-            except Exception:  # noqa: BLE001
+            except Exception:
                 training_text = ""
             badges = status_badges(
                 provider=str(getattr(self.settings, "llm_provider", "") or ""),
@@ -721,7 +721,7 @@ class TrainingHubApp(tk.Tk):
             if hasattr(self, "training_badge"):
                 self.training_badge.set(badges[1] if len(badges) > 1 else "")
             self.set_nav_badge("training", "●" if training_text else "")
-        except Exception:  # noqa: BLE001 - status bar must never kill polling
+        except Exception:
             pass
 
     # ------------------------------------------------------- night watch
@@ -753,7 +753,7 @@ class TrainingHubApp(tk.Tk):
             if not due(last, now=now,
                        interval_minutes=config.interval_minutes):
                 return
-        except Exception:  # noqa: BLE001 - the tick must never break the UI
+        except Exception:
             return
         if getattr(self, "_night_running", False):
             return
@@ -797,7 +797,7 @@ class TrainingHubApp(tk.Tk):
                 from .action_trace import action_entries_from_messages
 
                 actions = action_entries_from_messages(session.messages)
-            except Exception:  # noqa: BLE001 - report must not die on odd data
+            except Exception:
                 actions = []
         return morning_report(self.night_watch_log().entries(), actions=actions)
 
@@ -824,7 +824,7 @@ class TrainingHubApp(tk.Tk):
                 if callback:
                     try:
                         callback(payload.get("value"))
-                    except Exception as exc:  # noqa: BLE001
+                    except Exception as exc:
                         log_worker_error("callback", exc)
                         self.set_status(t('Ошибка обработки результата'))
                         messagebox.showerror("AlterEgo Training Hub",
@@ -838,7 +838,7 @@ class TrainingHubApp(tk.Tk):
                 if on_error:
                     try:
                         on_error(payload.get("error", ""))
-                    except Exception as exc:  # noqa: BLE001 - UI recovery must not cascade
+                    except Exception as exc:
                         log_worker_error("on_error", exc)
 
     # -------------------------------------------------------------- helpers
@@ -850,7 +850,7 @@ class TrainingHubApp(tk.Tk):
         """Find a model catalog entry by id or name (None if absent)."""
         try:
             entries = self.model_registry().load()
-        except Exception:  # noqa: BLE001
+        except Exception:
             return None
         key = str(model_id or "").strip().lower()
         if not key:
@@ -919,7 +919,7 @@ class TrainingHubApp(tk.Tk):
         self._watchdog_started = True
         try:
             self.after(15_000, self._watchdog_tick)
-        except Exception:  # noqa: BLE001 - no display server (tests)
+        except Exception:
             pass
 
     def _watchdog_tick(self):
@@ -949,11 +949,11 @@ class TrainingHubApp(tk.Tk):
             else:
                 self._watchdog_tail = (0, 0.0)
                 self.watchdog.reset()
-        except Exception:  # noqa: BLE001 - watchdog must never crash the app
+        except Exception:
             pass
         try:
             self.after(15_000, self._watchdog_tick)
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
     def _refresh_workspace_badge(self):
@@ -970,7 +970,7 @@ class TrainingHubApp(tk.Tk):
                 mark = "*" if status.changes else ""
                 extra = f" {status.ahead_behind}" if status.ahead_behind else ""
                 value = f"git: {status.branch}{mark}{extra}"
-            except Exception:  # noqa: BLE001 - not a repo / git missing
+            except Exception:
                 value = "git: —"
         self.git_badge.set(value)
 
@@ -1115,7 +1115,7 @@ class TrainingHubApp(tk.Tk):
                     if candidate.id == self.settings.active_model_id:
                         entry = candidate
                         break
-            except Exception:  # noqa: BLE001
+            except Exception:
                 entry = None
             config_data: object = None
             if root is not None:
@@ -1124,7 +1124,7 @@ class TrainingHubApp(tk.Tk):
                     try:
                         config_data = json.loads(
                             config_file.read_text(encoding="utf-8"))
-                    except Exception:  # noqa: BLE001
+                    except Exception:
                         config_data = config_file.read_text(
                             encoding="utf-8", errors="replace")[:1500]
             status = self.training.status()
@@ -1152,7 +1152,7 @@ class TrainingHubApp(tk.Tk):
         def list_model_catalog(_args):
             try:
                 entries = self.model_registry().load()
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 return {"ok": False, "error": str(exc)}
             return {"ok": True, "models": [
                 {"id": entry.id, "name": entry.name, "kind": entry.kind,
@@ -1184,7 +1184,8 @@ class TrainingHubApp(tk.Tk):
             root = self.workspace_root()
             if root is None:
                 return {"ok": False, "error": t('Рабочая папка не выбрана.')}
-            from .training import CONTROL_KEYS, read_control as read_hot_control
+            from .training import CONTROL_KEYS
+            from .training import read_control as read_hot_control
 
             return {"ok": True, "control": read_hot_control(root),
                     "keys": list(CONTROL_KEYS)}
@@ -1277,7 +1278,8 @@ class TrainingHubApp(tk.Tk):
                     "note": t('Применяй выбранные параметры через set_training_control.')}
 
         def compare_runs(args):
-            from .compare import compare_runs as _compare, overlay_series
+            from .compare import compare_runs as _compare
+            from .compare import overlay_series
 
             key = str(args.get("key") or "loss")
             records = [record for record in self.runs.list(10)
@@ -1299,8 +1301,13 @@ class TrainingHubApp(tk.Tk):
                     "lines": report.lines()}
 
         def prepare_dataset(args):
-            from .datasets import DatasetError, filter_rows, read_rows, \
-                split_rows, write_rows
+            from .datasets import (
+                DatasetError,
+                filter_rows,
+                read_rows,
+                split_rows,
+                write_rows,
+            )
 
             root = self.workspace_root()
             if root is None:
@@ -1400,8 +1407,13 @@ class TrainingHubApp(tk.Tk):
                     "checks": result.checks, "error": result.error}
 
         def benchmark_model(args):
-            from .bench import BenchResult, BenchStore, format_bench_table, \
-                rank_benchmarks, run_benchmark
+            from .bench import (
+                BenchResult,
+                BenchStore,
+                format_bench_table,
+                rank_benchmarks,
+                run_benchmark,
+            )
 
             entry = self.catalog_entry(str(args.get("model_id") or ""))
             command = str(args.get("command") or "").strip()
@@ -1449,8 +1461,12 @@ class TrainingHubApp(tk.Tk):
                     "error": result.error}
 
         def run_prompt_suite(args):
-            from .prompt_suite import default_suite, format_suite_report, \
-                load_suite, run_suite
+            from .prompt_suite import (
+                default_suite,
+                format_suite_report,
+                load_suite,
+                run_suite,
+            )
 
             entry = self.catalog_entry(str(args.get("model_id") or ""))
             if entry and entry.base_url:
@@ -1558,8 +1574,9 @@ class TrainingHubApp(tk.Tk):
             except (TypeError, ValueError):
                 steps = 6
             try:
-                from .agent import MentorAgent, MODEL_TOOLS_SCHEMAS as _MTS
+                from .agent import MODEL_TOOLS_SCHEMAS as _MTS
                 from .agent import TRAINING_CONTEXT_TOOL_SCHEMAS as _TCS
+                from .agent import MentorAgent
                 from .tools import WorkspaceTools
 
                 workspace = None
@@ -1642,7 +1659,7 @@ class TrainingHubApp(tk.Tk):
             handlers.update(conn_handlers)
             schemas.extend(conn_schemas)
             mutations |= set(conn_mutations)
-        except Exception:  # noqa: BLE001 - connectors must not break the agent
+        except Exception:
             pass
 
         try:
@@ -1651,7 +1668,7 @@ class TrainingHubApp(tk.Tk):
             handlers.update(srv_handlers)
             schemas.extend(srv_schemas)
             mutations |= set(srv_mutations)
-        except Exception:  # noqa: BLE001 - servers must not break the agent
+        except Exception:
             pass
 
         # Third-party plugin tools extend the agent without touching the core.

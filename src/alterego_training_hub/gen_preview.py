@@ -18,8 +18,8 @@ from __future__ import annotations
 import json
 import math
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 _BLOCK_RE = re.compile(
     r"^###\s*sample\s*@(?P<step>\d+)(?:\s*\[(?P<ckpt>[^\]]+)\])?\s*$")
@@ -48,7 +48,7 @@ def perplexity_from_loss(loss: float) -> float:
         value = float(loss)
     except (TypeError, ValueError):
         return float("inf")
-    if value < 0 or value != value or value in (float("inf"), float("-inf")):
+    if value < 0 or math.isnan(value) or value in (float("inf"), float("-inf")):
         return float("inf")
     try:
         return math.exp(value) if value < 30 else float("inf")

@@ -1,14 +1,14 @@
 """Models page: registry of local and cloud-hosted model artifacts."""
 from __future__ import annotations
-from .i18n import t
 
 import time
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
+from .i18n import t
 from .models_registry import ModelEntry, ModelRegistryError, default_library_dir
-from .ui_common import C, F_BASE, F_SMALL, card, page_header
+from .ui_common import F_BASE, F_SMALL, C, card, page_header
 
 
 class ModelsPage(tk.Frame):

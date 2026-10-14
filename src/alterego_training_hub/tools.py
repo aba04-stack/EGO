@@ -11,8 +11,9 @@ import json
 import re
 import shlex
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 READONLY_TOOLS: frozenset[str] = frozenset(
     {"list_files", "read_file", "search_files", "diff_files"})
@@ -243,7 +244,7 @@ class WorkspaceTools:
             return handler(**args)
         except ToolError as exc:
             return {"ok": False, "error": str(exc)}
-        except Exception as exc:  # noqa: BLE001 - tool boundary must not crash the agent
+        except Exception as exc:
             return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
     @staticmethod
@@ -297,7 +298,7 @@ class WorkspaceTools:
                 new = old.replace(find, replace) if count <= 0 else \
                     old.replace(find, replace, count)
                 return preview_diff(old, new, path)
-        except Exception:  # noqa: BLE001 - preview is advisory only
+        except Exception:
             return ""
         return ""
 

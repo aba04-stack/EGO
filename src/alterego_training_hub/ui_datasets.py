@@ -1,6 +1,5 @@
 """Dataset library page: catalogue, scan and preview training data."""
 from __future__ import annotations
-from .i18n import t
 
 import time
 import tkinter as tk
@@ -8,7 +7,8 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from .datasets import DatasetEntry, DatasetError, DatasetLibrary, preview_rows
-from .ui_common import C, F_BASE, F_MONO, F_SMALL, card, page_header, set_text
+from .i18n import t
+from .ui_common import F_BASE, F_MONO, F_SMALL, C, card, page_header, set_text
 
 
 class DatasetsPage(tk.Frame):

@@ -31,7 +31,7 @@ class ChatMessage:
         return payload
 
     @classmethod
-    def from_dict(cls, raw: dict[str, Any]) -> "ChatMessage":
+    def from_dict(cls, raw: dict[str, Any]) -> ChatMessage:
         return cls(
             role=str(raw.get("role", "user")),
             content=str(raw.get("content") or ""),
@@ -76,7 +76,7 @@ class ChatSession:
         }
 
     @classmethod
-    def from_dict(cls, raw: dict[str, Any]) -> "ChatSession":
+    def from_dict(cls, raw: dict[str, Any]) -> ChatSession:
         return cls(
             id=str(raw.get("id") or uuid.uuid4().hex[:12]),
             title=str(raw.get("title") or "Новый диалог"),

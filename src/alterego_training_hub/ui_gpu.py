@@ -1,13 +1,14 @@
 """Cloud GPU page: RunPod catalog, budget gate, pod lifecycle with confirmations."""
 from __future__ import annotations
-from .i18n import t
 
 import json
+import math
 import tkinter as tk
 from tkinter import messagebox, ttk
 
 from .cloud_gpu import CloudGpuError
-from .ui_common import C, F_BASE, F_MONO, F_SMALL, Collapsible, card, page_header
+from .i18n import t
+from .ui_common import F_BASE, F_MONO, F_SMALL, C, Collapsible, card, page_header
 
 
 class GpuPage(tk.Frame):
@@ -256,8 +257,7 @@ class GpuPage(tk.Frame):
         self.refresh_jobs()
 
     def export_selected_job_to_colab(self):
-        from .colab_export import (ColabExportError, default_notebook_name,
-                                   save_notebook)
+        from .colab_export import ColabExportError, default_notebook_name, save_notebook
 
         job = self._selected_job()
         if job is None:
@@ -276,7 +276,7 @@ class GpuPage(tk.Frame):
         try:
             budget = float(self.gpu_budget_var.get())
             disk = int(self.gpu_disk_var.get())
-            if budget != budget or budget in (float("inf"), float("-inf")) or budget <= 0:
+            if math.isnan(budget) or budget in (float("inf"), float("-inf")) or budget <= 0:
                 raise ValueError(t('Цена в час должна быть положительной.'))
             if not 10 <= disk <= 1000:
                 raise ValueError(t('Контейнерный диск должен быть 10–1000 GB.'))

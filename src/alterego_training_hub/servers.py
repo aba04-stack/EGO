@@ -9,9 +9,10 @@ from __future__ import annotations
 import json
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Protocol
+from typing import Any, Protocol
 
 from .config import SecretStore, app_data_dir
 
@@ -82,7 +83,7 @@ class ServerEntry:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, raw: dict[str, Any]) -> "ServerEntry":
+    def from_dict(cls, raw: dict[str, Any]) -> ServerEntry:
         entry = cls()
         entry.id = str(raw.get("id") or entry.id)
         entry.name = str(raw.get("name") or "")
@@ -186,7 +187,7 @@ class SshRunner:
         if pin_file.exists():
             try:
                 client.load_host_keys(str(pin_file))
-            except Exception:  # noqa: BLE001 - a corrupt pin file must not block
+            except Exception:
                 pass
 
         class PinOnFirstUse(paramiko.MissingHostKeyPolicy):
@@ -234,7 +235,7 @@ class SshRunner:
             self.host_fingerprint = ("SHA256:"
                                      + base64.b64encode(digest).decode()
                                      .rstrip("="))
-        except Exception:  # noqa: BLE001 - fingerprint is informational
+        except Exception:
             self.host_fingerprint = ""
 
     def run(self, command: str, timeout: float = DEFAULT_TIMEOUT) -> dict[str, Any]:
@@ -260,7 +261,7 @@ class SshRunner:
         if self._client is not None:
             try:
                 self._client.close()
-            except Exception:  # noqa: BLE001 - closing must not raise
+            except Exception:
                 pass
             self._client = None
 
@@ -298,7 +299,7 @@ class ServerManager:
         self.store.delete(server_id)
         try:
             self.secrets.delete(self.secret_key(server_id))
-        except Exception:  # noqa: BLE001 - keyring may be unavailable
+        except Exception:
             pass
 
     # -- secrets ---------------------------------------------------------

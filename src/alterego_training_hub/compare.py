@@ -1,6 +1,7 @@
 """A/B comparison of training runs: verdicts and overlay-ready series."""
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 from .metrics import MetricsSummary
@@ -36,7 +37,7 @@ class ComparisonReport:
 
 
 def _fmt(value: float) -> str:
-    return f"{value:.4f}" if value == value else "—"
+    return f"{value:.4f}" if not math.isnan(value) else "—"
 
 
 def _final_loss(summary: MetricsSummary) -> float:
@@ -51,19 +52,19 @@ def _best_loss(summary: MetricsSummary) -> float:
     values = [value for key in ("loss", "train_loss", "val_loss")
               for value in summary.series(key)]
     values += list(summary.best.values())
-    finite = [value for value in values if value == value]
+    finite = [value for value in values if not math.isnan(value)]
     return min(finite) if finite else float("nan")
 
 
 def _converge_epoch(summary: MetricsSummary, target: float) -> int | None:
     """First epoch whose loss reaches the shared target level."""
-    if target != target:
+    if math.isnan(target):
         return None
     for key in ("loss", "val_loss", "train_loss"):
         values = summary.series(key)
         if values:
             for index, value in enumerate(values, start=1):
-                if value == value and value <= target:
+                if not math.isnan(value) and value <= target:
                     return index
             break
     return None

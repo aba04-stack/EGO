@@ -2,9 +2,16 @@
 from alterego_training_hub.data_audit import audit_rows
 from alterego_training_hub.model_recipes import PRESETS, RECIPES, get_preset, recommend
 from alterego_training_hub.resource_calc import (
-    GPU_CATALOG, estimate, memory_need_gb, throughput_tps)
+    GPU_CATALOG,
+    estimate,
+    memory_need_gb,
+    throughput_tps,
+)
 from alterego_training_hub.tokenizer_train import (
-    ByteBPE, compression_stats, train_on_text)
+    ByteBPE,
+    compression_stats,
+    train_on_text,
+)
 from alterego_training_hub.wizard_plan import build_plan, compare_before_after
 
 

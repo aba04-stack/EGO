@@ -76,7 +76,7 @@ def install_excepthook() -> None:
             exc_type, exc_value, exc_traceback))
         try:
             get_logger("crash").error("Необработанное исключение:\n%s", text)
-        except Exception:  # noqa: BLE001 - logging must not raise in a hook
+        except Exception:
             pass
         try:
             import tkinter as tk
@@ -89,7 +89,7 @@ def install_excepthook() -> None:
                     "Произошла непредвиденная ошибка. Подробности записаны в лог:\n"
                     + str(log_file())))
                 return
-        except Exception:  # noqa: BLE001 - fall through to stderr
+        except Exception:
             pass
         sys.stderr.write(text)
 

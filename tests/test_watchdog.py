@@ -1,7 +1,7 @@
 """Tests for the training watchdog detectors (pure logic)."""
 from __future__ import annotations
 
-from alterego_training_hub.metrics import MetricsSummary, MetricPoint
+from alterego_training_hub.metrics import MetricPoint, MetricsSummary
 from alterego_training_hub.watchdog import (
     DEFAULT_QUIET_SECONDS,
     TrainingWatchdog,

@@ -106,7 +106,7 @@ def run_suite(client, cases: list[PromptCase], *, model: str = "",
             error = getattr(generated, "error", "")
             output = getattr(generated, "output", "")
             latency = int(getattr(generated, "latency_ms", 0))
-        except Exception as exc:  # noqa: BLE001 - one bad case must not kill the run
+        except Exception as exc:
             error, output, latency = f"{type(exc).__name__}: {exc}", "", 0
         matched: bool | None = None
         if not error and case.expect_contains:

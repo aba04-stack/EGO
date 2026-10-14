@@ -128,9 +128,9 @@ def _fetch_source(entry: CatalogEntry, *, base_dir: Path) -> bytes:
             raise CatalogError(
                 f"Не удалось прочитать «{entry.id}»: {path}") from None
     try:
-        with urllib.request.urlopen(source, timeout=30) as response:  # noqa: S310
+        with urllib.request.urlopen(source, timeout=30) as response:
             return response.read()
-    except Exception as exc:  # noqa: BLE001 - network errors are user-facing
+    except Exception as exc:
         raise CatalogError(f"Не удалось скачать «{entry.id}»: {exc}") from None
 
 

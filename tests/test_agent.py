@@ -147,7 +147,8 @@ def test_workspace_write_creates_backup(tmp_path):
     assert result["ok"] is True
     backup = result["backup"]
     assert backup.endswith("app.py")
-    assert open(backup, encoding="utf-8").read() == "old\n"
+    with open(backup, encoding="utf-8") as handle:
+        assert handle.read() == "old\n"
 
     result2 = workspace.execute(
         "replace_in_file", {"path": "src/app.py", "find": "new", "replace": "newer"})

@@ -97,7 +97,7 @@ def run_benchmark(model: str, command: str, *, iterations: int = DEFAULT_ITERATI
             tokens = max(tokens, parse_tokens(output))
             output_chars = max(output_chars, len(output))
     mean_raw = statistics.mean(durations) if durations else 0.0
-    mean_ms = max(1, int(round(mean_raw))) if durations else 0
+    mean_ms = max(1, round(mean_raw)) if durations else 0
     tokens_per_sec = (tokens / (mean_raw / 1000.0)) if tokens and mean_raw > 0 \
         else 0.0
     return BenchResult(model=model, command=command, iterations=iterations,

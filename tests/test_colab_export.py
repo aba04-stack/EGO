@@ -6,11 +6,13 @@ import json
 import pytest
 
 from alterego_training_hub.cloud_queue import CloudJob, CloudJobQueue
-from alterego_training_hub.colab_export import (ColabExportError,
-                                                default_notebook_name,
-                                                export_queue,
-                                                notebook_for_job,
-                                                save_notebook)
+from alterego_training_hub.colab_export import (
+    ColabExportError,
+    default_notebook_name,
+    export_queue,
+    notebook_for_job,
+    save_notebook,
+)
 
 
 def _job(name="дообучение-gpt2"):

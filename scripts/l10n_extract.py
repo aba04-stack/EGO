@@ -166,9 +166,7 @@ def main() -> int:
         rewrites[path] = edits
 
     for pattern in sorted(all_patterns):
-        if _has_cyr(translations.get(pattern, "")):
-            todo.append(pattern)
-        elif pattern not in translations:
+        if _has_cyr(translations.get(pattern, "")) or pattern not in translations:
             todo.append(pattern)
 
     if mode == "--dump":
@@ -184,7 +182,7 @@ def main() -> int:
             for start, end, repl in edits:
                 source = source[:start] + repl + source[end:]
             if not re.search(r"^from \.i18n import [^\n]*\bt\b(?!, as)", source,
-                             re.M):
+                             re.MULTILINE):
                 lines = source.splitlines(keepends=True)
                 future = next((i for i, line in enumerate(lines)
                                if line.startswith("from __future__")), None)

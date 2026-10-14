@@ -58,7 +58,7 @@ def run_diagnostics(settings: AppSettings | None = None,
         keyring_ok, keyring_detail = True, "хранилище отвечает"
     except RuntimeError as exc:
         keyring_ok, keyring_detail = False, f"хранилище недоступно: {exc}"
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         keyring_ok, keyring_detail = False, f"ошибка хранилища: {exc}"
     results.append(_check("Системное хранилище ключей", keyring_ok,
                           keyring_detail, "info" if keyring_ok else "warn"))
@@ -118,7 +118,7 @@ def run_diagnostics(settings: AppSettings | None = None,
         mentor_ok = mentor_ok and bool(secrets.get("mentor_api_key"))
         mentor_detail = "провайдер, модель и ключ настроены" if mentor_ok else \
             "провайдер/модель/ключ заданы не полностью"
-    except Exception:  # noqa: BLE001
+    except Exception:
         mentor_ok = False
         mentor_detail = "ключ наставника не сохранён или хранилище недоступно"
     results.append(_check("ИИ-наставник", mentor_ok, mentor_detail,
@@ -135,7 +135,7 @@ def run_diagnostics(settings: AppSettings | None = None,
         servers = ServerStore().list()
         results.append(_check("Серверы", True,
                               f"подключено: {len(servers)}"))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         results.append(_check("Серверы", False, str(exc), "warn"))
 
     return results

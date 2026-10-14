@@ -9,8 +9,9 @@ Pure logic — no tkinter, no network.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 # Rough USD per 1M tokens (input, output) by model family.  Heuristic only.
 _PRICE_TABLE: tuple[tuple[str, float, float], ...] = (

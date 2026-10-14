@@ -25,7 +25,7 @@ def _cell(cell_type: str, source: str) -> dict[str, Any]:
     cell: dict[str, Any] = {
         "cell_type": cell_type,
         "metadata": {},
-        "source": lines[:-1] + [lines[-1].rstrip("\n")],
+        "source": [*lines[:-1], lines[-1].rstrip("\n")],
     }
     if cell_type == "code":
         cell["execution_count"] = None

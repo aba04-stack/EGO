@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alterego-training-hub-desktop"
-version = "0.26.0"
+version = "0.26.1"
 description = "Desktop control panel for AlterEgo training repositories, API mentors, and cloud GPUs"
 requires-python = ">=3.10"
 dependencies = ["keyring>=25.0", "paramiko>=3.4"]
@@ -20,3 +20,20 @@ where = ["src"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-ra"
+
+[tool.ruff]
+# Stabilization baseline (этап 29): CI enforces this set. Broad-except and
+# try-except-pass in UI modules are deliberate resilience patterns (a page
+# must never die on odd data), so BLE/S families stay opt-in, not enforced.
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["F", "E9", "I", "UP", "SIM", "RUF"]
+ignore = [
+    "RUF001",  # Cyrillic look-alike chars in Russian UI text are intentional
+    "RUF002",
+    "RUF003",
+    "SIM105",  # try/except/pass with explicit comment is our resilience idiom
+    "SIM108",  # ternaries hurt readability in several guarded UI spots
+    "SIM102",  # nested guards in metrics/settings keep distinct semantics
+]

@@ -2,6 +2,14 @@
 
 Все заметные изменения проекта. Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.26.1] — 2026-10-14
+
+### Исправлено / стабилизация (этап 29)
+- **Полный аудит проекта**: 318 тестов зелёны, `compileall` чист, `pip check` чист, опасных паттернов (`shell=True`/`eval`/`pickle`/`os.system`) в коде нет, i18n — 0 непереведённых, wheel+sdist собираются и wheel импортируется в чистом venv.
+- **Ruff расширен**: добавлен `[tool.ruff]` в pyproject (F, E9, I, UP, SIM, RUF), CI теперь проверяет весь набор вместо только F,E9. Автофиксом и вручную закрыто 245 находок.
+- Реальные правки: самосравнение для NaN → `math.isnan` (chart, compare, dashboard, evaluation, gen_preview, watchdog, ui_gpu); само-присваивание в `chart.chart_points`; mutable class-defaults в тестовых фейках → `ClassVar`; `open()` без контекста в тесте; `zip(word, word[1:])` → `itertools.pairwise`; лишние `int(round())`, конкатенации списков → распаковка.
+- Намеренные паттерны устойчивости UI (broad-except с комментариями, вложенные guard-условия) задокументированы как ignore в конфиге ruff, а не «исправлены» вслепую.
+
 ## [0.26.0] — 2026-10-14
 
 ### Добавлено

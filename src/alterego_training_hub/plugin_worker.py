@@ -37,7 +37,7 @@ class SandboxViolation(RuntimeError):
     """A plugin tried to escape the sandbox."""
 
 
-def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):  # noqa: A002
+def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
     root = str(name).split(".")[0]
     if root not in ALLOWED_IMPORTS:
         raise SandboxViolation(
@@ -60,7 +60,7 @@ def _load_payload(path: Path) -> dict:
         "__name__": f"alterego_sandbox_{path.stem}",
         "__file__": str(path),
     }
-    exec(compile(source, str(path), "exec"), namespace)  # noqa: S102
+    exec(compile(source, str(path), "exec"), namespace)
     payload = namespace.get("PLUGIN")
     if not isinstance(payload, dict):
         raise SandboxViolation("в модуле нет словаря PLUGIN")
@@ -88,7 +88,7 @@ def _run(path: Path, tool: str, args: dict) -> dict:
         return {"ok": False, "error": f"handler инструмента «{tool}» не вызываем"}
     try:
         result = handler(args)
-    except Exception as exc:  # noqa: BLE001 - reported to the caller
+    except Exception as exc:
         return {"ok": False,
                 "error": f"{type(exc).__name__}: {exc}"}
     try:
@@ -128,7 +128,7 @@ def main(argv: list[str] | None = None) -> int:
             answer = {"ok": False, "error": "неизвестная операция"}
     except SandboxViolation as exc:
         answer = {"ok": False, "error": f"Песочница: {exc}"}
-    except Exception as exc:  # noqa: BLE001 - reported to the caller
+    except Exception as exc:
         answer = {"ok": False,
                   "error": f"{type(exc).__name__}: {exc}",
                   "trace": traceback.format_exc(limit=3)}

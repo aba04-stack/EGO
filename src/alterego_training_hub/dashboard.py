@@ -5,6 +5,7 @@ terminal and exported transcripts alike — no charts library required.
 """
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from .metrics import MetricsSummary
@@ -15,7 +16,7 @@ SPARK_BLOCKS = "▁▂▃▄▅▆▇█"
 def sparkline(values: list[float], width: int = 24) -> str:
     """Unicode sparkline of the last ``width`` finite values."""
     clean = [float(v) for v in values
-             if isinstance(v, (int, float)) and v == v][-int(width or 24):]
+             if isinstance(v, (int, float)) and not math.isnan(v)][-int(width or 24):]
     if not clean:
         return "—"
     low, high = min(clean), max(clean)

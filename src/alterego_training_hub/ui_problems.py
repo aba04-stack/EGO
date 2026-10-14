@@ -1,14 +1,14 @@
 """Problems panel: errors from training logs/metrics with jump-to-code."""
 from __future__ import annotations
-from .i18n import t
 
 import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, ttk
 
+from .i18n import t
 from .metrics import parse_log
 from .problems import MAX_PROBLEMS, parse_problems
-from .ui_common import C, F_SMALL
+from .ui_common import F_SMALL, C
 
 
 class ProblemsPanel(tk.Frame):
@@ -65,7 +65,7 @@ class ProblemsPanel(tk.Frame):
             for anomaly in summary.anomalies:
                 problems.append({"severity": "warn", "message": anomaly,
                                  "path": "", "line": 0})
-        except Exception:  # noqa: BLE001 - metrics parsing must not break UI
+        except Exception:
             pass
         return problems[:MAX_PROBLEMS]
 

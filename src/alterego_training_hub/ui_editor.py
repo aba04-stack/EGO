@@ -1,6 +1,5 @@
 """Code editor page: tree + tabbed IDE editor with gutter, find/replace, bookmarks."""
 from __future__ import annotations
-from .i18n import t
 
 import time
 import tkinter as tk
@@ -9,6 +8,7 @@ from tkinter import messagebox, ttk
 
 from .finding import iter_matches, next_match_index, replace_all
 from .formatter import format_source
+from .i18n import t
 from .lint import check_source
 from .minimap import minimap_bars
 from .pairing import (
@@ -21,7 +21,7 @@ from .pairing import (
 from .pathutil import PathSafetyError, safe_child_path
 from .syntax import configure_tags, detect_language, highlight
 from .templates import TemplateError, create_project, list_templates
-from .ui_common import C, F_BASE, F_MONO, F_SMALL, Collapsible, card, page_header
+from .ui_common import F_BASE, F_MONO, F_SMALL, C, Collapsible, card, page_header
 from .ui_completion import CompletionPopup
 
 IGNORED_DIRS = {".git", ".venv", "venv", "__pycache__", "node_modules",
@@ -558,7 +558,7 @@ class EditorPage(tk.Frame):
             self.editor.mark_set("insert", f"{int(line)}.0")
             self.editor.see(f"{int(line)}.0")
             self._update_cursor()
-        except Exception:  # noqa: BLE001 - cosmetic only
+        except Exception:
             pass
 
     # -------------------------------------------------------- go to line
@@ -595,7 +595,7 @@ class EditorPage(tk.Frame):
             index = text.index("insert")
             line, col = str(index).split(".")
             return text.get(f"{line}.0", f"{line}.end"), int(col)
-        except Exception:  # noqa: BLE001 - widget may be gone / fake
+        except Exception:
             return "", 0
 
     def _on_auto_char(self, char: str, _event=None, widget=None):
@@ -607,13 +607,13 @@ class EditorPage(tk.Frame):
                 text.insert("insert", char + PAIRS[char])
                 text.mark_set("insert", "insert-1c")
                 self._on_modified_force()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 return None
             return "break"
         if decision == "skip":
             try:
                 text.mark_set("insert", "insert+1c")
-            except Exception:  # noqa: BLE001
+            except Exception:
                 return None
             return "break"
         return None
@@ -625,7 +625,7 @@ class EditorPage(tk.Frame):
             try:
                 text.delete("insert-2c", "insert")
                 self._on_modified_force()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 return None
             return "break"
         return None
@@ -637,7 +637,7 @@ class EditorPage(tk.Frame):
             if offset is None:
                 return
             text = self.editor.get("1.0", "end-1c")
-        except Exception:  # noqa: BLE001 - widget may be gone / fake
+        except Exception:
             return
         index = bracket_for_cursor(text, int(offset))
         if index is None:
@@ -663,7 +663,7 @@ class EditorPage(tk.Frame):
         for widget in (self.editor, self.gutter, self.editor2, self.gutter2):
             try:
                 widget.configure(font=font)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
         self.status_var.set(t('масштаб шрифта: {size} пт').format(size=size))
 
@@ -682,7 +682,7 @@ class EditorPage(tk.Frame):
         try:
             self.editor2.delete("1.0", "end")
             self.editor2.insert("1.0", self.editor.get("1.0", "end-1c"))
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
         self.pane2.pack(side="left", fill="both", expand=True)
         self.split_visible = True
@@ -714,7 +714,7 @@ class EditorPage(tk.Frame):
                 target.delete("1.0", "end")
                 target.insert("1.0", text)
                 self._sync_guard = False
-        except Exception:  # noqa: BLE001
+        except Exception:
             self._sync_guard = False
 
     # ----------------------------------------------------------- minimap
@@ -722,7 +722,7 @@ class EditorPage(tk.Frame):
         try:
             self.minimap.delete("all")
             text = self.editor.get("1.0", "end-1c")
-        except Exception:  # noqa: BLE001 - fake widgets
+        except Exception:
             return
         bars = minimap_bars(text)
         if not bars:
@@ -730,7 +730,7 @@ class EditorPage(tk.Frame):
         try:
             width = int(self.minimap.winfo_width() or 64)
             height = int(self.minimap.winfo_height() or 400)
-        except Exception:  # noqa: BLE001
+        except Exception:
             width, height = 64, 400
         row_h = max(2, height // max(1, len(bars)))
         colors = {"code": "#6b7c93", "def": "#3b82f6", "head": "#8ab4f8",
@@ -753,7 +753,7 @@ class EditorPage(tk.Frame):
                 return
             total = self._line_count()
             self.open_at(1 + int(y / height * max(1, total - 1)))
-        except Exception:  # noqa: BLE001 - cosmetic only
+        except Exception:
             pass
 
     # ------------------------------------------------- format and linting
@@ -828,7 +828,7 @@ class EditorPage(tk.Frame):
                 self._tabs[self._active]["modified"] = True
                 self.editor.edit_modified(False)
                 self._render_tabs()
-        except Exception:  # noqa: BLE001 - fake widgets / shutdown
+        except Exception:
             pass
 
     def _update_cursor(self):
@@ -836,20 +836,20 @@ class EditorPage(tk.Frame):
             index = str(self.editor.index("insert"))
             line, col = index.split(".", 1)
             self.cursor_var.set(t('Стр {line}, кол {v3}').format(line=line, v3=int(col) + 1))
-        except Exception:  # noqa: BLE001 - cosmetic only
+        except Exception:
             pass
 
     # ------------------------------------------------------- gutter / marks
     def _sync_scroll(self, first, _last):
         try:
             self.gutter.yview_moveto(first)
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
     def _line_count(self) -> int:
         try:
             text = self.editor.get("1.0", "end-1c")
-        except Exception:  # noqa: BLE001
+        except Exception:
             return 0
         return text.count("\n") + 1 if text else 0
 
@@ -888,14 +888,14 @@ class EditorPage(tk.Frame):
                     gutter.tag_add("line_problem",
                                    f"{number}.0", f"{number}.end")
             gutter.configure(state="disabled")
-        except Exception:  # noqa: BLE001 - fake widgets
+        except Exception:
             pass
 
     def _on_gutter_click(self, event=None):
         try:
             index = self.gutter.index(f"@0,{event.y}")
             line = int(str(index).split(".", 1)[0])
-        except Exception:  # noqa: BLE001 - fake widgets / bad coords
+        except Exception:
             return
         self.toggle_bookmark(line)
 
@@ -903,7 +903,7 @@ class EditorPage(tk.Frame):
     def current_line(self) -> int:
         try:
             return int(str(self.editor.index("insert")).split(".", 1)[0])
-        except Exception:  # noqa: BLE001
+        except Exception:
             return 1
 
     def toggle_bookmark(self, line: int | None = None):
@@ -943,28 +943,28 @@ class EditorPage(tk.Frame):
         try:
             self.find_entry.focus_set()
             self.find_entry.selection_range(0, "end")
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
     def close_find(self):
         self.find_visible = False
         try:
             self.find_bar.pack_forget()
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
         self._clear_find_tags()
         self._matches = []
         self._match_index = None
         try:
             self.editor.focus_set()
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
     def _clear_find_tags(self):
         for tag in ("find_match", "find_current"):
             try:
                 self.editor.tag_remove(tag, "1.0", "end")
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
 
     def _refresh_matches(self):
@@ -972,7 +972,7 @@ class EditorPage(tk.Frame):
         query = self.find_var.get()
         try:
             text = self.editor.get("1.0", "end-1c")
-        except Exception:  # noqa: BLE001
+        except Exception:
             return
         self._matches = iter_matches(text, query,
                                      case_sensitive=bool(self.match_case.get()))
@@ -980,7 +980,7 @@ class EditorPage(tk.Frame):
             try:
                 self.editor.tag_add("find_match", f"1.0+{start}c",
                                     f"1.0+{end}c")
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
         self._match_index = None
         self.find_status.set(t('{v0} совпад.').format(v0=len(self._matches)) if query else "")
@@ -997,7 +997,7 @@ class EditorPage(tk.Frame):
             if isinstance(cursor, (tuple, list)):
                 cursor = cursor[0] if cursor else 0
             cursor = int(cursor or 0)
-        except Exception:  # noqa: BLE001
+        except Exception:
             cursor = 0
         index = next_match_index(self._matches, cursor, direction)
         if index is None:
@@ -1009,7 +1009,7 @@ class EditorPage(tk.Frame):
             self.editor.tag_add("find_current", f"1.0+{start}c", f"1.0+{end}c")
             self.editor.mark_set("insert", f"1.0+{end}c")
             self.editor.see(f"1.0+{start}c")
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
         self.find_status.set(t('{v0} из {v2}').format(v0=index + 1, v2=len(self._matches)))
 
@@ -1022,7 +1022,7 @@ class EditorPage(tk.Frame):
         try:
             self.editor.delete(f"1.0+{start}c", f"1.0+{end}c")
             self.editor.insert(f"1.0+{start}c", self.replace_var.get())
-        except Exception:  # noqa: BLE001
+        except Exception:
             return
         self._on_modified_force()
         self._refresh_matches()
@@ -1031,7 +1031,7 @@ class EditorPage(tk.Frame):
     def replace_all_in_file(self):
         try:
             text = self.editor.get("1.0", "end-1c")
-        except Exception:  # noqa: BLE001
+        except Exception:
             return
         new_text, count = replace_all(
             text, self.find_var.get(), self.replace_var.get(),
@@ -1042,7 +1042,7 @@ class EditorPage(tk.Frame):
         try:
             self.editor.delete("1.0", "end")
             self.editor.insert("1.0", new_text)
-        except Exception:  # noqa: BLE001
+        except Exception:
             return
         self._on_modified_force()
         self._refresh_matches()
@@ -1062,7 +1062,7 @@ class EditorPage(tk.Frame):
             highlight(self.editor, self._language)
             if self.split_visible:
                 highlight(self.editor2, self._language)
-        except Exception:  # noqa: BLE001 - cosmetic only
+        except Exception:
             pass
         self._regen_gutter()
         self._redraw_minimap()
@@ -1071,11 +1071,11 @@ class EditorPage(tk.Frame):
         if self._highlight_after is not None:
             try:
                 self.after_cancel(self._highlight_after)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
         try:
             self._highlight_after = self.after(400, self._apply_highlight)
-        except Exception:  # noqa: BLE001 - fake widgets
+        except Exception:
             self._apply_highlight()
 
     def _on_key_release(self, event=None):
@@ -1086,7 +1086,7 @@ class EditorPage(tk.Frame):
             return
         try:
             keysym = str(getattr(event, "keysym", "") or "")
-        except Exception:  # noqa: BLE001
+        except Exception:
             keysym = ""
         if keysym in {"Up", "Down", "Return", "Tab", "Escape"}:
             return
@@ -1107,7 +1107,7 @@ class EditorPage(tk.Frame):
             return "break"
         try:
             self.editor.insert("insert", "    ")
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
         return "break"
 
@@ -1172,7 +1172,7 @@ class EditorPage(tk.Frame):
                     self.editor.delete("1.0", "end")
                     self.editor.insert("1.0", content)
                     note = t(' · формат: {fixes} исправлений').format(fixes=fixes)
-        except Exception:  # noqa: BLE001 - formatting must not block saving
+        except Exception:
             pass
         try:
             tab["path"].write_text(content, encoding="utf-8")
@@ -1187,7 +1187,7 @@ class EditorPage(tk.Frame):
             try:
                 self.run_lint()
                 note += " · " + self.status_var.get()
-            except Exception:  # noqa: BLE001 - linting must not block saving
+            except Exception:
                 pass
         self.status_var.set(t('сохранено {v1}{note}').format(v1=time.strftime('%H:%M:%S'), note=note))
         self.app.set_status(t('Файл сохранён'))

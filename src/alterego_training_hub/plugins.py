@@ -33,8 +33,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .plugin_sandbox import (build_meta, describe_plugin, run_tool,
-                             static_trusted)
+from .plugin_sandbox import build_meta, describe_plugin, run_tool, static_trusted
 
 PLUGIN_SUFFIX = ".py"
 MANIFEST_NAME = "plugins.json"
@@ -159,7 +158,7 @@ class PluginManager:
             if not isinstance(payload, dict):
                 raise PluginError("в модуле нет словаря PLUGIN")
             return self._build(path, payload, flags, trusted=True)
-        except Exception as exc:  # noqa: BLE001 - plugin isolation
+        except Exception as exc:
             return LoadedPlugin(id=path.stem, name=path.stem, path=str(path),
                                 enabled=False,
                                 error=f"{type(exc).__name__}: {exc}")

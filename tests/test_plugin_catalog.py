@@ -5,9 +5,14 @@ import json
 
 import pytest
 
-from alterego_training_hub.plugin_catalog import (CatalogEntry, CatalogError,
-                                                  install_entry, load_catalog,
-                                                  save_catalog, uninstall)
+from alterego_training_hub.plugin_catalog import (
+    CatalogEntry,
+    CatalogError,
+    install_entry,
+    load_catalog,
+    save_catalog,
+    uninstall,
+)
 
 PLUGIN_SOURCE = '''
 PLUGIN = {"id": "mini", "name": "Mini", "version": "2.0",

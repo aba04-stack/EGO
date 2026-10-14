@@ -57,13 +57,15 @@ def test_verify_export_gguf_and_onnx(tmp_path):
     checks, artifact = verify_export(tmp_path, "gguf")
     assert artifact == fake and any("GGUF-магии" in line for line in checks)
 
-    fake.write_bytes(b"GGUF" + b"\0" * 4096)
+    import struct
+    fake.write_bytes(b"GGUF" + struct.pack("<IQQ", 3, 1, 1) + b"\0" * 4096)
     checks, artifact = verify_export(tmp_path, "gguf")
     assert not any(line.startswith("✗") for line in checks)
 
     onnx_dir = tmp_path / "onnx"
     onnx_dir.mkdir()
-    (onnx_dir / "model.onnx").write_bytes(b"\x08\x07" + b"\0" * 4096)
+    (onnx_dir / "model.onnx").write_bytes(
+        b"\x08\x07" + b"\x12\xd0\x0f" + b"a" * 2000 + b"\x3a\x02\x0a\x00")
     checks, artifact = verify_export(onnx_dir, "onnx")
     assert artifact is not None and any("проверка пройдена" in line
                                         for line in checks)
@@ -77,7 +79,9 @@ def test_run_export_with_injectable_runner(tmp_path):
     def good_runner(command):
         target = out_dir / "gguf"
         target.mkdir(parents=True, exist_ok=True)
-        (target / "model.gguf").write_bytes(b"GGUF" + b"\0" * 8192)
+        import struct
+        (target / "model.gguf").write_bytes(
+            b"GGUF" + struct.pack("<IQQ", 3, 1, 1) + b"\0" * 8192)
         return _Done(0, "converted")
 
     result = run_export(ExportRequest(source=str(source), fmt="gguf",

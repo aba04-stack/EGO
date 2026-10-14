@@ -40,6 +40,7 @@ UI_MESSAGES: dict[str, str] = {
     "Pull — только fast-forward": "Pull — fast-forward only",
     "Push на HF…": "Push to HF…",
     "Push на Hugging Face": "Push to Hugging Face",
+    "RunPod API недоступен 3 цикла подряд — автостоп бюджета временно НЕ работает, расходы не контролируются": "RunPod API unreachable for 3 cycles in a row — budget auto-stop is temporarily NOT working, spending is uncontrolled",
     "RunPod API-ключ": "RunPod API key",
     "SFT-валидация": "SFT validation",
     "SSH-пользователь": "SSH user",

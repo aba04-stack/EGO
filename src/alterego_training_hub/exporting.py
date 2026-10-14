@@ -73,8 +73,95 @@ def build_export_command(request: ExportRequest) -> list[str]:
             "--outtype", out_type]
 
 
-def verify_export(output_dir: str | Path, fmt: str) -> tuple[list[str], Path | None]:
-    """Check the produced artifact: existence, size, format magic."""
+def _protobuf_fields(data: bytes) -> list[int] | None:
+    """Номера полей верхнего уровня protobuf или None при битом потоке."""
+    fields: list[int] = []
+    pos = 0
+    while pos < len(data):
+        # varint-тег
+        tag, shift = 0, 0
+        while True:
+            if pos >= len(data) or shift > 63:
+                return None
+            byte = data[pos]
+            pos += 1
+            tag |= (byte & 0x7F) << shift
+            if not byte & 0x80:
+                break
+            shift += 7
+        number, wire = tag >> 3, tag & 7
+        if number == 0:
+            return None
+        fields.append(number)
+        if wire == 0:  # varint
+            while pos < len(data) and data[pos] & 0x80:
+                pos += 1
+            pos += 1
+        elif wire == 1:
+            pos += 8
+        elif wire == 2:  # length-delimited
+            length, shift = 0, 0
+            while True:
+                if pos >= len(data) or shift > 63:
+                    return None
+                byte = data[pos]
+                pos += 1
+                length |= (byte & 0x7F) << shift
+                if not byte & 0x80:
+                    break
+                shift += 7
+            pos += length
+        elif wire == 5:
+            pos += 4
+        else:
+            return None
+        if pos > len(data):
+            return None
+    return fields
+
+
+def _check_onnx_structure(artifact: Path) -> str | None:
+    """Структурная проверка ONNX (protobuf ModelProto), не только расширение."""
+    try:
+        import onnx  # type: ignore
+
+        model = onnx.load(str(artifact))
+        onnx.checker.check_model(model)
+        return None
+    except ImportError:
+        pass
+    except Exception as exc:
+        return f"onnx.checker: {exc}"
+    fields = _protobuf_fields(artifact.read_bytes())
+    if fields is None:
+        return "файл не является корректным protobuf-потоком"
+    # ModelProto: 1=ir_version, 7=graph должны присутствовать
+    if 7 not in fields:
+        return "в protobuf нет поля graph (7) — это не модель ONNX"
+    return None
+
+
+def _check_gguf_header(artifact: Path) -> str | None:
+    import struct
+
+    with artifact.open("rb") as handle:
+        head = handle.read(24)
+    if len(head) < 24 or head[:4] != GGUF_MAGIC:
+        return "нет GGUF-магии"
+    version, n_tensors, n_meta = struct.unpack("<IQQ", head[4:24])
+    if version not in (2, 3) or n_tensors > 100_000 or n_meta > 100_000:
+        return (f"подозрительный заголовок GGUF: version={version}, "
+                f"tensors={n_tensors}, meta={n_meta}")
+    return None
+
+
+def verify_export(output_dir: str | Path, fmt: str, *,
+                  since: float | None = None) -> tuple[list[str], Path | None]:
+    """Check the produced artifact: существование, свежесть, структура.
+
+    ``since`` (момент запуска конвертации) отсекает СТАРЫЕ файлы в папке:
+    успех засчитывается только артефакту этого запуска.
+    """
     fmt = str(fmt or "").lower()
     if fmt not in EXPORT_FORMATS:
         raise ExportError(f"Неизвестный формат: {fmt}")
@@ -84,26 +171,37 @@ def verify_export(output_dir: str | Path, fmt: str) -> tuple[list[str], Path | N
         candidates = sorted(base.rglob("*.gguf")) if base.is_dir() else []
     else:
         candidates = sorted(base.rglob("*.onnx")) if base.is_dir() else []
+    if since is not None:
+        fresh = [c for c in candidates if c.stat().st_mtime >= since - 1.0]
+        if candidates and not fresh:
+            checks.append("✗ в папке есть только СТАРЫЕ артефакты — этот "
+                          "запуск ничего не создал (не выдаём прошлое за результат)")
+            return checks, None
+        candidates = fresh
     if not candidates:
         checks.append("✗ артефакт не найден: конвертация не выполнена "
                       f"(проверьте инструменты: {EXPORT_FORMATS[fmt]['tool_hint']})")
         return checks, None
-    artifact = candidates[0]
+    artifact = max(candidates, key=lambda c: c.stat().st_mtime)
     size = artifact.stat().st_size
     checks.append(f"✓ файл: {artifact.name} ({size / 1_048_576:.1f} MB)")
     if size < MIN_ARTIFACT_BYTES:
         checks.append("✗ файл подозрительно мал — конвертация оборвана")
         return checks, artifact
     if fmt == "gguf":
-        with artifact.open("rb") as handle:
-            magic = handle.read(4)
-        if magic == GGUF_MAGIC:
-            checks.append("✓ магия GGUF подтверждена")
+        problem = _check_gguf_header(artifact)
+        if problem is None:
+            checks.append("✓ заголовок GGUF валиден (магия, версия, счётчики)")
         else:
-            checks.append(f"✗ неверный формат (нет GGUF-магии): {magic!r}")
+            checks.append(f"✗ GGUF: {problem}")
             return checks, artifact
     else:
-        checks.append("✓ расширение .onnx")
+        problem = _check_onnx_structure(artifact)
+        if problem is None:
+            checks.append("✓ структура ONNX подтверждена (protobuf ModelProto)")
+        else:
+            checks.append(f"✗ ONNX: {problem}")
+            return checks, artifact
     checks.append("✓ проверка пройдена")
     return checks, artifact
 
@@ -115,6 +213,7 @@ def run_export(request: ExportRequest, *,
     ``runner`` is injectable for tests (defaults to subprocess.run).
     """
     started = time.monotonic()
+    started_wall = time.time()
     try:
         command = build_export_command(request)
     except ExportError as exc:
@@ -147,7 +246,8 @@ def run_export(request: ExportRequest, *,
                             log_tail=log_tail,
                             error=f"Конвертация завершилась с кодом {returncode}.")
 
-    checks, artifact = verify_export(out_dir, request.fmt)
+    checks, artifact = verify_export(out_dir, request.fmt,
+                                     since=started_wall)
     ok = artifact is not None and artifact.stat().st_size >= MIN_ARTIFACT_BYTES \
         and not any(line.startswith("✗") for line in checks)
     return ExportResult(

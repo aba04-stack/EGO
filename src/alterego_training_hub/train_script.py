@@ -43,6 +43,7 @@ class ScriptConfig:
     lora_dropout: float = 0.05
     qlora: bool = False  # 4-bit base (bitsandbytes) — QLoRA
     target_modules: str = "auto"  # auto | all-linear | q_proj,v_proj,...
+    gradient_checkpointing: bool = False
     sample_every: int = 200  # steps between generation samples in the log
     eval_prompts: tuple[str, ...] = ("Привет! Расскажи о себе.",)
 
@@ -100,6 +101,7 @@ if __name__ == "__main__":
 def _config_json(cfg: ScriptConfig) -> str:
     payload = {
         "path": cfg.path,
+        "recipe_name": cfg.recipe_name,
         "dataset": cfg.dataset_path,
         "tokenizer": cfg.tokenizer_path,
         "base_model": cfg.base_model,
@@ -111,6 +113,7 @@ def _config_json(cfg: ScriptConfig) -> str:
         "warmup_pct": cfg.warmup_pct,
         "seed": cfg.seed,
         "grad_accum": cfg.grad_accum,
+        "gradient_checkpointing": bool(cfg.gradient_checkpointing),
         "gpus": cfg.gpus,
         "lora": {"r": cfg.lora_r, "alpha": cfg.lora_alpha,
                  "dropout": cfg.lora_dropout, "qlora": cfg.qlora,
@@ -264,6 +267,9 @@ def main() -> None:
         print(f"Подсказка: для {CONFIG['gpus']} GPU запустите через "
               f"torchrun --nproc_per_node={CONFIG['gpus']} train_llm.py",
               flush=True)
+    if CONFIG.get("recipe_name") == "classifier":
+        train_classifier(args)
+        return
     if CONFIG["path"] == "scratch":
         # Scratch строит char-корпус в памяти по дизайну (тензор токенов).
         texts = [t for t in load_texts(args.dataset) if t.strip()]
@@ -355,7 +361,8 @@ def train_scratch(args, texts: list[str]) -> None:
             "разными и длиннее последовательности). Уменьшите seq_len "
             "в мастере или добавьте данных.")
     print(f"Токенизатор: char-level, vocab={len(stoi)} (пресет "
-          f"{arch['id']}: ~{arch['params_est'] / 1e6:.0f}M параметров)", flush=True)
+          f"{arch['id']}: ~{arch['params_est'] / 1e6:.0f}M параметров "
+          "по BPE-словарю пресета)", flush=True)
 
     class Block(nn.Module):
         def __init__(self, d):
@@ -393,6 +400,12 @@ def train_scratch(args, texts: list[str]) -> None:
     train_data, val_data = (data[:-n_val], data[-n_val:]) \
         if len(data) > 2 * seq else (data, data)
     model = TinyLM().to(device)
+    if main_proc:
+        # Честная цифра по построенной модели (char-словарь корпуса),
+        # а не оценка пресета с чужим BPE-словарём.
+        print(f"Параметров фактически: "
+              f"{sum(p.numel() for p in model.parameters()) / 1e6:.1f}M",
+              flush=True)
     if distributed:
         model = nn.parallel.DistributedDataParallel(
             model,
@@ -406,9 +419,40 @@ def train_scratch(args, texts: list[str]) -> None:
         raw = model.module if hasattr(model, "module") else model
         raw.load_state_dict(state)
         if main_proc:
-            print(f"Resume: веса из {args.resume} "
-                  "(оптимизатор и шаг начнутся заново)", flush=True)
+            print(f"Resume: веса из {args.resume}", flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr)
+    _total_opt_steps = max(
+        1, (max(1, (len(train_data) - seq) // (CONFIG["batch"] * seq))
+            * args.epochs))
+    _warmup = max(0, int(_total_opt_steps * CONFIG["warmup_pct"] / 100))
+
+    def _lr_lambda(opt_step):
+        if opt_step < _warmup:
+            return (opt_step + 1) / max(1, _warmup)
+        import math as _math
+        progress = (opt_step - _warmup) / max(1, _total_opt_steps - _warmup)
+        return 0.1 + 0.9 * 0.5 * (1.0 + _math.cos(_math.pi * progress))
+
+    scheduler = torch.optim.lr_scheduler.LambdaLR(opt, _lr_lambda)
+    if resume_bundle is not None:
+        restored = ["веса"]
+        if isinstance(resume_bundle.get("optimizer"), dict):
+            try:
+                opt.load_state_dict(resume_bundle["optimizer"])
+                restored.append("оптимизатор")
+            except (ValueError, RuntimeError):
+                pass
+        if resume_bundle.get("rng_state") is not None:
+            try:
+                torch.set_rng_state(resume_bundle["rng_state"])
+                restored.append("RNG")
+            except (TypeError, RuntimeError):
+                pass
+        if main_proc:
+            print(f"Resume: восстановлено: {', '.join(restored)} "
+                  f"(шаг чекпоинта: {int(resume_bundle.get('step', 0))}; "
+                  "эпоха начнётся с начала — точного mid-epoch resume "
+                  "у scratch нет)", flush=True)
 
     def _bundle():
         """Чекпоинт для самостоятельного восстановления: веса+словарь+конфиг."""
@@ -416,6 +460,8 @@ def train_scratch(args, texts: list[str]) -> None:
         return {"state_dict": raw_model.state_dict(), "stoi": stoi,
                 "itos": {str(k): v for k, v in itos.items()},
                 "arch": arch, "seq": seq,
+                "optimizer": opt.state_dict(), "step": step,
+                "rng_state": torch.get_rng_state(),
                 "config": {"seq_len": CONFIG["seq_len"],
                            "lr": args.lr, "epochs": args.epochs}}
     steps_per_epoch = max(1, (len(train_data) - seq) // (CONFIG["batch"] * seq))
@@ -455,6 +501,7 @@ def train_scratch(args, texts: list[str]) -> None:
                 value += float(loss.detach())  # среднее по микробатчам
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
+            scheduler.step()
             step += 1
             if step % 20 == 0 and main_proc:
                 mem = (f" mem={torch.cuda.max_memory_allocated() / 1e9:.2f}GB"
@@ -564,7 +611,11 @@ def train_lora(args) -> None:
         for row in iter_rows_raw(args.dataset):
             prompt, full = _row_pair(row)
             if full.strip():
-                yield {"text": full, "prompt": prompt}
+                messages = row.get("messages") if isinstance(row, dict) \
+                    else None
+                yield {"text": full, "prompt": prompt,
+                       "messages": messages
+                       if isinstance(messages, list) else []}
 
     # from_generator: датасет строится потоково (Arrow на диске),
     # весь корпус в RAM не собирается.
@@ -576,19 +627,42 @@ def train_lora(args) -> None:
     else:
         train_ds, eval_ds = full_ds, None
 
+    use_chat_template = bool(getattr(tokenizer, "chat_template", None))
+
+    def _ids_for(text, messages, *, prompt_only=False):
+        """Токены примера: chat template модели > ручной 'role: content'."""
+        max_len = CONFIG["seq_len"]
+        if messages and use_chat_template:
+            ids = tokenizer.apply_chat_template(
+                messages, tokenize=True,
+                add_generation_prompt=prompt_only)
+            return list(ids)[:max_len]
+        return tokenizer(text, truncation=True,
+                         max_length=max_len)["input_ids"]
+
     def tokenize(batch):
-        enc = tokenizer(batch["text"], truncation=True,
-                        max_length=CONFIG["seq_len"])
-        prompt_enc = tokenizer(batch["prompt"], truncation=True,
-                               max_length=CONFIG["seq_len"])
-        # Маскируем prompt (инструкции, system/user): loss только
-        # по целевому ответу. Для plain text prompt пуст — учимся
-        # на всём тексте, как в обычном LM.
-        enc["labels"] = [
-            _mask_labels(ids, prompt_ids)
-            for ids, prompt_ids in zip(enc["input_ids"],
-                                       prompt_enc["input_ids"])]
-        return enc
+        input_ids, labels = [], []
+        for text, prompt, messages in zip(
+                batch["text"], batch["prompt"], batch["messages"]):
+            ids = _ids_for(text, messages)
+            if messages and use_chat_template:
+                # prompt = диалог до финального assistant + generation prompt
+                last = max((i for i, m in enumerate(messages)
+                            if isinstance(m, dict)
+                            and m.get("role") == "assistant"), default=-1)
+                prompt_ids = (_ids_for("", messages[:last],
+                                       prompt_only=True)
+                              if last > 0 else [])
+            else:
+                prompt_ids = tokenizer(
+                    prompt, truncation=True,
+                    max_length=CONFIG["seq_len"])["input_ids"] if prompt \
+                    else []
+            input_ids.append(ids)
+            # Маскируем prompt (инструкции, system/user): loss только
+            # по целевому ответу. Plain text: prompt пуст — обычный LM.
+            labels.append(_mask_labels(ids, prompt_ids))
+        return {"input_ids": input_ids, "labels": labels}
 
     trainer = Trainer(
         model=model,
@@ -600,6 +674,8 @@ def train_lora(args) -> None:
             num_train_epochs=args.epochs,
             learning_rate=args.lr,
             warmup_ratio=CONFIG["warmup_pct"] / 100.0,
+            lr_scheduler_type="cosine",
+            gradient_checkpointing=bool(CONFIG["gradient_checkpointing"]),
             logging_steps=20,
             eval_strategy="epoch" if eval_ds is not None else "no",
             save_strategy="epoch",
@@ -634,6 +710,81 @@ def train_lora(args) -> None:
                    checkpoint="final")
     trainer.save_model(args.output_dir)
     print(f"Готово. Адаптер: {args.output_dir}", flush=True)
+
+
+def train_classifier(args) -> None:
+    """Классификация: SequenceClassification по полю label (НЕ causal LM)."""
+    try:
+        import torch
+        from datasets import Dataset
+        from transformers import (AutoModelForSequenceClassification,
+                                  AutoTokenizer, DataCollatorWithPadding,
+                                  Trainer, TrainingArguments)
+    except ImportError as exc:
+        raise SystemExit(
+            "Нужны transformers/datasets: pip install transformers datasets"
+        ) from exc
+
+    base = CONFIG["base_model"]
+    tokenizer = AutoTokenizer.from_pretrained(CONFIG["tokenizer"] or base)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    rows = []
+    for row in iter_rows_raw(args.dataset):
+        if not isinstance(row, dict) or row.get("label") is None:
+            continue
+        text = _row_text(row)
+        if text.strip():
+            rows.append({"text": text, "label": str(row["label"])})
+    if len(rows) < 2:
+        raise SystemExit(
+            "Классификатор: нужно минимум 2 строки с полем label.")
+    names = sorted({r["label"] for r in rows})
+    if len(names) < 2:
+        raise SystemExit(
+            f"Классификатор: найден один класс {names} — нужны минимум 2.")
+    label2id = {name: i for i, name in enumerate(names)}
+    for r in rows:
+        r["label"] = label2id[r["label"]]
+    print(f"Классы: {label2id}", flush=True)
+    random.Random(CONFIG["seed"]).shuffle(rows)
+    split = max(1, len(rows) - max(1, len(rows) // 10)) if len(rows) >= 10 \
+        else len(rows)
+    train_ds = Dataset.from_list(rows[:split])
+    eval_ds = Dataset.from_list(rows[split:]) if split < len(rows) else None
+
+    def tokenize(batch):
+        return tokenizer(batch["text"], truncation=True,
+                         max_length=CONFIG["seq_len"])
+
+    model = AutoModelForSequenceClassification.from_pretrained(
+        base, num_labels=len(names),
+        id2label={i: n for n, i in label2id.items()}, label2id=label2id)
+    trainer = Trainer(
+        model=model,
+        args=TrainingArguments(
+            output_dir=args.output_dir,
+            per_device_train_batch_size=CONFIG["batch"],
+            num_train_epochs=args.epochs,
+            learning_rate=args.lr,
+            warmup_ratio=CONFIG["warmup_pct"] / 100.0,
+            lr_scheduler_type="cosine",
+            eval_strategy="epoch" if eval_ds is not None else "no",
+            save_strategy="epoch", report_to=[], seed=CONFIG["seed"]),
+        train_dataset=train_ds.map(tokenize, batched=True),
+        eval_dataset=(eval_ds.map(tokenize, batched=True)
+                      if eval_ds is not None else None),
+        data_collator=DataCollatorWithPadding(tokenizer))
+    trainer.train()
+    if eval_ds is not None:
+        import numpy as np
+        preds = trainer.predict(eval_ds.map(tokenize, batched=True))
+        guessed = np.argmax(preds.predictions, axis=1)
+        acc = float((guessed == np.array(preds.label_ids)).mean())
+        print(f"eval: accuracy={acc:.3f}", flush=True)
+    trainer.save_model(args.output_dir)
+    print(f"Готово. Классификатор: {args.output_dir}", flush=True)
 
 '''
 

@@ -34,6 +34,7 @@ class CloudJob:
     status: str = "pending"
     pod_id: str = ""
     missing_polls: int = 0  # подряд ответов API без этого пода
+    api_errors: int = 0     # подряд сбоев самого API при опросе
     log: str = ""
     error: str = ""
     created_at: float = field(default_factory=time.time)
@@ -255,14 +256,20 @@ class CloudJobQueue:
         try:
             pods = client.list_pods()
         except Exception as exc:
-            return self.update(job_id, error=f"сбой опроса: {exc}")
+            fails = int(job.api_errors or 0) + 1
+            note = f"сбой опроса API ({fails} подряд): {exc}"
+            if fails >= 3:
+                note += (" — статус задания НЕИЗВЕСТЕН, не считайте его "
+                         "завершённым или проваленным")
+            return self.update(job_id, api_errors=fails, error=note)
         for pod in pods:
             if str(pod.get("id") or "") == job.pod_id:
                 desired = str(pod.get("desiredStatus") or pod.get("status") or "")
                 mapped = {"RUNNING": "running", "EXITED": "done",
                           "TERMINATED": "done", "FAILED": "failed"}.get(
                     desired.upper(), job.status)
-                changes: dict = {"status": mapped, "missing_polls": 0}
+                changes: dict = {"status": mapped, "missing_polls": 0,
+                                 "api_errors": 0}
                 if mapped == "done" and job.status != "done":
                     # EXITED означает лишь «контейнер завершился»: обучение
                     # могло упасть внутри. Успех не выдумываем.

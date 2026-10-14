@@ -39,14 +39,19 @@ class ArchPreset:
 
 
 PRESETS: tuple[ArchPreset, ...] = (
-    ArchPreset("gpt2-small", "GPT-2 small", 50257, 768, 12, 12, 1024,
-               "классика для экспериментов и обучения с нуля на малом корпусе"),
-    ArchPreset("gpt2-medium", "GPT-2 medium", 50257, 1024, 24, 16, 1024,
-               "заметно сильнее, нужна GPU 16+ ГБ для full FT"),
-    ArchPreset("llama-tiny", "Llama-like tiny", 32000, 512, 8, 8, 2048,
-               "современная архитектура, быстрый старт с нуля"),
-    ArchPreset("llama-small", "Llama-like small", 32000, 1024, 16, 16, 2048,
-               "разумный баланс качества и цены"),
+    # Честно: scratch — собственная char-level Transformer-модель приложения.
+    # Имена пресетов задают МАСШТАБ (d_model/слои), а не реализацию GPT-2/Llama:
+    # нет их токенизаторов, RoPE/SwiGLU/RMSNorm и весов. params — оценка для
+    # BPE-словаря пресета; фактическое число параметров скрипт печатает по
+    # построенной модели (char-словарь корпуса намного меньше).
+    ArchPreset("gpt2-small", "Масштаб GPT-2 small (своя char-модель)", 50257, 768, 12, 12, 1024,
+               "НЕ GPT-2: собственная char-Transformer архитектура приложения в этом масштабе"),
+    ArchPreset("gpt2-medium", "Масштаб GPT-2 medium (своя char-модель)", 50257, 1024, 24, 16, 1024,
+               "НЕ GPT-2: собственная char-Transformer архитектура приложения в этом масштабе"),
+    ArchPreset("llama-tiny", "Масштаб Llama tiny (своя char-модель)", 32000, 512, 8, 8, 2048,
+               "НЕ Llama: нет RoPE/SwiGLU/RMSNorm; собственная char-архитектура, быстрый старт"),
+    ArchPreset("llama-small", "Масштаб Llama small (своя char-модель)", 32000, 1024, 16, 16, 2048,
+               "НЕ Llama: нет RoPE/SwiGLU/RMSNorm; собственная char-архитектура в этом масштабе"),
     ArchPreset("custom", "Своя конфигурация", 32000, 768, 12, 12, 1024,
                "параметры задаются вручную в конфиге обучения"),
 )

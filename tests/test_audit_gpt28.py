@@ -22,7 +22,7 @@ def _summary(values):
 def test_lora_script_builds_labels():
     script = generate_script(ScriptConfig(path="lora", dataset_path="d.jsonl",
                                           base_model="m"))
-    assert 'enc["labels"]' in script
+    assert "_mask_labels" in script and '"labels": labels' in script
 
 
 # 2/3/4: scratch: настоящий val, messages/битые строки, бандл чекпоинта

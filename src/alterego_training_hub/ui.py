@@ -970,7 +970,19 @@ class TrainingHubApp(tk.Tk):
             client = self.runpod_client()
             pods = client.list_pods()
         except Exception:
-            return  # no key / no network — stay silent, retry next tick
+            # Молчать вечно нельзя: после 3 недоступных циклов пользователь
+            # должен знать, что автостоп сейчас НЕ работает.
+            self._budget_api_fails = getattr(self, "_budget_api_fails", 0) + 1
+            if self._budget_api_fails == 3:
+                from .budget_guard import BudgetVerdict
+
+                self.post_event("budget", {"verdict": BudgetVerdict(
+                    cap_usd=cap, spent_usd=0.0, over=False,
+                    warning=t('RunPod API недоступен 3 цикла подряд — '
+                              'автостоп бюджета временно НЕ работает, '
+                              'расходы не контролируются'))})
+            return
+        self._budget_api_fails = 0
         ledger = BudgetLedger.load()
 
         def stopper(pod_id):

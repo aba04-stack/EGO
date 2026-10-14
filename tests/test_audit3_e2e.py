@@ -93,8 +93,9 @@ def test_scratch_torchrun_two_ranks(tmp_path):
     # Заявленные свойства DDP, а не только «не упало»: оба ранга стартовали,
     # метрики не дублируются между рангами, «Готово» печатает только главный.
     combined = done.stdout + done.stderr  # torchrun раскладывает ранги по потокам
-    rank_lines = [ln for ln in combined.splitlines() if "[rank " in ln]
-    assert len(rank_lines) == 2 and rank_lines[0] != rank_lines[1]
+    import re as _re
+    rank_marks = _re.findall(r"\[rank (\d)/2\]", combined)
+    assert sorted(rank_marks) == ["0", "1"]  # оба ранга реально стартовали
     steps = [ln.split("step=")[1].split()[0]
              for ln in done.stdout.splitlines()
              if ln.startswith("loss=")]

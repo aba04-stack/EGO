@@ -49,7 +49,7 @@ _STRINGS_RU: dict[str, str] = {
     "platform.reset_hotkeys": "Сбросить к умолчаниям",
     "platform.plugins": "Плагины (plugins/*.py)",
     "platform.reload_plugins": "Перезагрузить плагины",
-    "platform.language_note": "Смена языка применяется после перезапуска.",
+    "platform.language_note": "Смена языка применяется сразу.",
 }
 
 _STRINGS_EN: dict[str, str] = {
@@ -86,7 +86,7 @@ _STRINGS_EN: dict[str, str] = {
     "platform.reset_hotkeys": "Reset to defaults",
     "platform.plugins": "Plugins (plugins/*.py)",
     "platform.reload_plugins": "Reload plugins",
-    "platform.language_note": "Language changes apply after restart.",
+    "platform.language_note": "Language changes apply immediately.",
 }
 
 STRINGS: dict[str, dict[str, str]] = {

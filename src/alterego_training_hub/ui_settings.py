@@ -255,6 +255,42 @@ class SettingsPage(tk.Frame):
                    command=self.reload_plugins).pack(anchor="w", pady=(4, 2))
         self._refresh_plugins_label()
 
+        sync_section = Collapsible(self, t('Синхронизация настроек'))
+        sync_section.pack(fill="x", padx=24, pady=(0, 12))
+        sync_card = sync_section.body
+        tk.Label(sync_card,
+                 text=t('Синхронизация настроек между машинами: экспортируйте файл или укажите общую папку (облако). Секреты (API-ключи) не экспортируются — они остаются в системном хранилище.'),
+                 bg=C["panel"], fg=C["muted"], font=F_SMALL, wraplength=860,
+                 justify="left").pack(anchor="w")
+        sync_row = tk.Frame(sync_card, bg=C["panel"])
+        sync_row.pack(fill="x", pady=(6, 2))
+        tk.Label(sync_row, text=t('Папка синхронизации (облако)'),
+                 bg=C["panel"], font=F_BASE).pack(side="left", padx=(0, 8))
+        self.sync_dir_var = tk.StringVar(
+            value=getattr(self.app.settings, "settings_sync_dir", "") or "")
+        tk.Entry(sync_row, textvariable=self.sync_dir_var, bd=1, relief="solid",
+                 font=F_BASE, width=48).pack(side="left")
+        ttk.Button(sync_row, text=t('Выбрать…'),
+                   command=self.browse_sync_dir).pack(side="left", padx=6)
+        sync_btns = tk.Frame(sync_card, bg=C["panel"])
+        sync_btns.pack(fill="x", pady=(4, 2))
+        ttk.Button(sync_btns, text=t('Выгрузить…'),
+                   command=self.export_settings_dialog).pack(side="left")
+        ttk.Button(sync_btns, text=t('Загрузить…'),
+                   command=self.import_settings_dialog).pack(side="left", padx=6)
+        ttk.Button(sync_btns, text=t('Отправить в папку'),
+                   command=self.push_settings_sync).pack(side="left", padx=6)
+        ttk.Button(sync_btns, text=t('Получить из папки'),
+                   command=self.pull_settings_sync).pack(side="left", padx=6)
+        self.sync_status_var = tk.StringVar(value="")
+        tk.Label(sync_card, textvariable=self.sync_status_var, bg=C["panel"],
+                 fg=C["muted"], font=F_SMALL, wraplength=860,
+                 justify="left").pack(anchor="w")
+        tk.Label(sync_card,
+                 text=t('Перетащите полосу сверху панели к краю окна, чтобы закрепить её.'),
+                 bg=C["panel"], fg=C["muted"], font=F_SMALL, wraplength=860,
+                 justify="left").pack(anchor="w", pady=(2, 0))
+
         keys_section = Collapsible(self, t('Ключи облачных сервисов'))
         keys_section.pack(fill="x", padx=24, pady=(0, 12))
         keys_card = keys_section.body
@@ -437,15 +473,92 @@ class SettingsPage(tk.Frame):
 
     # --------------------------------------------------------- platform
     def save_language(self):
-        from .i18n import LANGUAGES, set_language
+        from .i18n import LANGUAGES
 
         selected = self.language_var.get()
         lang = next((code for code, label in LANGUAGES.items()
                      if label == selected), "ru")
-        self.app.settings.ui_language = set_language(lang)
-        self.app.save_settings()
+        self.app.apply_language(lang)
         messagebox.showinfo(t('Язык'),
-                            t('Язык сохранён. Полностью интерфейс обновится после перезапуска.'), parent=self)
+                            t('Язык применён сразу.'), parent=self)
+
+    # ------------------------------------------------------ settings sync
+    def browse_sync_dir(self):
+        from tkinter import filedialog
+
+        directory = filedialog.askdirectory() or ""
+        if directory:
+            self.sync_dir_var.set(directory)
+            self.app.settings.settings_sync_dir = directory
+            self.app.save_settings()
+
+    def export_settings_dialog(self):
+        from tkinter import filedialog
+
+        from .settings_sync import SettingsSyncError, export_settings
+
+        path = filedialog.asksaveasfilename(
+            defaultextension=".json", filetypes=[("JSON", "*.json")])
+        if not path:
+            return
+        try:
+            file = export_settings(path, self.app.settings)
+        except SettingsSyncError as exc:
+            messagebox.showerror(t('Настройки'), str(exc), parent=self)
+            return
+        self.sync_status_var.set(t('Настройки выгружены: ') + str(file))
+
+    def import_settings_dialog(self):
+        from tkinter import filedialog
+
+        from .i18n import current_language
+        from .settings_sync import SettingsSyncError, apply_bundle, import_bundle
+
+        path = filedialog.askopenfilename(filetypes=[("JSON", "*.json")])
+        if not path:
+            return
+        try:
+            raw = import_bundle(path)
+            changed = apply_bundle(self.app.settings, raw)
+            self.app.save_settings()
+        except SettingsSyncError as exc:
+            messagebox.showerror(t('Настройки'), str(exc), parent=self)
+            return
+        self.sync_status_var.set(t('Настройки загружены и применены.')
+                                 + " " + t('Изменённых полей: ')
+                                 + str(len(changed)))
+        wanted = self.app.settings.ui_language
+        if wanted and wanted != current_language():
+            self.app.apply_language(wanted)
+
+    def push_settings_sync(self):
+        from .settings_sync import SettingsSyncError, push
+
+        try:
+            push(self.app.settings, self.sync_dir_var.get().strip())
+            self.app.save_settings()
+        except SettingsSyncError as exc:
+            messagebox.showerror(t('Настройки'), str(exc), parent=self)
+            return
+        self.sync_status_var.set(
+            t('Настройки отправлены в папку синхронизации.'))
+
+    def pull_settings_sync(self):
+        from .settings_sync import SettingsSyncError, pull
+
+        try:
+            applied, changed = pull(self.app.settings,
+                                    self.sync_dir_var.get().strip())
+            self.app.save_settings()
+        except SettingsSyncError as exc:
+            messagebox.showerror(t('Настройки'), str(exc), parent=self)
+            return
+        if not applied:
+            self.sync_status_var.set(
+                t('Изменений нет — настройки уже актуальны.'))
+        else:
+            self.sync_status_var.set(t('Изменённых полей: ')
+                                     + str(len(changed)))
 
     def apply_layout_preset(self):
         from .layouts import layout_info

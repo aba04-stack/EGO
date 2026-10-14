@@ -487,6 +487,24 @@ class EditorPage(tk.Frame):
         if self._active is not None and 0 <= self._active < len(self._tabs):
             self._tabs[self._active]["text"] = self.editor.get("1.0", "end-1c")
 
+    def snapshot(self) -> dict:
+        """Capture open tabs (with unsaved text) for a UI rebuild."""
+        self._stash_buffer()
+        return {"tabs": [dict(tab) for tab in self._tabs],
+                "active": self._active}
+
+    def restore(self, snap: dict) -> None:
+        """Re-open tabs captured before a UI rebuild."""
+        tabs = [dict(tab) for tab in (snap or {}).get("tabs", [])]
+        if not tabs:
+            return
+        self._tabs = tabs
+        self._active = None
+        active = snap.get("active")
+        index = active if isinstance(active, int) and 0 <= active < len(tabs) \
+            else len(tabs) - 1
+        self._select_tab(index)
+
     def _select_tab(self, index: int):
         if not 0 <= index < len(self._tabs):
             return

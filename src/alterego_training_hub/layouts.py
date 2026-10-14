@@ -18,6 +18,8 @@ class LayoutError(RuntimeError):
 VALID_PAGES = {"editor", "workspace", "search", "models", "datasets", "model",
                "playground", "training", "gpu", "servers", "connectors",
                "settings", "chat"}
+VALID_SIDES = {"left", "right"}
+VALID_BOTTOM_VIEWS = {"terminal", "problems", "git"}
 
 
 @dataclass
@@ -26,12 +28,61 @@ class LayoutState:
     bottom_visible: bool = True
     bottom_view: str = "terminal"  # terminal | problems | git
     geometry: str = ""
+    sidebar_side: str = "left"     # left | right (drag-and-drop docking)
+    chat_side: str = "right"       # left | right
+    bottom_height: int = 210       # px, adjustable by dragging the grip
 
     def validate(self) -> None:
         if self.page not in VALID_PAGES:
             raise LayoutError(f"Неизвестная страница: {self.page}")
-        if self.bottom_view not in {"terminal", "problems", "git"}:
+        if self.bottom_view not in VALID_BOTTOM_VIEWS:
             raise LayoutError(f"Неизвестная нижняя панель: {self.bottom_view}")
+        if self.sidebar_side not in VALID_SIDES:
+            raise LayoutError("Сторона панели: left или right.")
+        if self.chat_side not in VALID_SIDES:
+            raise LayoutError("Сторона чата: left или right.")
+        try:
+            height = int(self.bottom_height)
+        except (TypeError, ValueError):
+            raise LayoutError("Высота нижней панели: целое число.") from None
+        if not 80 <= height <= 800:
+            raise LayoutError("Высота нижней панели: 80–800 px.")
+
+
+def edge_drop(x: float, width: float, margin: float = 0.22) -> str | None:
+    """Map a drop pointer position to a dock edge.
+
+    The left/right ``margin`` fraction of the window is a drop zone;
+    dropping elsewhere cancels (returns ``None``).
+    """
+    try:
+        x, width, margin = float(x), float(width), float(margin)
+    except (TypeError, ValueError):
+        return None
+    if width <= 0 or not 0.05 <= margin <= 0.45:
+        return None
+    if x <= 0 or x >= width:
+        return None
+    if x < width * margin:
+        return "left"
+    if x > width * (1.0 - margin):
+        return "right"
+    return None
+
+
+def docked(state: LayoutState, source: str, side: str) -> LayoutState:
+    """Return a copy of ``state`` with ``source`` (sidebar|chat) docked."""
+    side = str(side or "").strip().lower()
+    if side not in VALID_SIDES:
+        raise LayoutError("Сторона: left или right.")
+    copy = LayoutState(**asdict(state))
+    if source == "sidebar":
+        copy.sidebar_side = side
+    elif source == "chat":
+        copy.chat_side = side
+    else:
+        raise LayoutError("Панель: sidebar или chat.")
+    return copy
 
 
 NAMED_LAYOUTS: dict[str, LayoutState] = {

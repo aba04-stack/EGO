@@ -2,6 +2,24 @@
 
 Все заметные изменения проекта. Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.21.0] — 2026-10-14
+
+### Added
+- Drag-and-drop panel docking: grip strips on the sidebar and chat panel —
+  drag to a window edge to dock left/right; arrangement persists and is part
+  of saved layouts (`sidebar_side`, `chat_side`).
+- Resizable bottom panel: drag its grip to change the height (80–800 px),
+  persisted in settings and layouts.
+- Settings sync between machines: portable JSON bundle export/import plus
+  push/pull through a shared (cloud) folder with last-write-wins timestamps.
+  Secrets (API keys) are never exported.
+- Live language switching: the whole interface rebuilds in place in the new
+  language — editor tabs (with unsaved text) and the chat session survive.
+
+### Added (UI)
+- Settings page: «Синхронизация настроек» section (sync folder, export,
+  import, push, pull).
+
 ## [0.20.0] — 2026-10-14
 
 ### Added

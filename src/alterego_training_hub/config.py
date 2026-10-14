@@ -54,6 +54,12 @@ class AppSettings:
     runpod_max_gpu_hourly_usd: float = 0.50
     runpod_container_disk_gb: int = 30
     runpod_image: str = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1"
+    # Panel docking (drag-and-drop) and settings sync
+    sidebar_side: str = "left"   # left | right
+    chat_side: str = "right"     # left | right
+    bottom_height: int = 210     # px
+    settings_sync_dir: str = ""
+    synced_at: float = 0.0
 
     @classmethod
     def load(cls, path: Path | None = None) -> AppSettings:

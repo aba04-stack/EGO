@@ -93,11 +93,12 @@ class TrainingHubApp(tk.Tk):
 
         container = tk.Frame(self, bg=C["bg"])
         container.pack(fill="both", expand=True)
+        self._container = container
 
-        # ---- Left sidebar (navigation) --------------------------------
+        # ---- Sidebar (navigation, dockable to left/right) -------------
         sidebar = tk.Frame(container, bg=C["sidebar"], width=200)
-        sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
+        self._sidebar_frame = sidebar
         brand = tk.Frame(sidebar, bg=C["sidebar"])
         brand.pack(fill="x", pady=(18, 12), padx=16)
         tk.Label(brand, text="AlterEgo", bg=C["sidebar"], fg="#ffffff",
@@ -141,17 +142,19 @@ class TrainingHubApp(tk.Tk):
                  bg=C["sidebar"],
                  fg="#5b6b85", font=F_NAV_SMALL).pack(side="bottom", pady=12)
 
-        # ---- Right chat panel (docked) --------------------------------
+        # ---- Chat panel (docked left/right) ---------------------------
         from .ui_chat import ChatPage
 
         self.chat_panel = ChatPage(container, self)
-        self.chat_panel.pack(side="right", fill="y")
         self.chat_panel.configure(width=390)
         self.chat_panel.pack_propagate(False)
 
         # ---- Center: pages + terminal ---------------------------------
         center = tk.Frame(container, bg=C["bg"])
-        center.pack(side="left", fill="both", expand=True)
+        self._center = center
+        self._pack_docks()
+        self._make_dock_grip(self._sidebar_frame, "sidebar")
+        self._make_dock_grip(self.chat_panel, "chat")
         self.pages_host = tk.Frame(center, bg=C["bg"])
         self.pages_host.pack(fill="both", expand=True)
 
@@ -195,10 +198,15 @@ class TrainingHubApp(tk.Tk):
 
         self.bottom = tk.Frame(center, bg=C["panel"])
         self.bottom.pack(side="bottom", fill="x", pady=(0, 2))
-        self.bottom.configure(height=210)
+        try:
+            dock_height = int(self.settings.bottom_height or 210)
+        except (TypeError, ValueError):
+            dock_height = 210
+        self.bottom.configure(height=max(80, min(800, dock_height)))
         self.bottom.pack_propagate(False)
         bottom_bar = tk.Frame(self.bottom, bg=C["panel"])
         bottom_bar.pack(fill="x")
+        self._make_height_grip(self.bottom)
         self._bottom_view = "terminal"
         self._bottom_visible = True
         self.terminal_tab = tk.Label(bottom_bar, text=t('ТЕРМИНАЛ'), bg=C["panel"],
@@ -260,6 +268,149 @@ class TrainingHubApp(tk.Tk):
         else:
             self.bottom.pack_forget()
 
+    # ------------------------------------------------- panel docking (dnd)
+    def _pack_docks(self):
+        """Pack sidebar/center/chat according to the saved dock sides."""
+        for widget in (self._sidebar_frame, self.chat_panel, self._center):
+            widget.pack_forget()
+        sidebar_side = str(getattr(self.settings, "sidebar_side", "left")
+                           or "left")
+        chat_side = str(getattr(self.settings, "chat_side", "right") or "right")
+        pairs = [("sidebar", self._sidebar_frame, sidebar_side),
+                 ("chat", self.chat_panel, chat_side)]
+        for _name, widget, side in pairs:
+            if side == "left":
+                widget.pack(side="left", fill="y")
+        self._center.pack(side="left", fill="both", expand=True)
+        for _name, widget, side in reversed(pairs):
+            if side == "right":
+                widget.pack(side="right", fill="y")
+
+    def _make_dock_grip(self, panel, source: str):
+        """Thin draggable strip on top of a dockable panel."""
+        grip = tk.Frame(panel, bg=C["panel_alt"], height=6, cursor="fleur")
+        children = panel.winfo_children() or []
+        if children:
+            grip.pack(side="top", fill="x", before=children[0])
+        else:
+            grip.pack(side="top", fill="x")
+
+        def on_release(event):
+            from .layouts import edge_drop
+
+            width = self.winfo_width()
+            x = event.x_root - self.winfo_rootx()
+            side = edge_drop(x, width)
+            if side:
+                self._dock_panel(source, side)
+
+        grip.bind("<ButtonRelease-1>", on_release)
+        return grip
+
+    def _make_height_grip(self, panel):
+        """Drag the strip on the bottom panel to change its height."""
+        grip = tk.Frame(panel, bg=C["panel_alt"], height=4, cursor="sb_v_double_arrow")
+        children = panel.winfo_children() or []
+        if children:
+            grip.pack(side="top", fill="x", before=children[0])
+        else:
+            grip.pack(side="top", fill="x")
+        state = {"start_y": 0, "start_h": 210}
+
+        def on_press(event):
+            state["start_y"] = event.y_root
+            try:
+                state["start_h"] = int(panel.winfo_height() or 210)
+            except (TypeError, ValueError):
+                state["start_h"] = 210
+
+        def on_drag(event):
+            height = state["start_h"] + (state["start_y"] - event.y_root)
+            panel.configure(height=max(80, min(800, int(height))))
+
+        def on_release(_event):
+            try:
+                self.settings.bottom_height = max(
+                    80, min(800, int(panel.winfo_height() or 210)))
+            except (TypeError, ValueError):
+                self.settings.bottom_height = 210
+            self.save_settings()
+
+        grip.bind("<Button-1>", on_press)
+        grip.bind("<B1-Motion>", on_drag)
+        grip.bind("<ButtonRelease-1>", on_release)
+        return grip
+
+    def _dock_panel(self, source: str, side: str) -> None:
+        """Move sidebar/chat to a window edge and persist the arrangement."""
+        side = str(side or "").strip().lower()
+        if side not in {"left", "right"}:
+            return
+        if source == "sidebar":
+            self.settings.sidebar_side = side
+        elif source == "chat":
+            self.settings.chat_side = side
+        else:
+            return
+        self._pack_docks()
+        self.save_settings()
+        self.set_status(t("Применена раскладка «{v1}».").format(
+            v1=f"{source}={side}"))
+
+    # -------------------------------------------------------- live language
+    def apply_language(self, lang: str) -> None:
+        """Switch the interface language live — rebuild UI in place.
+
+        Editor tabs (with unsaved text) and the chat session survive the
+        rebuild; everything else is re-created from scratch in the new
+        language.
+        """
+        editor = self.pages.get("editor")
+        editor_snap = None
+        if editor is not None and hasattr(editor, "snapshot"):
+            try:
+                editor_snap = editor.snapshot()
+            except Exception:  # noqa: BLE001
+                editor_snap = None
+        chat = getattr(self, "chat_panel", None)
+        chat_session = getattr(chat, "session", None)
+        chat_cache = getattr(chat, "_sessions_cache", None)
+        keep_page = self._current_page or "editor"
+        keep_bottom = self._bottom_view or "terminal"
+
+        set_language(lang)
+        self.settings.ui_language = lang
+        self.save_settings()
+
+        for child in (self.winfo_children() or []):
+            child.destroy()
+        self._nav_buttons = {}
+        self._nav_accent = {}
+        self.pages = {}
+        ui_common.apply_theme(self)
+        self._build_layout()
+        self.show_page(keep_page)
+        if keep_bottom:
+            self.show_bottom(keep_bottom)
+
+        new_editor = self.pages.get("editor")
+        if editor_snap and new_editor is not None and hasattr(new_editor, "restore"):
+            try:
+                new_editor.restore(editor_snap)
+            except Exception:  # noqa: BLE001
+                pass
+        new_chat = getattr(self, "chat_panel", None)
+        if new_chat is not None and chat_session is not None:
+            new_chat.session = chat_session
+            if chat_cache is not None:
+                new_chat._sessions_cache = chat_cache
+            render = getattr(new_chat, "_render_messages", None)
+            if callable(render):
+                try:
+                    render()
+                except Exception:  # noqa: BLE001
+                    pass
+
     # ------------------------------------------------------------- layouts
     def current_layout(self):
         """Snapshot the current arrangement as a LayoutState."""
@@ -270,11 +421,20 @@ class TrainingHubApp(tk.Tk):
             geometry = str(self.geometry() or "")
         except Exception:  # noqa: BLE001
             geometry = ""
+        try:
+            bottom_height = int(self.settings.bottom_height or 210)
+        except (TypeError, ValueError):
+            bottom_height = 210
         return LayoutState(
             page=self._current_page or "editor",
             bottom_visible=bool(getattr(self, "_bottom_visible", True)),
             bottom_view=self._bottom_view or "terminal",
-            geometry=geometry)
+            geometry=geometry,
+            sidebar_side=str(getattr(self.settings, "sidebar_side", "left")
+                             or "left"),
+            chat_side=str(getattr(self.settings, "chat_side", "right")
+                          or "right"),
+            bottom_height=bottom_height)
 
     def apply_layout(self, state):
         """Restore an arrangement saved earlier or a named preset."""
@@ -285,6 +445,12 @@ class TrainingHubApp(tk.Tk):
                 self.toggle_bottom()
             if state.bottom_visible:
                 self.show_bottom(state.bottom_view or "terminal")
+            self.settings.sidebar_side = state.sidebar_side
+            self.settings.chat_side = state.chat_side
+            self.settings.bottom_height = int(state.bottom_height or 210)
+            self._pack_docks()
+            self.bottom.configure(
+                height=max(80, min(800, int(state.bottom_height or 210))))
             if state.geometry:
                 self.geometry(state.geometry)
         except Exception:  # noqa: BLE001 - layout must not break startup

@@ -180,6 +180,9 @@ This is a desktop control-plane MVP, not yet an end-to-end training orchestratio
 The next milestone is a typed remote training worker with resumable checkpoint/data transfers, explicit elapsed-time and total-cost guards, live logs, and end-to-end tests on a short disposable job.
 
 ## Releases
+- 0.21.0: UX — drag-and-drop panel docking, resizable bottom panel, settings
+  sync between machines (export/import + cloud folder), live language
+  switching without restart.
 - 0.20.0: full English interface — every page, dialog and help string is
   localized (RU/EN packs, message-as-key safe fallback, extraction tooling
   and coverage tests).

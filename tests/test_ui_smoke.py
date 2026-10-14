@@ -15,7 +15,7 @@ class _Widget:
     """Permissive widget stand-in: any method call is a harmless no-op."""
 
     def __init__(self, *args, **kwargs):
-        pass
+        self._kwargs = dict(kwargs)
 
     def __getattr__(self, name):
         if name.startswith("__") and name.endswith("__"):
@@ -1443,3 +1443,52 @@ def test_stage20_platform_hotkeys_layouts_plugins(fake_ui, tmp_path):
     assert result["ok"] is False and "Гостевой режим" in result["error"]
     assert tools["hello_tool"]({})["ok"] is True  # read-only plugin tool
     app.settings.access_role = "owner"
+
+
+def test_stage23_live_language_and_panel_dnd(fake_ui, tmp_path):
+    """Live language switch plus drag-and-drop docking state."""
+    from alterego_training_hub.i18n import t
+    from alterego_training_hub.layouts import layout_info
+
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+
+    # --- live language: nav labels rebuilt in the new language
+    before = app._nav_buttons["editor"]._kwargs["text"]
+    assert t("Редактор кода") in before
+
+    editor = app.pages["editor"]
+    editor._tabs = [{"path": tmp_path / "demo.py", "text": "",
+                     "modified": True, "bookmarks": []}]
+    editor._active = 0
+    editor.editor.insert("1.0", "hello buffer")
+    app.chat_panel.session.add("user", "привет")
+    assert len(app.chat_panel.session.messages) == 1
+
+    app.apply_language("en")
+    after = app._nav_buttons["editor"]._kwargs["text"]
+    assert "Code editor" in after and after != before
+    # editor tabs with unsaved text survive the rebuild
+    assert app.pages["editor"]._tabs[0]["text"] == "hello buffer"
+    # chat session survives the rebuild
+    assert len(app.chat_panel.session.messages) == 1
+
+    app.apply_language("ru")
+    assert t("Редактор кода") in app._nav_buttons["editor"]._kwargs["text"]
+
+    # --- drag-and-drop docking
+    app._dock_panel("chat", "left")
+    assert app.settings.chat_side == "left"
+    app._dock_panel("sidebar", "right")
+    assert app.settings.sidebar_side == "right"
+    state = app.current_layout()
+    assert state.chat_side == "left" and state.sidebar_side == "right"
+
+    # named layout restores dock sides and bottom height
+    app.apply_layout(layout_info("code"))
+    assert app.settings.chat_side == "right"
+    assert app.settings.sidebar_side == "left"
+    assert app.settings.bottom_height == 210
+
+    app.settings.bottom_height = 320
+    assert app.current_layout().bottom_height == 320

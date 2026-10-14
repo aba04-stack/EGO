@@ -1,0 +1,17 @@
+{
+    "Язык применён сразу.": "Language applied immediately.",
+    "Синхронизация настроек": "Settings sync",
+    "Папка синхронизации (облако)": "Sync folder (cloud)",
+    "Выгрузить…": "Export…",
+    "Загрузить…": "Import…",
+    "Отправить в папку": "Push to folder",
+    "Получить из папки": "Pull from folder",
+    "Настройки выгружены: ": "Settings exported: ",
+    "Настройки загружены и применены.": "Settings imported and applied.",
+    "Настройки отправлены в папку синхронизации.": "Settings pushed to the sync folder.",
+    "Изменённых полей: ": "Changed fields: ",
+    "Изменений нет — настройки уже актуальны.": "No changes — settings are already up to date.",
+    "Перетащите полосу сверху панели к краю окна, чтобы закрепить её.": "Drag the strip on top of a panel to a window edge to dock it.",
+    "Синхронизация настроек между машинами: экспортируйте файл или укажите общую папку (облако). Секреты (API-ключи) не экспортируются — они остаются в системном хранилище.": "Sync settings between machines: export a file or pick a shared (cloud) folder. Secrets (API keys) are never exported — they stay in the system keychain.",
+    "Панель перетаскивается": "Panel dragged"
+}

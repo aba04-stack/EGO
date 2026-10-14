@@ -180,6 +180,7 @@ This is a desktop control-plane MVP, not yet an end-to-end training orchestratio
 The next milestone is a typed remote training worker with resumable checkpoint/data transfers, explicit elapsed-time and total-cost guards, live logs, and end-to-end tests on a short disposable job.
 
 ## Releases
+- 0.36.0: distribution — in-app update check against GitHub Releases (Settings → diagnostics) and a tag-driven release pipeline publishing the Windows .exe, wheel and sdist together.
 - 0.35.0: resume after Stop (▶ picks the task up from the transcript) and
   the night watch as a training verifier — it diffs generation samples and
   best val_loss between checks and flags degradation in the morning report.

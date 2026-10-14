@@ -1861,3 +1861,17 @@ def test_stage38_resume_and_night_verifier(fake_ui, tmp_path):
     app.mentor_client = lambda: _Mentor()
     entry = app.run_night_check()
     assert any("Деградация" in issue for issue in entry.issues), entry.issues
+
+
+def test_stage39_update_check_button(fake_ui, tmp_path, monkeypatch):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    settings_page = app.pages["settings"]
+    import alterego_training_hub.update_check as upd
+
+    monkeypatch.setattr(
+        upd, "_fetch_json",
+        lambda url: {"tag_name": "v99.0.0",
+                     "html_url": "https://example/release"})
+    text = settings_page.updates_text()
+    assert "99.0.0" in text

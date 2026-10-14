@@ -3,6 +3,7 @@ name: Windows Desktop Build
 on:
   push:
     branches: [feature/desktop-app-mvp]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -40,4 +41,34 @@ jobs:
           name: AlterEgoTrainingHub-Windows-x64
           path: dist/AlterEgoTrainingHub-Windows-x64.zip
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 30
+
+  release:
+    # Публикация GitHub-релиза по тегу v*: exe + wheel + sdist одним пакетом.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build wheel and sdist
+        run: |
+          python -m pip install build
+          python -m build
+      - name: Download Windows executable
+        uses: actions/download-artifact@v4
+        with:
+          name: AlterEgoTrainingHub-Windows-x64
+          path: release-assets
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp dist/*.whl dist/*.tar.gz release-assets/
+          gh release create "${GITHUB_REF_NAME}" release-assets/* \
+            --title "AlterEgo LLM Studio ${GITHUB_REF_NAME}" \
+            --generate-notes

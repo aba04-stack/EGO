@@ -393,6 +393,8 @@ class SettingsPage(tk.Frame):
                    command=self.copy_diag).pack(side="left", padx=8)
         ttk.Button(btns, text=t('Показать лог ошибок'),
                    command=self.show_log).pack(side="left", padx=8)
+        ttk.Button(btns, text=t('Проверить обновления'),
+                   command=self.check_updates).pack(side="left")
         self.diag_text = tk.Text(diag, height=8, wrap="word", state="disabled",
                                  bd=1, relief="solid", font=F_MONO)
         self.diag_text.pack(fill="x", pady=(8, 2))
@@ -424,6 +426,22 @@ class SettingsPage(tk.Frame):
                              lambda: run_diagnostics(self.app.settings,
                                                      self.app.secrets),
                              done)
+
+    def updates_text(self) -> str:
+        from . import __version__
+        from .update_check import check_update
+
+        repo = str(getattr(self.app.settings, "update_repo", "")
+                   or "aba04-stack/-")
+        return check_update(__version__, repo=repo).render()
+
+    def check_updates(self):
+        def done(text):
+            self.diag_status.set(text.splitlines()[0] if text else "")
+            messagebox.showinfo(t('Обновления'), text, parent=self)
+
+        self.app.start_async(t('Проверка обновлений'),
+                             self.updates_text, done)
 
     def copy_diag(self):
         text = self._last_diag or self.diag_text.get("1.0", "end")

@@ -49,10 +49,21 @@ def memory_need_gb(params: int, *, path: str = "lora", seq_len: int = 1024,
     return round(weights_grads_adam + act, 1)
 
 
-def throughput_tps(gpu: GpuOption, params: int, *, path: str = "lora") -> float:
-    """Tokens/sec scaled from the 7B anchor by model size (LoRA ~1.6x faster)."""
-    scale = 7e9 / max(1, int(params))
-    tps = gpu.tokens_per_sec_7b * min(4.0, max(0.15, scale))
+def throughput_tps(gpu: GpuOption, params: int, *, path: str = "lora",
+                   seq_len: int = 1024, batch: int = 16) -> float:
+    """Tokens/sec from the 7B anchor.
+
+    Масштаб по размеру модели — степенной (показатель 0.9, не линейный:
+    маленькие модели упираются в накладные расходы, не в FLOPs), длинные
+    последовательности замедляют токен (внимание), малый batch недогружает
+    GPU. Это по-прежнему эвристика с разбросом ±~2x — render() так и пишет.
+    """
+    scale = (7e9 / max(1, int(params))) ** 0.9
+    tps = gpu.tokens_per_sec_7b * min(4.0, max(0.12, scale))
+    if seq_len > 1024:
+        tps /= 1.0 + (seq_len - 1024) / 8192.0
+    if batch < 16:
+        tps *= 0.6 + 0.4 * (max(1, batch) / 16.0)
     return tps * (1.6 if path == "lora" else 1.0)
 
 
@@ -76,6 +87,9 @@ class ResourceEstimate:
                         f"${self.gpu.usd_per_hour:.2f}/ч)")
             rows.append(f"Время: ~{self.hours:.1f} ч · стоимость: ~${self.cost_usd:.2f} "
                         f"(оценка, не котировка)")
+            rows.append("⚠ Эвристика по каталожным ценам и якорной скорости 7B: "
+                        "реальное время легко отличается в 1.5–2 раза в обе "
+                        "стороны (архитектура, оптимизатор, данные).")
         return "\n".join(rows)
 
 
@@ -90,8 +104,9 @@ def estimate(*, params: int, data_tokens: int, epochs: int = 3, batch: int = 16,
     if not fitting:
         return ResourceEstimate(params, need, steps, 0.0, None, 0.0)
     # cheapest fitting GPU that is not absurdly slow: min cost = price / tps
-    gpu = min(fitting, key=lambda g: g.usd_per_hour / max(1.0, throughput_tps(g, params, path=path)))
-    tps = throughput_tps(gpu, params, path=path)
+    gpu = min(fitting, key=lambda g: g.usd_per_hour / max(
+        1.0, throughput_tps(g, params, path=path, seq_len=seq_len, batch=batch)))
+    tps = throughput_tps(gpu, params, path=path, seq_len=seq_len, batch=batch)
     hours = (tokens_total / tps / 3600.0) if tokens_total else 0.0
     return ResourceEstimate(params, need, steps, round(hours, 2), gpu,
                             round(hours * gpu.usd_per_hour, 2))

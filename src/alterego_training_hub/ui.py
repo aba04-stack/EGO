@@ -67,6 +67,9 @@ class TrainingHubApp(tk.Tk):
         self.plugins = PluginManager(app_data_dir() / "plugins")
         self._plugin_list = self.plugins.load_all()
         self.executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="alterego-hub")
+        import threading as _threading
+
+        self.closing_event = _threading.Event()  # кооперативная отмена фоновых задач
         self._closing = False
         self._nav_buttons: dict[str, tk.Label] = {}
         self._nav_accent: dict[str, tk.Frame] = {}
@@ -664,6 +667,9 @@ class TrainingHubApp(tk.Tk):
         self.events.put((kind, payload))
 
     def start_async(self, label: str, task, on_success=None, on_error=None):
+        if self._closing:
+            self.set_status(t('Приложение закрывается'))
+            return
         self.set_status(label + "…")
 
         def work():
@@ -1100,6 +1106,11 @@ class TrainingHubApp(tk.Tk):
 
         def start_training(args):
             command = str(args.get("command") or "").strip() or self.settings.training_command
+            if not command.strip():
+                return {"ok": False,
+                        "error": t('Команда обучения не задана: передайте '
+                                   'command (например, python train_llm.py) '
+                                   'или сгенерируйте скрипт в мастере.')}
             root = self.workspace_root()
             if root is None:
                 return {"ok": False, "error": t('Рабочая папка не выбрана.')}
@@ -1766,6 +1777,10 @@ class TrainingHubApp(tk.Tk):
     # ---------------------------------------------------------------- close
     def _on_close(self):
         self._closing = True
+        try:
+            self.closing_event.set()  # выполняющиеся задачи проверяют и сворачиваются
+        except Exception:
+            pass
         try:
             self.training.stop()
         except Exception:

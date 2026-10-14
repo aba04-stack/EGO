@@ -187,8 +187,15 @@ class SshRunner:
         if pin_file.exists():
             try:
                 client.load_host_keys(str(pin_file))
-            except Exception:
-                pass
+            except Exception as exc:
+                # Повреждённый файл пинов нельзя игнорировать: иначе
+                # изменившийся ключ молча запинится как новый.
+                raise ServerError(
+                    "SSH: не удалось прочитать known_hosts приложения "
+                    f"({pin_file}): {exc}. Исправьте или удалите файл."
+                ) from None
+
+        pin_errors: list[OSError] = []
 
         class PinOnFirstUse(paramiko.MissingHostKeyPolicy):
             def missing_host_key(self, ssh_client, hostname, key):
@@ -198,8 +205,11 @@ class SshRunner:
                     with open(pin_file, "a", encoding="utf-8") as handle:
                         handle.write(
                             f"{hostname} {key.get_name()} {key.get_base64()}\n")
-                except OSError:
-                    pass  # session continues, but the key is not pinned
+                except OSError as exc:
+                    # Fail-closed: без сохранённого пина следующее
+                    # подключение приняло бы ключ вслепую. Соединение
+                    # будет прервано сразу после connect (см. ниже).
+                    pin_errors.append(exc)
 
         client.set_missing_host_key_policy(PinOnFirstUse())
         connect_kwargs: dict[str, Any] = {
@@ -225,6 +235,15 @@ class SshRunner:
                 f"known_hosts: {exc}.") from None
         except (paramiko.SSHException, OSError, TimeoutError) as exc:
             raise ServerError(f"SSH: не удалось подключиться ({exc}).") from None
+        if pin_errors:
+            try:
+                client.close()
+            except Exception:
+                pass
+            raise ServerError(
+                "SSH: не удалось сохранить ключ сервера в known_hosts "
+                f"({pin_file}): {pin_errors[0]}. Подключение прервано: "
+                "без пина проверка доверия не работала бы.")
         self._client = client
         try:
             import base64
@@ -244,9 +263,46 @@ class SshRunner:
         try:
             _stdin, stdout, stderr = self._client.exec_command(
                 command, timeout=float(timeout))
-            raw_out = stdout.read(_MAX_OUTPUT + 1)
-            raw_err = stderr.read(_MAX_OUTPUT + 1)
+            # stdout и stderr читаем ПАРАЛЛЕЛЬНО: последовательное чтение
+            # упирается в окно SSH-канала и вешает команду с большим
+            # выводом. Сверх лимита продолжаем читать и выбрасывать,
+            # чтобы удалённый процесс не блокировался на записи.
+            import threading as _threading
+
+            chunks: dict[str, list[bytes]] = {"out": [], "err": []}
+            sizes = {"out": 0, "err": 0}
+
+            def drain(stream, slot):
+                while True:
+                    data = stream.read(32768) if hasattr(stream, "read") \
+                        else b""
+                    if not data:
+                        break
+                    if sizes[slot] <= _MAX_OUTPUT:
+                        keep = data[:_MAX_OUTPUT + 1 - sizes[slot]]
+                        chunks[slot].append(keep)
+                        sizes[slot] += len(keep)
+
+            threads = [
+                _threading.Thread(target=drain, args=(stdout, "out"),
+                                  daemon=True),
+                _threading.Thread(target=drain, args=(stderr, "err"),
+                                  daemon=True),
+            ]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=float(timeout) + 5)
+            if any(thread.is_alive() for thread in threads):
+                try:
+                    stdout.channel.close()
+                except Exception:
+                    pass
+                raise ServerError(
+                    "SSH: команда превысила тайм-аут чтения вывода.")
             exit_code = stdout.channel.recv_exit_status()
+            raw_out = b"".join(chunks["out"])
+            raw_err = b"".join(chunks["err"])
         except (OSError, TimeoutError) as exc:
             raise ServerError(f"SSH: команда не выполнена ({exc}).") from None
         except Exception as exc:  # paramiko transport errors

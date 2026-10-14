@@ -49,7 +49,7 @@ class AppSettings:
     active_layout: str = "code"  # named layout from layouts.NAMED_LAYOUTS
     hotkeys: dict = field(default_factory=dict)  # action id -> bind sequence
     gmail_from: str = ""
-    training_command: str = "python -m pytest -q"
+    training_command: str = ""  # пусто = не задана (НЕ тесты!)
     runpod_cloud: str = "SECURE"
     runpod_max_gpu_hourly_usd: float = 0.50
     cloud_total_budget_usd: float = 0.0  # 0 = общий потолок выключен
@@ -70,6 +70,9 @@ class AppSettings:
     thought_protocol: bool = True   # структурный протокол «Мысль/Действие/Ответ»
     critic_enabled: bool = False    # самопроверка ответов («Критик»)
 
+    # не поле dataclass: текст проблемы последней загрузки (для UI)
+    load_error: str = ""
+
     @classmethod
     def load(cls, path: Path | None = None) -> AppSettings:
         settings_path = path or (app_data_dir() / "settings.json")
@@ -79,11 +82,39 @@ class AppSettings:
             raw = json.loads(settings_path.read_text(encoding="utf-8"))
             if not isinstance(raw, dict):
                 raise ValueError("settings root must be an object")
-            allowed = cls.__dataclass_fields__.keys()
-            return cls(**{key: value for key, value in raw.items() if key in allowed})
-        except (OSError, json.JSONDecodeError, TypeError, ValueError):
-            # Do not crash the whole UI due to a manually edited or partial config.
-            return cls()
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            # Повреждённый файл НЕ проглатываем молча: сохраняем копию
+            # рядом и честно сообщаем через load_error, что взяты умолчания.
+            instance = cls()
+            instance.load_error = (
+                f"Файл настроек повреждён ({type(exc).__name__}); "
+                "загружены значения по умолчанию")
+            try:
+                import time as _time
+                backup = settings_path.with_name(
+                    f"settings.json.corrupt-{int(_time.time())}")
+                backup.write_bytes(settings_path.read_bytes())
+                instance.load_error += f"; копия: {backup.name}"
+            except OSError:
+                pass
+            return instance
+        fields = cls.__dataclass_fields__
+        values: dict = {}
+        bad: list[str] = []
+        for key, value in raw.items():
+            if key not in fields or key == "load_error":
+                continue
+            ok, coerced = _coerce_setting(fields[key].default, value)
+            if ok:
+                values[key] = coerced
+            else:
+                bad.append(key)
+        instance = cls(**values)
+        if bad:
+            instance.load_error = (
+                "Некорректные типы в настройках (взяты умолчания): "
+                + ", ".join(sorted(bad)))
+        return instance
 
     def save(self, path: Path | None = None) -> Path:
         settings_path = path or (app_data_dir() / "settings.json")
@@ -95,6 +126,35 @@ class AppSettings:
         )
         tmp.replace(settings_path)
         return settings_path
+
+
+def _coerce_setting(default, value):
+    """(ok, coerced) — привести значение из JSON к типу поля настроек."""
+    if isinstance(default, bool):
+        return (True, value) if isinstance(value, bool) else (False, None)
+    if isinstance(default, int):
+        if isinstance(value, bool):
+            return False, None
+        try:
+            return True, int(value)
+        except (TypeError, ValueError):
+            return False, None
+    if isinstance(default, float):
+        if isinstance(value, bool):
+            return False, None
+        try:
+            return True, float(value)
+        except (TypeError, ValueError):
+            return False, None
+    if isinstance(default, str):
+        return (True, value) if isinstance(value, str) else (False, None)
+    if isinstance(default, list):
+        if isinstance(value, list):
+            return True, [str(item) for item in value]
+        return False, None
+    if isinstance(default, dict):
+        return (True, value) if isinstance(value, dict) else (False, None)
+    return True, value
 
 
 class SecretStore:

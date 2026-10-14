@@ -53,4 +53,4 @@ def test_no_releases_is_friendly():
 
     report = check_update("1.8.0", fetcher=not_found)
     assert report.error == "no_releases"
-    assert "Релизов пока не опубликовано" in report.render()
+    assert "Релизов не найдено" in report.render()  # 404 двусмыслен — честно

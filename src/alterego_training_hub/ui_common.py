@@ -318,7 +318,7 @@ def draw_line_chart(canvas: tk.Canvas, series: dict[str, list[float]],
     canvas.delete("all")
     valid = {key: values for key, values in series.items() if len(values) >= 1}
     if not valid:
-        canvas.create_text(width / 2, height / 2, text=t('Нет данных для графика'),
+        canvas.create_text(width / 2, height / 2, text=t(t('Нет данных для графика')),
                            fill=C["muted"], font=F_SMALL)
         return
     vmin, vmax = value_range(

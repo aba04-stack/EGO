@@ -452,7 +452,12 @@ class SettingsPage(tk.Frame):
 
         repo = str(getattr(self.app.settings, "update_repo", "")
                    or "aba04-stack/-")
-        return check_update(__version__, repo=repo).render()
+        token = ""
+        try:
+            token = self.app.secrets.get("connector.github_token") or ""
+        except Exception:
+            token = ""
+        return check_update(__version__, repo=repo, token=token).render()
 
     def check_updates(self):
         def done(text):

@@ -70,18 +70,18 @@ class EditorPage(tk.Frame):
     def _build(self):
         header = page_header(
             self,
-            t('Редактор кода'),
-            t('Файлы рабочей папки: просмотр, правка и разбор кода с наставником. Ctrl+P — быстрое открытие, Ctrl+F — поиск, Ctrl+F2 — закладка.'),
+            t(t('Редактор кода')),
+            t(t('Файлы рабочей папки: просмотр, правка и разбор кода с наставником. Ctrl+P — быстрое открытие, Ctrl+F — поиск, Ctrl+F2 — закладка.')),
         )
         header.pack(fill="x", padx=24, pady=(20, 10))
 
         # Project scaffolding bar (collapsible)
-        scaffold_section = Collapsible(self, t('Новый проект из шаблона'))
+        scaffold_section = Collapsible(self, t(t('Новый проект из шаблона')))
         scaffold_section.pack(fill="x", padx=24, pady=(0, 10))
         scaffold = scaffold_section.body
         row = tk.Frame(scaffold, bg=C["panel"])
         row.pack(fill="x")
-        tk.Label(row, text=t('Новый проект'), bg=C["panel"], font=F_BASE).pack(
+        tk.Label(row, text=t(t('Новый проект')), bg=C["panel"], font=F_BASE).pack(
             side="left", padx=(0, 8))
         self.project_var = tk.StringVar()
         tk.Entry(row, textvariable=self.project_var, width=22, bd=1,
@@ -90,7 +90,7 @@ class EditorPage(tk.Frame):
         self.template_var = tk.StringVar(value=templates[0] if templates else "")
         ttk.Combobox(row, textvariable=self.template_var, values=templates,
                      state="readonly", width=42).pack(side="left", padx=(0, 8))
-        ttk.Button(row, text=t('Создать проект'), style="Accent.TButton",
+        ttk.Button(row, text=t(t('Создать проект')), style="Accent.TButton",
                    command=self.create_project).pack(side="left")
         self.project_hint = tk.StringVar(value="")
         tk.Label(row, textvariable=self.project_hint, bg=C["panel"], fg=C["muted"],
@@ -100,7 +100,7 @@ class EditorPage(tk.Frame):
         body.pack(fill="both", expand=True, padx=24, pady=(0, 14))
 
         # File tree
-        left = card(body, t('Файлы'))
+        left = card(body, t(t('Файлы')))
         left.pack(side="left", fill="y", padx=(0, 10))
         self.tree = ttk.Treeview(left, columns=("path",), show="tree",
                                  height=22, selectmode="browse")
@@ -108,24 +108,24 @@ class EditorPage(tk.Frame):
         self.tree.bind("<Double-1>", lambda _e: self.open_selected())
         tree_btns = tk.Frame(left, bg=C["panel"])
         tree_btns.pack(fill="x", pady=(6, 0))
-        ttk.Button(tree_btns, text=t('Обновить'), command=self.refresh_tree).pack(
+        ttk.Button(tree_btns, text=t(t('Обновить')), command=self.refresh_tree).pack(
             side="left")
-        ttk.Button(tree_btns, text=t('Открыть'), command=self.open_selected).pack(
+        ttk.Button(tree_btns, text=t(t('Открыть')), command=self.open_selected).pack(
             side="left", padx=6)
         file_ops = tk.Frame(left, bg=C["panel"])
         file_ops.pack(fill="x", pady=(4, 0))
         self.new_name_var = tk.StringVar()
         tk.Entry(file_ops, textvariable=self.new_name_var, width=16, bd=1,
                  relief="solid", font=F_BASE).pack(side="left")
-        ttk.Button(file_ops, text=t('+ Файл'),
+        ttk.Button(file_ops, text=t(t('+ Файл')),
                    command=self.create_file).pack(side="left", padx=4)
-        ttk.Button(file_ops, text=t('Переименовать'),
+        ttk.Button(file_ops, text=t(t('Переименовать')),
                    command=self.rename_selected).pack(side="left")
-        ttk.Button(file_ops, text=t('Удалить'),
+        ttk.Button(file_ops, text=t(t('Удалить')),
                    command=self.delete_selected).pack(side="left", padx=4)
 
         # Editor card: tab bar + find bar + gutter + text
-        right = card(body, t('Редактор'))
+        right = card(body, t(t('Редактор')))
         right.pack(side="left", fill="both", expand=True)
         self.tab_bar = tk.Frame(right, bg=C["panel"])
         self.tab_bar.pack(fill="x")
@@ -135,7 +135,7 @@ class EditorPage(tk.Frame):
         self.find_visible = False
         find_row = tk.Frame(self.find_bar, bg=C["panel_alt"])
         find_row.pack(fill="x", padx=2, pady=2)
-        tk.Label(find_row, text=t('Найти'), bg=C["panel_alt"], font=F_SMALL).pack(
+        tk.Label(find_row, text=t(t('Найти')), bg=C["panel_alt"], font=F_SMALL).pack(
             side="left", padx=(6, 4))
         self.find_var = tk.StringVar()
         self.find_entry = tk.Entry(find_row, textvariable=self.find_var, width=28,
@@ -158,7 +158,7 @@ class EditorPage(tk.Frame):
                  fg=C["muted"], font=F_SMALL, width=14).pack(side="left")
 
         replace_row = tk.Frame(self.find_bar, bg=C["panel_alt"])
-        tk.Label(replace_row, text=t('Заменить'), bg=C["panel_alt"],
+        tk.Label(replace_row, text=t(t('Заменить')), bg=C["panel_alt"],
                  font=F_SMALL).pack(side="left", padx=(6, 4))
         self.replace_var = tk.StringVar()
         self.replace_entry = tk.Entry(replace_row, textvariable=self.replace_var,
@@ -166,9 +166,9 @@ class EditorPage(tk.Frame):
         self.replace_entry.pack(side="left", padx=(0, 6))
         self.replace_entry.bind("<Escape>",
                                 lambda _e: (self.close_find(), "break")[1])
-        ttk.Button(replace_row, text=t('Заменить'),
+        ttk.Button(replace_row, text=t(t('Заменить')),
                    command=self.replace_current).pack(side="left", padx=(0, 4))
-        ttk.Button(replace_row, text=t('Всё'),
+        ttk.Button(replace_row, text=t(t('Всё')),
                    command=self.replace_all_in_file).pack(side="left", padx=(0, 4))
         ttk.Button(find_row, text="✕", width=3,
                    command=self.close_find).pack(side="right", padx=6)
@@ -178,7 +178,7 @@ class EditorPage(tk.Frame):
         self.goto_visible = False
         goto_row = tk.Frame(self.goto_bar, bg=C["panel_alt"])
         goto_row.pack(fill="x", padx=2, pady=2)
-        tk.Label(goto_row, text=t('Строка'), bg=C["panel_alt"],
+        tk.Label(goto_row, text=t(t('Строка')), bg=C["panel_alt"],
                  font=F_SMALL).pack(side="left", padx=(6, 4))
         self.goto_var = tk.StringVar()
         self.goto_entry = tk.Entry(goto_row, textvariable=self.goto_var,
@@ -188,35 +188,35 @@ class EditorPage(tk.Frame):
                              lambda _e: (self.goto_line_jump(), "break")[1])
         self.goto_entry.bind("<Escape>",
                              lambda _e: (self.close_goto_line(), "break")[1])
-        ttk.Button(goto_row, text=t('Перейти'),
+        ttk.Button(goto_row, text=t(t('Перейти')),
                    command=self.goto_line_jump).pack(side="left", padx=(0, 4))
         ttk.Button(goto_row, text="✕", width=3,
                    command=self.close_goto_line).pack(side="right", padx=6)
 
         bar = tk.Frame(right, bg=C["panel"])
         bar.pack(fill="x", pady=(4, 6))
-        self.file_var = tk.StringVar(value=t('файл не открыт'))
+        self.file_var = tk.StringVar(value=t(t('файл не открыт')))
         tk.Label(bar, textvariable=self.file_var, bg=C["panel"], fg=C["muted"],
                  font=F_MONO).pack(side="left")
         self.format_on_save = tk.BooleanVar(value=False)
-        tk.Checkbutton(bar, text=t('формат при сохранении'),
+        tk.Checkbutton(bar, text=t(t('формат при сохранении')),
                        variable=self.format_on_save, bg=C["panel"],
                        font=F_SMALL).pack(side="left", padx=(10, 0))
         self.lint_on_save = tk.BooleanVar(value=True)
-        tk.Checkbutton(bar, text=t('линт при сохранении'),
+        tk.Checkbutton(bar, text=t(t('линт при сохранении')),
                        variable=self.lint_on_save, bg=C["panel"],
                        font=F_SMALL).pack(side="left", padx=(6, 0))
-        ttk.Button(bar, text=t('Сохранить'), style="Accent.TButton",
+        ttk.Button(bar, text=t(t('Сохранить')), style="Accent.TButton",
                    command=self.save_file).pack(side="right")
-        ttk.Button(bar, text=t('Перечитать'),
+        ttk.Button(bar, text=t(t('Перечитать')),
                    command=self.reload_file).pack(side="right", padx=6)
-        ttk.Button(bar, text=t('Формат'),
+        ttk.Button(bar, text=t(t('Формат')),
                    command=self.format_file).pack(side="right", padx=6)
-        ttk.Button(bar, text=t('Разделить'),
+        ttk.Button(bar, text=t(t('Разделить')),
                    command=self.toggle_split).pack(side="right", padx=6)
-        ttk.Button(bar, text=t('Проверить'),
+        ttk.Button(bar, text=t(t('Проверить')),
                    command=self.run_lint).pack(side="right", padx=6)
-        ttk.Button(bar, text=t('Обсудить с наставником'),
+        ttk.Button(bar, text=t(t('Обсудить с наставником')),
                    command=self.send_to_mentor).pack(side="right", padx=6)
 
         # Code area: primary pane (+ optional synchronized split pane)
@@ -337,7 +337,7 @@ class EditorPage(tk.Frame):
     def create_project(self):
         root = self.app.workspace_root()
         if root is None:
-            messagebox.showerror(t('Проект'), t('Сначала выберите рабочую папку.'),
+            messagebox.showerror(t(t('Проект')), t(t('Сначала выберите рабочую папку.')),
                                  parent=self)
             self.app.show_page("workspace")
             return
@@ -346,14 +346,14 @@ class EditorPage(tk.Frame):
         try:
             created = create_project(root, name, template_id)
         except TemplateError as exc:
-            messagebox.showerror(t('Проект'), str(exc), parent=self)
+            messagebox.showerror(t(t('Проект')), str(exc), parent=self)
             return
-        self.app.activity.log("system", t('Создан проект «{name}» ({template_id})').format(name=name, template_id=template_id),
+        self.app.activity.log("system", t(t('Создан проект «{name}» ({template_id})')).format(name=name, template_id=template_id),
                               files=created)
         self.project_var.set("")
-        self.project_hint.set(t('Создано файлов: {v1}').format(v1=len(created)))
+        self.project_hint.set(t(t('Создано файлов: {v1}')).format(v1=len(created)))
         self.refresh_tree()
-        self.app.set_status(t('Проект {name} создан').format(name=name))
+        self.app.set_status(t(t('Проект {name} создан')).format(name=name))
 
     # -------------------------------------------------------------- files
     def refresh_tree(self):
@@ -375,53 +375,53 @@ class EditorPage(tk.Frame):
     def create_file(self):
         root = self.app.workspace_root()
         if root is None:
-            messagebox.showerror(t('Файлы'), t('Сначала выберите рабочую папку.'),
+            messagebox.showerror(t(t('Файлы')), t(t('Сначала выберите рабочую папку.')),
                                  parent=self)
             return
         try:
             target = safe_child_path(root, self.new_name_var.get())
         except PathSafetyError as exc:
-            messagebox.showerror(t('Файлы'), str(exc), parent=self)
+            messagebox.showerror(t(t('Файлы')), str(exc), parent=self)
             return
         if target.exists():
-            messagebox.showerror(t('Файлы'), t('Файл уже существует.'), parent=self)
+            messagebox.showerror(t(t('Файлы')), t(t('Файл уже существует.')), parent=self)
             return
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text("", encoding="utf-8")
         except OSError as exc:
-            messagebox.showerror(t('Файлы'), t('Не удалось создать файл: {exc}').format(exc=exc),
+            messagebox.showerror(t(t('Файлы')), t(t('Не удалось создать файл: {exc}')).format(exc=exc),
                                  parent=self)
             return
         self.new_name_var.set("")
         self.refresh_tree()
         self.open_file(target)
-        self.status_var.set(t('создан файл {v1}').format(v1=target.name))
+        self.status_var.set(t(t('создан файл {v1}')).format(v1=target.name))
 
     def rename_selected(self):
         root = self.app.workspace_root()
         selection = self.tree.selection()
         if root is None or not selection:
-            messagebox.showerror(t('Файлы'), t('Выберите файл в дереве.'), parent=self)
+            messagebox.showerror(t(t('Файлы')), t(t('Выберите файл в дереве.')), parent=self)
             return
         old_path = Path(selection[0])
         if not old_path.is_file():
-            messagebox.showerror(t('Файлы'), t('Переименовать можно только файл.'),
+            messagebox.showerror(t(t('Файлы')), t(t('Переименовать можно только файл.')),
                                  parent=self)
             return
         try:
             new_path = safe_child_path(root, self.new_name_var.get())
         except PathSafetyError as exc:
-            messagebox.showerror(t('Файлы'), str(exc), parent=self)
+            messagebox.showerror(t(t('Файлы')), str(exc), parent=self)
             return
         if new_path.exists():
-            messagebox.showerror(t('Файлы'), t('Имя уже занято.'), parent=self)
+            messagebox.showerror(t(t('Файлы')), t(t('Имя уже занято.')), parent=self)
             return
         try:
             new_path.parent.mkdir(parents=True, exist_ok=True)
             old_path.rename(new_path)
         except OSError as exc:
-            messagebox.showerror(t('Файлы'), t('Не удалось переименовать: {exc}').format(exc=exc),
+            messagebox.showerror(t(t('Файлы')), t(t('Не удалось переименовать: {exc}')).format(exc=exc),
                                  parent=self)
             return
         for tab in self._tabs:
@@ -432,21 +432,21 @@ class EditorPage(tk.Frame):
             self.file_var.set(str(new_path))
         self.new_name_var.set("")
         self.refresh_tree()
-        self.status_var.set(t('переименовано в {v1}').format(v1=new_path.name))
+        self.status_var.set(t(t('переименовано в {v1}')).format(v1=new_path.name))
 
     def delete_selected(self):
         selection = self.tree.selection()
         if not selection:
-            messagebox.showerror(t('Файлы'), t('Выберите файл в дереве.'), parent=self)
+            messagebox.showerror(t(t('Файлы')), t(t('Выберите файл в дереве.')), parent=self)
             return
         path = Path(selection[0])
         if not path.is_file():
-            messagebox.showerror(t('Файлы'), t('Удалить можно только файл.'),
+            messagebox.showerror(t(t('Файлы')), t(t('Удалить можно только файл.')),
                                  parent=self)
             return
         if not messagebox.askyesno(
-            t('Удалить файл'),
-            t('Удалить {v1}? Файл будет удалён безвозвратно.').format(v1=path.name),
+            t(t('Удалить файл')),
+            t(t('Удалить {v1}? Файл будет удалён безвозвратно.')).format(v1=path.name),
             parent=self,
         ):
             return
@@ -456,11 +456,11 @@ class EditorPage(tk.Frame):
         try:
             path.unlink()
         except OSError as exc:
-            messagebox.showerror(t('Файлы'), t('Не удалось удалить: {exc}').format(exc=exc),
+            messagebox.showerror(t(t('Файлы')), t(t('Не удалось удалить: {exc}')).format(exc=exc),
                                  parent=self)
             return
         self.refresh_tree()
-        self.status_var.set(t('удалён файл {v1}').format(v1=path.name))
+        self.status_var.set(t(t('удалён файл {v1}')).format(v1=path.name))
 
     # --------------------------------------------------------------- tabs
     def _render_tabs(self):
@@ -537,10 +537,10 @@ class EditorPage(tk.Frame):
         try:
             raw = path.read_bytes()
         except OSError as exc:
-            messagebox.showerror(t('Редактор'), str(exc), parent=self)
+            messagebox.showerror(t(t('Редактор')), str(exc), parent=self)
             return
         if len(raw) > MAX_FILE_BYTES:
-            messagebox.showerror(t('Редактор'), t('Файл слишком большой для редактора.'),
+            messagebox.showerror(t(t('Редактор')), t(t('Файл слишком большой для редактора.')),
                                  parent=self)
             return
         if len(self._tabs) >= MAX_TABS:
@@ -549,7 +549,7 @@ class EditorPage(tk.Frame):
         self._tabs.append({"path": path, "text": text, "modified": False,
                            "bookmarks": set()})
         self._select_tab(len(self._tabs) - 1)
-        self.status_var.set(t('открыто {v1} · {v3} байт').format(v1=time.strftime('%H:%M:%S'), v3=len(raw)))
+        self.status_var.set(t(t('открыто {v1} · {v3} байт')).format(v1=time.strftime('%H:%M:%S'), v3=len(raw)))
         if line:
             self.open_at(line)
 
@@ -585,7 +585,7 @@ class EditorPage(tk.Frame):
         total = self._line_count()
         if line >= 1:
             self.open_at(min(line, total))
-            self.status_var.set(t('переход к строке {v1}').format(v1=min(line, total)))
+            self.status_var.set(t(t('переход к строке {v1}')).format(v1=min(line, total)))
         self.close_goto_line()
 
     # ------------------------------------------------- brackets & pairing
@@ -665,19 +665,19 @@ class EditorPage(tk.Frame):
                 widget.configure(font=font)
             except Exception:
                 pass
-        self.status_var.set(t('масштаб шрифта: {size} пт').format(size=size))
+        self.status_var.set(t(t('масштаб шрифта: {size} пт')).format(size=size))
 
     # ------------------------------------------------------- split editor
     def toggle_split(self):
         if self._active is None or not self._tabs:
-            messagebox.showinfo(t('Редактор'), t('Сначала откройте файл.'),
+            messagebox.showinfo(t(t('Редактор')), t(t('Сначала откройте файл.')),
                                 parent=self)
             return
         if self.split_visible:
             self._sync_split_buffers()
             self.pane2.pack_forget()
             self.split_visible = False
-            self.status_var.set(t('разделённый вид выключен'))
+            self.status_var.set(t(t('разделённый вид выключен')))
             return
         try:
             self.editor2.delete("1.0", "end")
@@ -689,7 +689,7 @@ class EditorPage(tk.Frame):
         self._last_edited = 1
         self._regen_gutter()
         self._schedule_highlight()
-        self.status_var.set(t('разделённый вид: панели синхронизированы'))
+        self.status_var.set(t(t('разделённый вид: панели синхронизированы')))
 
     def _mark_edited(self, pane: int):
         self._last_edited = pane
@@ -759,24 +759,24 @@ class EditorPage(tk.Frame):
     # ------------------------------------------------- format and linting
     def format_file(self):
         if self._active is None or not self._tabs:
-            messagebox.showinfo(t('Редактор'), t('Сначала откройте файл.'),
+            messagebox.showinfo(t(t('Редактор')), t(t('Сначала откройте файл.')),
                                 parent=self)
             return
         self._sync_split_buffers()
         text = self.editor.get("1.0", "end-1c")
         new_text, fixes = format_source(text)
         if not fixes:
-            self.status_var.set(t('форматирование: изменений нет'))
+            self.status_var.set(t(t('форматирование: изменений нет')))
             return
         self.editor.delete("1.0", "end")
         self.editor.insert("1.0", new_text)
         self._on_modified_force()
         self._schedule_highlight()
-        self.status_var.set(t('форматировано: {fixes} исправлений').format(fixes=fixes))
+        self.status_var.set(t(t('форматировано: {fixes} исправлений')).format(fixes=fixes))
 
     def run_lint(self):
         if self._active is None or not self._tabs:
-            messagebox.showinfo(t('Редактор'), t('Сначала откройте файл.'),
+            messagebox.showinfo(t(t('Редактор')), t(t('Сначала откройте файл.')),
                                 parent=self)
             return
         self._sync_split_buffers()
@@ -791,9 +791,9 @@ class EditorPage(tk.Frame):
         errors = sum(1 for row in rows if row["severity"] == "error")
         if rows:
             self.status_var.set(
-                t('линт: {errors} ошиб(ок), {v3} предупреждений').format(errors=errors, v3=len(rows) - errors))
+                t(t('линт: {errors} ошиб(ок), {v3} предупреждений')).format(errors=errors, v3=len(rows) - errors))
         else:
-            self.status_var.set(t('линт: проблем не найдено'))
+            self.status_var.set(t(t('линт: проблем не найдено')))
 
     def close_tab(self, index: int | None = None):
         if not self._tabs:
@@ -803,8 +803,8 @@ class EditorPage(tk.Frame):
             return
         tab = self._tabs[index]
         if tab.get("modified") and not messagebox.askyesno(
-                t('Закрыть вкладку'),
-                t('«{v1}» изменён. Закрыть без сохранения?').format(v1=tab['path'].name),
+                t(t('Закрыть вкладку')),
+                t(t('«{v1}» изменён. Закрыть без сохранения?')).format(v1=tab['path'].name),
                 parent=self):
             return
         del self._tabs[index]
@@ -814,7 +814,7 @@ class EditorPage(tk.Frame):
         else:
             self._current_path = None
             self.editor.delete("1.0", "end")
-            self.file_var.set(t('файл не открыт'))
+            self.file_var.set(t(t('файл не открыт')))
             self._render_tabs()
             self._regen_gutter()
 
@@ -835,7 +835,7 @@ class EditorPage(tk.Frame):
         try:
             index = str(self.editor.index("insert"))
             line, col = index.split(".", 1)
-            self.cursor_var.set(t('Стр {line}, кол {v3}').format(line=line, v3=int(col) + 1))
+            self.cursor_var.set(t(t('Стр {line}, кол {v3}')).format(line=line, v3=int(col) + 1))
         except Exception:
             pass
 
@@ -916,14 +916,14 @@ class EditorPage(tk.Frame):
         else:
             marks.add(line)
         self._regen_gutter()
-        self.status_var.set(t('закладки: {v1}').format(v1=len(marks)))
+        self.status_var.set(t(t('закладки: {v1}')).format(v1=len(marks)))
 
     def goto_bookmark(self, direction: int = 1):
         if self._active is None or not self._tabs:
             return
         marks = sorted(self._tabs[self._active].get("bookmarks", set()))
         if not marks:
-            self.status_var.set(t('закладок нет'))
+            self.status_var.set(t(t('закладок нет')))
             return
         line = self.current_line()
         if direction >= 0:
@@ -983,14 +983,14 @@ class EditorPage(tk.Frame):
             except Exception:
                 pass
         self._match_index = None
-        self.find_status.set(t('{v0} совпад.').format(v0=len(self._matches)) if query else "")
+        self.find_status.set(t(t('{v0} совпад.')).format(v0=len(self._matches)) if query else "")
 
     def find_next(self, direction: int = 1):
         if not self.find_visible:
             self.open_find()
         self._refresh_matches()
         if not self._matches:
-            self.find_status.set(t('нет совпадений') if self.find_var.get() else "")
+            self.find_status.set(t(t('нет совпадений')) if self.find_var.get() else "")
             return
         try:
             cursor = self.editor.count("1.0", self.editor.index("insert"), "chars")
@@ -1011,7 +1011,7 @@ class EditorPage(tk.Frame):
             self.editor.see(f"1.0+{start}c")
         except Exception:
             pass
-        self.find_status.set(t('{v0} из {v2}').format(v0=index + 1, v2=len(self._matches)))
+        self.find_status.set(t(t('{v0} из {v2}')).format(v0=index + 1, v2=len(self._matches)))
 
     def replace_current(self):
         if self._match_index is None or not self._matches:
@@ -1037,7 +1037,7 @@ class EditorPage(tk.Frame):
             text, self.find_var.get(), self.replace_var.get(),
             case_sensitive=bool(self.match_case.get()))
         if not count:
-            self.find_status.set(t('нет совпадений'))
+            self.find_status.set(t(t('нет совпадений')))
             return
         try:
             self.editor.delete("1.0", "end")
@@ -1046,7 +1046,7 @@ class EditorPage(tk.Frame):
             return
         self._on_modified_force()
         self._refresh_matches()
-        self.find_status.set(t('заменено: {count}').format(count=count))
+        self.find_status.set(t(t('заменено: {count}')).format(count=count))
 
     def _on_modified_force(self):
         if self._active is not None and 0 <= self._active < len(self._tabs):
@@ -1149,17 +1149,17 @@ class EditorPage(tk.Frame):
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError as exc:
-            messagebox.showerror(t('Редактор'), str(exc), parent=self)
+            messagebox.showerror(t(t('Редактор')), str(exc), parent=self)
             return
         if self._active is not None and 0 <= self._active < len(self._tabs):
             self._tabs[self._active]["text"] = text
             self._tabs[self._active]["modified"] = False
             self._select_tab(self._active)
-        self.status_var.set(t('перечитано {v1}').format(v1=time.strftime('%H:%M:%S')))
+        self.status_var.set(t(t('перечитано {v1}')).format(v1=time.strftime('%H:%M:%S')))
 
     def save_file(self):
         if self._active is None or not self._tabs:
-            messagebox.showinfo(t('Редактор'), t('Сначала откройте файл.'), parent=self)
+            messagebox.showinfo(t(t('Редактор')), t(t('Сначала откройте файл.')), parent=self)
             return
         self._sync_split_buffers()
         tab = self._tabs[self._active]
@@ -1171,36 +1171,36 @@ class EditorPage(tk.Frame):
                 if fixes:
                     self.editor.delete("1.0", "end")
                     self.editor.insert("1.0", content)
-                    note = t(' · формат: {fixes} исправлений').format(fixes=fixes)
+                    note = t(t(' · формат: {fixes} исправлений')).format(fixes=fixes)
         except Exception:
             pass
         try:
             tab["path"].write_text(content, encoding="utf-8")
         except OSError as exc:
-            messagebox.showerror(t('Редактор'), str(exc), parent=self)
+            messagebox.showerror(t(t('Редактор')), str(exc), parent=self)
             return
         tab["text"] = content
         tab["modified"] = False
         self._render_tabs()
-        self.app.activity.log("file_edit", t('Сохранён файл {v1}').format(v1=tab['path'].name))
+        self.app.activity.log("file_edit", t(t('Сохранён файл {v1}')).format(v1=tab['path'].name))
         if self.lint_on_save.get():
             try:
                 self.run_lint()
                 note += " · " + self.status_var.get()
             except Exception:
                 pass
-        self.status_var.set(t('сохранено {v1}{note}').format(v1=time.strftime('%H:%M:%S'), note=note))
-        self.app.set_status(t('Файл сохранён'))
+        self.status_var.set(t(t('сохранено {v1}{note}')).format(v1=time.strftime('%H:%M:%S'), note=note))
+        self.app.set_status(t(t('Файл сохранён')))
 
     def send_to_mentor(self):
         if self._current_path is None:
-            messagebox.showinfo(t('Редактор'), t('Сначала откройте файл.'), parent=self)
+            messagebox.showinfo(t(t('Редактор')), t(t('Сначала откройте файл.')), parent=self)
             return
         content = self.editor.get("1.0", "end-1c")
         if len(content) > 120_000:
-            content = content[:120_000] + t('\n…[файл обрезан]')
+            content = content[:120_000] + t(t('\n…[файл обрезан]'))
         prompt = (
-            t('Разбери этот код, найди ошибки и предложи улучшения.\n\nФайл: {v1}\n```\n{content}\n```').format(v1=self.file_var.get(), content=content)
+            t(t('Разбери этот код, найди ошибки и предложи улучшения.\n\nФайл: {v1}\n```\n{content}\n```')).format(v1=self.file_var.get(), content=content)
         )
         self.app.show_page("chat")
         self.app.pages["chat"].send_preset(prompt)

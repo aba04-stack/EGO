@@ -23,12 +23,12 @@ class GitPanel(tk.Frame):
     def _build(self):
         top = tk.Frame(self, bg=C["panel"])
         top.pack(fill="x", padx=8, pady=(6, 0))
-        ttk.Button(top, text=t('Обновить'), command=self.refresh).pack(side="left")
-        ttk.Button(top, text=t('Индексировать'),
+        ttk.Button(top, text=t(t('Обновить')), command=self.refresh).pack(side="left")
+        ttk.Button(top, text=t(t('Индексировать')),
                    command=self.stage_selected).pack(side="left", padx=6)
-        ttk.Button(top, text=t('Снять из индекса'),
+        ttk.Button(top, text=t(t('Снять из индекса')),
                    command=self.unstage_selected).pack(side="left")
-        ttk.Button(top, text=t('Отменить изменения'),
+        ttk.Button(top, text=t(t('Отменить изменения')),
                    command=self.discard_selected).pack(side="left", padx=6)
         self.branch_var = tk.StringVar(value="—")
         tk.Label(top, textvariable=self.branch_var, bg=C["panel"],
@@ -42,8 +42,8 @@ class GitPanel(tk.Frame):
         self.tree = ttk.Treeview(left, columns=("status", "file", "stat"),
                                  show="headings", height=7,
                                  selectmode="extended")
-        self.tree.heading("status", text=t('Статус'))
-        self.tree.heading("file", text=t('Файл'))
+        self.tree.heading("status", text=t(t('Статус')))
+        self.tree.heading("file", text=t(t('Файл')))
         self.tree.heading("stat", text="+/-")
         self.tree.column("status", width=110, anchor="w")
         self.tree.column("file", width=260, anchor="w")
@@ -59,13 +59,13 @@ class GitPanel(tk.Frame):
         right.pack(side="left", fill="both", expand=True, padx=(8, 0))
         commit_row = tk.Frame(right, bg=C["panel"])
         commit_row.pack(fill="x")
-        tk.Label(commit_row, text=t('Сообщение'), bg=C["panel"],
+        tk.Label(commit_row, text=t(t('Сообщение')), bg=C["panel"],
                  font=F_BASE).pack(side="left")
         self.commit_var = tk.StringVar()
         tk.Entry(commit_row, textvariable=self.commit_var, bd=1,
                  relief="solid", font=F_BASE).pack(
             side="left", fill="x", expand=True, padx=6)
-        ttk.Button(commit_row, text=t('Закоммитить'), style="Accent.TButton",
+        ttk.Button(commit_row, text=t(t('Закоммитить')), style="Accent.TButton",
                    command=self.commit_changes).pack(side="left")
         ttk.Button(commit_row, text="Push",
                    command=self.push_changes).pack(side="left", padx=4)
@@ -94,7 +94,7 @@ class GitPanel(tk.Frame):
         root = self.app.workspace_root()
         if root is None:
             self.branch_var.set("—")
-            self.status_var.set(t('Рабочая папка не выбрана.'))
+            self.status_var.set(t(t('Рабочая папка не выбрана.')))
             self._set_diff_text("")
             return
         try:
@@ -114,8 +114,8 @@ class GitPanel(tk.Frame):
             self.tree.insert("", "end", iid=row["path"],
                              values=(row["label"], row["path"], mark))
         ahead = f" {status.ahead_behind}" if status.ahead_behind else ""
-        self.branch_var.set(t('ветка: {v1}{ahead}').format(v1=status.branch, ahead=ahead))
-        self.status_var.set(t('Изменений: {v1}').format(v1=len(self._rows)))
+        self.branch_var.set(t(t('ветка: {v1}{ahead}')).format(v1=status.branch, ahead=ahead))
+        self.status_var.set(t(t('Изменений: {v1}')).format(v1=len(self._rows)))
         self._show_selected_diff()
         badge = getattr(self.app, "_refresh_git_badge", None)
         if callable(badge):
@@ -147,7 +147,7 @@ class GitPanel(tk.Frame):
                 else:
                     text = self.app.git.diff_text(root, path=path)
                 if not text.strip():
-                    text = t('(нет различий с HEAD — файл: {path})').format(path=path)
+                    text = t(t('(нет различий с HEAD — файл: {path})')).format(path=path)
         except GitRepositoryError as exc:
             text = str(exc)[:2000]
         self._set_diff_text(text)
@@ -169,29 +169,29 @@ class GitPanel(tk.Frame):
         root = self.app.workspace_root()
         paths = self._selected_paths()
         if root is None or not paths:
-            self.status_var.set(t('Выберите файлы, чтобы {verb}.').format(verb=verb))
+            self.status_var.set(t(t('Выберите файлы, чтобы {verb}.')).format(verb=verb))
             return
         try:
             action(root, paths)
-            self.status_var.set(t('Готово: {verb} ({v3} файл(ов)).').format(verb=verb, v3=len(paths)))
+            self.status_var.set(t(t('Готово: {verb} ({v3} файл(ов)).')).format(verb=verb, v3=len(paths)))
         except GitRepositoryError as exc:
             messagebox.showerror("Git", str(exc)[:500], parent=self)
         self.refresh()
 
     def stage_selected(self):
-        self._act_on_selected(self.app.git.stage, t('проиндексировать'))
+        self._act_on_selected(self.app.git.stage, t(t('проиндексировать')))
 
     def unstage_selected(self):
-        self._act_on_selected(self.app.git.unstage, t('снять из индекса'))
+        self._act_on_selected(self.app.git.unstage, t(t('снять из индекса')))
 
     def discard_selected(self):
         paths = self._selected_paths()
         if not paths:
-            self.status_var.set(t('Выберите файл, чтобы отменить изменения.'))
+            self.status_var.set(t(t('Выберите файл, чтобы отменить изменения.')))
             return
         if not messagebox.askyesno(
             "Git",
-            t('Отменить изменения в выбранных файлах? Несохранённые правки будут потеряны.'),
+            t(t('Отменить изменения в выбранных файлах? Несохранённые правки будут потеряны.')),
             parent=self,
         ):
             return
@@ -201,7 +201,7 @@ class GitPanel(tk.Frame):
         try:
             for path in paths:
                 self.app.git.discard_file(root, path)
-            self.status_var.set(t('Изменения отменены: {v1} файл(ов).').format(v1=len(paths)))
+            self.status_var.set(t(t('Изменения отменены: {v1} файл(ов).')).format(v1=len(paths)))
         except GitRepositoryError as exc:
             messagebox.showerror("Git", str(exc)[:500], parent=self)
         self.refresh()
@@ -210,10 +210,10 @@ class GitPanel(tk.Frame):
         root = self.app.workspace_root()
         message = self.commit_var.get().strip()
         if root is None:
-            self.status_var.set(t('Рабочая папка не выбрана.'))
+            self.status_var.set(t(t('Рабочая папка не выбрана.')))
             return
         if not message:
-            self.status_var.set(t('Введите сообщение коммита.'))
+            self.status_var.set(t(t('Введите сообщение коммита.')))
             return
         try:
             output = self.app.git.commit(root, message)
@@ -223,28 +223,28 @@ class GitPanel(tk.Frame):
         self.commit_var.set("")
         first = next((line for line in output.splitlines()
                       if line.strip() and not line.startswith("[")), "")
-        self.status_var.set(t('Коммит создан. {v1}').format(v1=first[:120]))
+        self.status_var.set(t(t('Коммит создан. {v1}')).format(v1=first[:120]))
         self.refresh()
 
     def push_changes(self):
         root = self.app.workspace_root()
         if root is None:
-            self.status_var.set(t('Рабочая папка не выбрана.'))
+            self.status_var.set(t(t('Рабочая папка не выбрана.')))
             return
         try:
             self.app.git.push(root)
-            self.status_var.set(t('Изменения отправлены (push).'))
+            self.status_var.set(t(t('Изменения отправлены (push).')))
         except GitRepositoryError as exc:
             messagebox.showerror("Git", str(exc)[:500], parent=self)
 
     def pull_changes(self):
         root = self.app.workspace_root()
         if root is None:
-            self.status_var.set(t('Рабочая папка не выбрана.'))
+            self.status_var.set(t(t('Рабочая папка не выбрана.')))
             return
         try:
             self.app.git.pull_fast_forward(root)
-            self.status_var.set(t('Обновления получены (pull --ff-only).'))
+            self.status_var.set(t(t('Обновления получены (pull --ff-only).')))
         except GitRepositoryError as exc:
             messagebox.showerror("Git", str(exc)[:500], parent=self)
         self.refresh()

@@ -21,9 +21,9 @@ class ModelsPage(tk.Frame):
     def _build(self):
         header = page_header(
             self,
-            t('Модели'),
-            t('Единый каталог моделей: локальные чекпойнты и облачные хранилища (s3://, hf://, runpod://, https://). Манифест можно переносить между машинами.'),
-            actions=[(t('Добавить'), self.add_entry, "Accent.TButton")],
+            t(t('Модели')),
+            t(t('Единый каталог моделей: локальные чекпойнты и облачные хранилища (s3://, hf://, runpod://, https://). Манифест можно переносить между машинами.')),
+            actions=[(t(t('Добавить')), self.add_entry, "Accent.TButton")],
         )
         header.pack(fill="x", padx=24, pady=(20, 12))
 
@@ -31,15 +31,15 @@ class ModelsPage(tk.Frame):
         lib_card.pack(fill="x", padx=24, pady=(0, 12))
         row = tk.Frame(lib_card, bg=C["panel"])
         row.pack(fill="x")
-        tk.Label(row, text=t('Папка библиотеки моделей:'), bg=C["panel"],
+        tk.Label(row, text=t(t('Папка библиотеки моделей:')), bg=C["panel"],
                  font=F_BASE).pack(side="left")
         self.library_var = tk.StringVar()
         tk.Label(row, textvariable=self.library_var, bg=C["panel"], fg=C["muted"],
                  font=F_BASE).pack(side="left", padx=8)
-        ttk.Button(row, text=t('Сменить папку…'), command=self.change_library).pack(side="right")
+        ttk.Button(row, text=t(t('Сменить папку…')), command=self.change_library).pack(side="right")
         tk.Label(
             lib_card,
-            text=t('Укажите синхронизируемую облаком папку, чтобы каталог моделей был в облаке.'),
+            text=t(t('Укажите синхронизируемую облаком папку, чтобы каталог моделей был в облаке.')),
             bg=C["panel"], fg=C["muted"], font=F_SMALL,
         ).pack(anchor="w", pady=(6, 0))
 
@@ -48,29 +48,29 @@ class ModelsPage(tk.Frame):
 
         toolbar = tk.Frame(table_card, bg=C["panel"])
         toolbar.pack(fill="x", pady=(0, 8))
-        ttk.Button(toolbar, text=t('Обновить'), command=self.refresh).pack(side="left")
-        ttk.Button(toolbar, text=t('Добавить'), style="Accent.TButton",
+        ttk.Button(toolbar, text=t(t('Обновить')), command=self.refresh).pack(side="left")
+        ttk.Button(toolbar, text=t(t('Добавить')), style="Accent.TButton",
                    command=self.add_entry).pack(side="left", padx=8)
-        ttk.Button(toolbar, text=t('Сохранить изменения'),
+        ttk.Button(toolbar, text=t(t('Сохранить изменения')),
                    command=self.save_entry).pack(side="left", padx=8)
-        ttk.Button(toolbar, text=t('Удалить'), style="Danger.TButton",
+        ttk.Button(toolbar, text=t(t('Удалить')), style="Danger.TButton",
                    command=self.remove_entry).pack(side="left", padx=8)
-        ttk.Button(toolbar, text=t('Сканировать папку…'),
+        ttk.Button(toolbar, text=t(t('Сканировать папку…')),
                    command=self.scan_folder).pack(side="left", padx=8)
-        ttk.Button(toolbar, text=t('Экспорт…'), command=self.export_manifest).pack(side="left",
+        ttk.Button(toolbar, text=t(t('Экспорт…')), command=self.export_manifest).pack(side="left",
                                                                                padx=8)
-        ttk.Button(toolbar, text=t('Импорт…'), command=self.import_manifest).pack(side="left")
-        ttk.Button(toolbar, text=t('Скачать с HF…'),
+        ttk.Button(toolbar, text=t(t('Импорт…')), command=self.import_manifest).pack(side="left")
+        ttk.Button(toolbar, text=t(t('Скачать с HF…')),
                    command=self.download_hf).pack(side="left", padx=8)
-        ttk.Button(toolbar, text=t('Push на HF…'),
+        ttk.Button(toolbar, text=t(t('Push на HF…')),
                    command=self.push_hf).pack(side="left")
 
         columns = ("name", "kind", "location", "model_id", "updated")
         self.tree = ttk.Treeview(table_card, columns=columns, show="headings", height=8)
         for col, title, width in [
-            ("name", t('Название'), 200), ("kind", t('Тип'), 80),
-            ("location", t('Путь / URI'), 340), ("model_id", "API model id", 160),
-            ("updated", t('Обновлено'), 130),
+            ("name", t(t('Название')), 200), ("kind", t(t('Тип')), 80),
+            ("location", t(t('Путь / URI')), 340), ("model_id", "API model id", 160),
+            ("updated", t(t('Обновлено')), 130),
         ]:
             self.tree.heading(col, text=title)
             self.tree.column(col, width=width, anchor="w")
@@ -81,33 +81,33 @@ class ModelsPage(tk.Frame):
         self.tree.bind("<<TreeviewSelect>>", lambda _e: self._load_selected())
 
         # Model tools: export / quantize / benchmark / prompt suite
-        tools_card = card(self, t('Инструменты модели'))
+        tools_card = card(self, t(t('Инструменты модели')))
         tools_card.pack(fill="x", padx=24, pady=(0, 12))
         tools_row = tk.Frame(tools_card, bg=C["panel"])
         tools_row.pack(fill="x")
-        tk.Label(tools_row, text=t('Формат/рецепт'), bg=C["panel"],
+        tk.Label(tools_row, text=t(t('Формат/рецепт')), bg=C["panel"],
                  font=F_BASE).pack(side="left", padx=(0, 6))
         self.tool_option_var = tk.StringVar(value="gguf")
         ttk.Combobox(tools_row, textvariable=self.tool_option_var, width=10,
                      values=("gguf", "onnx", "q8_0", "q5_k_m", "q4_k_m",
                              "q4_0", "q3_k_m", "int8"),
                      state="readonly").pack(side="left", padx=(0, 12))
-        ttk.Button(tools_row, text=t('Экспорт'),
+        ttk.Button(tools_row, text=t(t('Экспорт')),
                    command=self.export_model).pack(side="left", padx=(0, 6))
-        ttk.Button(tools_row, text=t('Квантизация'),
+        ttk.Button(tools_row, text=t(t('Квантизация')),
                    command=self.quantize_model).pack(side="left", padx=(0, 6))
-        ttk.Button(tools_row, text=t('Бенчмарк'),
+        ttk.Button(tools_row, text=t(t('Бенчмарк')),
                    command=self.benchmark_model).pack(side="left", padx=(0, 6))
-        ttk.Button(tools_row, text=t('Промпт-набор'),
+        ttk.Button(tools_row, text=t(t('Промпт-набор')),
                    command=self.run_prompt_suite).pack(side="left")
         self.tools_status = tk.StringVar(
-            value=t('Выберите модель и инструмент. Экспорт/квантизация требуют внешних конвертеров (см. подсказку в результате).'))
+            value=t(t('Выберите модель и инструмент. Экспорт/квантизация требуют внешних конвертеров (см. подсказку в результате).')))
         tk.Label(tools_card, textvariable=self.tools_status, bg=C["panel"],
                  fg=C["muted"], font=F_SMALL, wraplength=900,
                  justify="left").pack(anchor="w", pady=(6, 0))
 
         # Editor
-        edit_card = card(self, t('Карточка модели'))
+        edit_card = card(self, t(t('Карточка модели')))
         edit_card.pack(fill="x", padx=24, pady=(0, 12))
         edit_card.columnconfigure(1, weight=1)
         edit_card.columnconfigure(3, weight=1)
@@ -129,13 +129,13 @@ class ModelsPage(tk.Frame):
                              font=F_BASE, width=width)
             w.grid(row=row, column=col + 1, sticky="ew", padx=(0, 16), pady=4)
 
-        field(0, 0, t('Название'), self.var_name)
-        field(0, 2, t('Тип'), self.var_kind, widget="combo")
-        field(1, 0, t('Путь / URI'), self.var_location)
+        field(0, 0, t(t('Название')), self.var_name)
+        field(0, 2, t(t('Тип')), self.var_kind, widget="combo")
+        field(1, 0, t(t('Путь / URI')), self.var_location)
         field(1, 2, "API model id", self.var_model_id)
-        field(2, 0, t('URL инференса'), self.var_base_url)
+        field(2, 0, t(t('URL инференса')), self.var_base_url)
 
-        tk.Label(edit_card, text=t('Заметки'), bg=C["panel"], font=F_BASE).grid(
+        tk.Label(edit_card, text=t(t('Заметки')), bg=C["panel"], font=F_BASE).grid(
             row=3, column=0, sticky="nw", padx=(0, 8), pady=4)
         self.notes = tk.Text(edit_card, height=3, wrap="word", bd=1, relief="solid",
                              font=F_BASE)
@@ -153,7 +153,7 @@ class ModelsPage(tk.Frame):
         self.library_var.set(str(Path(raw).expanduser()) if raw else str(default_library_dir()))
 
     def change_library(self):
-        path = filedialog.askdirectory(title=t('Папка библиотеки моделей'))
+        path = filedialog.askdirectory(title=t(t('Папка библиотеки моделей')))
         if not path:
             return
         self.app.settings.model_library_path = path
@@ -169,7 +169,7 @@ class ModelsPage(tk.Frame):
         try:
             entries = self.app.model_registry().load()
         except Exception as exc:
-            messagebox.showerror(t('Модели'), str(exc), parent=self)
+            messagebox.showerror(t(t('Модели')), str(exc), parent=self)
             return
         self.tree.delete(*self.tree.get_children())
         self._entries.clear()
@@ -179,7 +179,7 @@ class ModelsPage(tk.Frame):
                 entry.name, entry.kind, entry.location, entry.model_id, stamp,
             ))
             self._entries[iid] = entry
-        self.models_status.set(t('Моделей в каталоге: {v1}').format(v1=len(entries)))
+        self.models_status.set(t(t('Моделей в каталоге: {v1}')).format(v1=len(entries)))
 
     def _load_selected(self):
         selection = self.tree.selection()
@@ -204,8 +204,8 @@ class ModelsPage(tk.Frame):
                         confirm_text: str = ""):
         entry = self._selected_entry()
         if entry is None:
-            messagebox.showinfo(t('Инструменты модели'),
-                                t('Сначала выберите модель в таблице.'),
+            messagebox.showinfo(t(t('Инструменты модели')),
+                                t(t('Сначала выберите модель в таблице.')),
                                 parent=self)
             return
         if confirm_text and not messagebox.askyesno(label, confirm_text,
@@ -230,8 +230,8 @@ class ModelsPage(tk.Frame):
                 value = result.get(key)
                 if value:
                     parts.append(str(value))
-            text = "\n".join(parts) or (t('Готово.') if result.get("ok")
-                                        else t('Не удалось.'))
+            text = "\n".join(parts) or (t(t('Готово.')) if result.get("ok")
+                                        else t(t('Не удалось.')))
             self.tools_status.set(text[:600])
             if result.get("ok"):
                 messagebox.showinfo(label, text[:1500], parent=self)
@@ -239,7 +239,7 @@ class ModelsPage(tk.Frame):
                 messagebox.showerror(label, text[:1500], parent=self)
 
         def failed(error):
-            self.tools_status.set(t('Ошибка: {error}').format(error=error))
+            self.tools_status.set(t(t('Ошибка: {error}')).format(error=error))
             messagebox.showerror(label, str(error), parent=self)
 
         self.app.start_async(label, work, done, failed)
@@ -248,26 +248,26 @@ class ModelsPage(tk.Frame):
         option = self.tool_option_var.get().strip().lower()
         fmt = option if option in {"gguf", "onnx"} else "gguf"
         self._run_model_tool(
-            "export_model", {"format": fmt}, t('Экспорт модели'),
-            t('Конвертировать модель в {v1}? Для этого потребуются внешние инструменты (transformers[onnx] или llama.cpp).').format(v1=fmt.upper()))
+            "export_model", {"format": fmt}, t(t('Экспорт модели')),
+            t(t('Конвертировать модель в {v1}? Для этого потребуются внешние инструменты (transformers[onnx] или llama.cpp).')).format(v1=fmt.upper()))
 
     def quantize_model(self):
         option = self.tool_option_var.get().strip().lower()
         quant = option if option in {"q8_0", "q5_k_m", "q4_k_m", "q4_0",
                                      "q3_k_m", "int8"} else "q4_k_m"
         self._run_model_tool(
-            "quantize_model", {"quant_type": quant}, t('Квантизация модели'),
-            t('Квантизовать модель ({quant})? Файл будет создан в папке библиотеки (exports).').format(quant=quant))
+            "quantize_model", {"quant_type": quant}, t(t('Квантизация модели')),
+            t(t('Квантизовать модель ({quant})? Файл будет создан в папке библиотеки (exports).')).format(quant=quant))
 
     def benchmark_model(self):
         self._run_model_tool("benchmark_model", {"iterations": 3},
-                             t('Бенчмарк модели'),
-                             t('Выполнить 3 замера скорости модели?'))
+                             t(t('Бенчмарк модели')),
+                             t(t('Выполнить 3 замера скорости модели?')))
 
     def run_prompt_suite(self):
         self._run_model_tool(
-            "run_prompt_suite", {}, t('Промпт-набор'),
-            t('Прогнать набор из 5 промптов? Это отправит запросы к API и может расходовать кредиты провайдера.'))
+            "run_prompt_suite", {}, t(t('Промпт-набор')),
+            t(t('Прогнать набор из 5 промптов? Это отправит запросы к API и может расходовать кредиты провайдера.')))
 
     def _entry_from_form(self) -> ModelEntry:
         metrics: dict[str, float] = {}
@@ -294,23 +294,23 @@ class ModelsPage(tk.Frame):
         try:
             self.app.model_registry().add(self._entry_from_form())
         except ModelRegistryError as exc:
-            messagebox.showerror(t('Модели'), str(exc), parent=self)
+            messagebox.showerror(t(t('Модели')), str(exc), parent=self)
             return
         self.refresh()
-        self.app.set_status(t('Модель добавлена в каталог'))
+        self.app.set_status(t(t('Модель добавлена в каталог')))
 
     def save_entry(self):
         selection = self.tree.selection()
         if not selection:
-            messagebox.showinfo(t('Модели'), t('Выберите модель в списке.'), parent=self)
+            messagebox.showinfo(t(t('Модели')), t(t('Выберите модель в списке.')), parent=self)
             return
         try:
             self.app.model_registry().update(self._entry_from_form())
         except ModelRegistryError as exc:
-            messagebox.showerror(t('Модели'), str(exc), parent=self)
+            messagebox.showerror(t(t('Модели')), str(exc), parent=self)
             return
         self.refresh()
-        self.app.set_status(t('Карточка модели сохранена'))
+        self.app.set_status(t(t('Карточка модели сохранена')))
 
     def remove_entry(self):
         selection = self.tree.selection()
@@ -319,18 +319,18 @@ class ModelsPage(tk.Frame):
         entry = self._entries.get(selection[0])
         if not entry:
             return
-        if not messagebox.askyesno(t('Удалить модель'),
-                                   t('Удалить «{v1}» из каталога?').format(v1=entry.name), parent=self):
+        if not messagebox.askyesno(t(t('Удалить модель')),
+                                   t(t('Удалить «{v1}» из каталога?')).format(v1=entry.name), parent=self):
             return
         try:
             self.app.model_registry().remove(entry.id)
         except ModelRegistryError as exc:
-            messagebox.showerror(t('Модели'), str(exc), parent=self)
+            messagebox.showerror(t(t('Модели')), str(exc), parent=self)
             return
         self.refresh()
 
     def scan_folder(self):
-        folder = filedialog.askdirectory(title=t('Папка с чекпойнтами моделей'))
+        folder = filedialog.askdirectory(title=t(t('Папка с чекпойнтами моделей')))
         if not folder:
             return
 
@@ -346,17 +346,17 @@ class ModelsPage(tk.Frame):
                     added += 1
             return added
 
-        self.app.start_async(t('Сканирование папки моделей'), work,
+        self.app.start_async(t(t('Сканирование папки моделей')), work,
                              lambda added: self._after_scan(added, folder))
 
     def _after_scan(self, added: int, folder: str):
         self.refresh()
-        messagebox.showinfo(t('Модели'),
-                            t('Найдено и добавлено моделей: {added}\nПапка: {folder}').format(added=added, folder=folder),
+        messagebox.showinfo(t(t('Модели')),
+                            t(t('Найдено и добавлено моделей: {added}\nПапка: {folder}')).format(added=added, folder=folder),
                             parent=self)
 
     def export_manifest(self):
-        dest = filedialog.asksaveasfilename(title=t('Экспорт манифеста'),
+        dest = filedialog.asksaveasfilename(title=t(t('Экспорт манифеста')),
                                             defaultextension=".json",
                                             filetypes=[("JSON", "*.json")])
         if not dest:
@@ -364,22 +364,22 @@ class ModelsPage(tk.Frame):
         try:
             path = self.app.model_registry().export_manifest(dest)
         except Exception as exc:
-            messagebox.showerror(t('Модели'), str(exc), parent=self)
+            messagebox.showerror(t(t('Модели')), str(exc), parent=self)
             return
-        messagebox.showinfo(t('Модели'), t('Манифест сохранён: {path}').format(path=path), parent=self)
+        messagebox.showinfo(t(t('Модели')), t(t('Манифест сохранён: {path}')).format(path=path), parent=self)
 
     def import_manifest(self):
-        src = filedialog.askopenfilename(title=t('Импорт манифеста'),
+        src = filedialog.askopenfilename(title=t(t('Импорт манифеста')),
                                          filetypes=[("JSON", "*.json")])
         if not src:
             return
         try:
             count = self.app.model_registry().import_manifest(src)
         except ModelRegistryError as exc:
-            messagebox.showerror(t('Модели'), str(exc), parent=self)
+            messagebox.showerror(t(t('Модели')), str(exc), parent=self)
             return
         self.refresh()
-        messagebox.showinfo(t('Модели'), t('Записей в манифесте: {count}').format(count=count), parent=self)
+        messagebox.showinfo(t(t('Модели')), t(t('Записей в манифесте: {count}')).format(count=count), parent=self)
 
 
     # ------------------------------------------------------------- HF Hub
@@ -396,7 +396,7 @@ class ModelsPage(tk.Frame):
         from .hf_hub import download_model
 
         repo = simpledialog.askstring(
-            t('Скачать с Hugging Face'), t('Repo id (owner/name):'),
+            t(t('Скачать с Hugging Face')), t('Repo id (owner/name):'),
             parent=self)
         if not repo:
             return
@@ -411,7 +411,7 @@ class ModelsPage(tk.Frame):
             messagebox.showerror(t('Hugging Face'), str(error), parent=self)
 
         self.app.start_async(
-            t('Скачивание {v1}').format(v1=repo),
+            t(t('Скачивание {v1}')).format(v1=repo),
             lambda: download_model(repo, library, self._hf_token()),
             done, failed)
 
@@ -425,11 +425,11 @@ class ModelsPage(tk.Frame):
         if entry is None or not Path(entry.location).is_dir():
             messagebox.showinfo(
                 t('Hugging Face'),
-                t('Сначала выберите модель с локальной папкой.'),
+                t(t('Сначала выберите модель с локальной папкой.')),
                 parent=self)
             return
         repo = simpledialog.askstring(
-            t('Push на Hugging Face'), t('Repo id (owner/name):'),
+            t(t('Push на Hugging Face')), t('Repo id (owner/name):'),
             initialvalue=entry.model_id or "", parent=self)
         if not repo:
             return

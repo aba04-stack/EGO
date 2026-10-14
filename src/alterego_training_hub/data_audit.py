@@ -10,7 +10,17 @@ from dataclasses import dataclass, field
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 _PHONE = re.compile(r"(?:\+?\d[\d\s\-()]{9,}\d)")
 _CARD = re.compile(r"\b(?:\d[ -]?){13,19}\b")
-_SECRET = re.compile(r"(?i)(sk-[a-z0-9]{10,}|api[_-]?key\s*[:=]|password\s*[:=])")
+_SECRET = re.compile(
+    r"(?i)(sk-[a-z0-9]{10,}"                      # OpenAI-стиль
+    r"|gh[pousr]_[a-z0-9]{20,}"                   # GitHub classic/fine tokens
+    r"|github_pat_[a-z0-9_]{20,}"
+    r"|hf_[a-z0-9]{20,}"                          # Hugging Face
+    r"|AKIA[0-9A-Z]{16}"                          # AWS access key id
+    r"|xox[baprs]-[a-z0-9-]{10,}"                 # Slack
+    r"|AIza[0-9A-Za-z_-]{20,}"                    # Google API key
+    r"|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"
+    r"|api[_-]?key\s*[:=]|password\s*[:=]"
+    r"|secret\s*[:=]\s*\S{8,})")
 
 
 def _text_of(row) -> str:

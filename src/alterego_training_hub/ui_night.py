@@ -51,7 +51,7 @@ def night_watch_maybe(app) -> None:
         finally:
             app._night_running = False
 
-    app.start_async(t('Ночная проверка'), work)
+    app.start_async(t(t('Ночная проверка')), work)
 
 def run_night_check(app):
     """Collect one snapshot and ask the mentor to analyse it."""
@@ -81,12 +81,12 @@ def run_night_check(app):
         save_state(_state_path, _current)
     except Exception:
         pass
-    dashboard = build_dashboard(summary, title=t('Ночной снимок'))
+    dashboard = build_dashboard(summary, title=t(t('Ночной снимок')))
     entry = run_check(app.mentor_client(), tail=tail, dashboard=dashboard,
                       issues=issues)
     app.night_watch_log().add(entry)
     app.activity.log("night", entry.line())
-    app.set_status(t('Ночная проверка: ') + entry.summary)
+    app.set_status(t(t('Ночная проверка: ')) + entry.summary)
     return entry
 
 def morning_report_text(app) -> str:

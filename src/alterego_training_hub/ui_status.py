@@ -12,7 +12,7 @@ def refresh_status_badges(app) -> None:
         training_text = ""
         try:
             status = app.training.status()
-            training_text = t('идёт') if status.running else ""
+            training_text = t(t('идёт')) if status.running else ""
         except Exception:
             training_text = ""
         badges = status_badges(

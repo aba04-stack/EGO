@@ -47,6 +47,8 @@ class CloudJob:
             raise CloudQueueError("Команда задания не должна быть пустой.")
         if self.status not in JOB_STATUSES:
             raise CloudQueueError(f"Статус: один из {JOB_STATUSES}.")
+        if self.provider not in {"runpod", "colab", "manual"}:
+            raise CloudQueueError("Провайдер: runpod, colab или manual.")
         if self.cloud.upper() not in {"SECURE", "COMMUNITY"}:
             raise CloudQueueError("Облако: SECURE или COMMUNITY.")
         if not 10 <= int(self.container_disk_gb) <= 1000:
@@ -159,6 +161,17 @@ class CloudJobQueue:
         job = self.get(job_id)
         if job.status not in {"pending", "queued"}:
             raise CloudQueueError(f"Задание не в очереди: {job.status}.")
+        if job.provider == "colab":
+            raise CloudQueueError(
+                "Colab не автоматизирован API: экспортируйте задание "
+                "в Colab (кнопка экспорта) и запустите ноутбук вручную.")
+        if job.provider == "manual":
+            return self.update(
+                job_id, status="queued",
+                log=("Ручной провайдер: выполните команду на своём сервере: "
+                     f"{job.command}"))
+        if client is None:
+            raise CloudQueueError("Для RunPod нужен клиент API.")
         plan = {
             "name": f"{name_suffix}-{job.name}"[:60],
             "gpu_id": job.gpu_id,

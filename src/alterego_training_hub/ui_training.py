@@ -141,6 +141,14 @@ class TrainingPage(tk.Frame):
     # ------------------------------------------------------------- actions
     def start_training(self):
         command = self.cmd_var.get().strip()
+        if not command:
+            messagebox.showerror(
+                t('Обучение'),
+                t('Команда обучения пуста. Укажите команду (например, '
+                  'python train_llm.py) или сгенерируйте скрипт в мастере '
+                  '«Своя ЛЛМ».'),
+                parent=self)
+            return
         root = self.app.workspace_root()
         if root is None:
             messagebox.showerror(t('Обучение'),

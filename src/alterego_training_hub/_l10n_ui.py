@@ -236,6 +236,8 @@ UI_MESSAGES: dict[str, str] = {
     "Команда на {v1}": "Command on {v1}",
     "Команда на сервере": "Command on the server",
     "Команда обучения": "Training command",
+    "Команда обучения не задана: передайте command (например, python train_llm.py) или сгенерируйте скрипт в мастере.": "No training command set: pass a command (e.g. python train_llm.py) or generate a script in the wizard.",
+    "Команда обучения пуста. Укажите команду (например, python train_llm.py) или сгенерируйте скрипт в мастере «Своя ЛЛМ».": "The training command is empty. Enter a command (e.g. python train_llm.py) or generate a script in the «Your LLM» wizard.",
     "Команда: {v1}": "Command: {v1}",
     "Коммит создан. {v1}": "Commit created. {v1}",
     "Конвертировать модель в {v1}? Для этого потребуются внешние инструменты (transformers[onnx] или llama.cpp).": "Convert the model to {v1}? External tools are required for this (transformers[onnx] or llama.cpp).",

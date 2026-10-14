@@ -18,12 +18,12 @@ NAV_ICONS: dict[str, str] = {
 
 # The one primary action per page, shown top-right in the page header.
 PRIMARY_ACTIONS: dict[str, tuple[str, str]] = {
-    "training": (t("Запустить"), "start_training"),
-    "models": (t("Добавить"), "add_entry"),
-    "datasets": (t("Сканировать папку…"), "scan_folder"),
-    "model": (t("Оценка наставника"), "request_assessment"),
-    "playground": (t("Запустить"), "run_single"),
-    "gpu": (t("Обновить"), "refresh_jobs"),
+    "training": (t(t('Запустить')), "start_training"),
+    "models": (t(t('Добавить')), "add_entry"),
+    "datasets": (t(t('Сканировать папку…')), "scan_folder"),
+    "model": (t(t('Оценка наставника')), "request_assessment"),
+    "playground": (t(t('Запустить')), "run_single"),
+    "gpu": (t(t('Обновить')), "refresh_jobs"),
 }
 
 
@@ -61,11 +61,11 @@ def status_badges(*, provider: str = "", model: str = "", training: str = "",
     if model:
         badges.append(f"🤖 {provider + ' · ' if provider else ''}{model}")
     else:
-        badges.append(t("🤖 модель не выбрана"))
+        badges.append(t(t('🤖 модель не выбрана')))
     if training:
         badges.append(f"🏋 {training}")
     if tokens_today:
-        text = t("🎟 {tokens_today} ток.").format(tokens_today=tokens_today)
+        text = t(t('🎟 {tokens_today} ток.')).format(tokens_today=tokens_today)
         if budget_usd:
             text += f" / ${budget_usd:.2f}"
         badges.append(text)

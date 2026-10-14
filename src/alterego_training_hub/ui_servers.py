@@ -23,14 +23,14 @@ class ServersPage(tk.Frame):
     def _build(self):
         header = page_header(
             self,
-            t('Серверы'),
-            t('Подключение удалённых серверов по SSH: проверка связи, состояние системы и выполнение команд — вручную или через агента-наставника. Пароли хранятся только в системном хранилище.'),
+            t(t('Серверы')),
+            t(t('Подключение удалённых серверов по SSH: проверка связи, состояние системы и выполнение команд — вручную или через агента-наставника. Пароли хранятся только в системном хранилище.')),
         )
         header.pack(fill="x", padx=24, pady=(20, 10))
 
-        form = Collapsible(self, t('Настройки подключения'))
+        form = Collapsible(self, t(t('Настройки подключения')))
         form.pack(fill="x", padx=24, pady=(0, 10))
-        form.set_hint(t('свернуть/развернуть'))
+        form.set_hint(t(t('свернуть/развернуть')))
         body = form.body
         body.columnconfigure(1, weight=1)
 
@@ -43,10 +43,10 @@ class ServersPage(tk.Frame):
         self.var_password = tk.StringVar()
 
         rows = [
-            (t('Имя'), self.var_name, 24),
-            (t('Хост (IP / домен)'), self.var_host, 28),
-            (t('Порт'), self.var_port, 6),
-            (t('SSH-пользователь'), self.var_user, 18),
+            (t(t('Имя')), self.var_name, 24),
+            (t(t('Хост (IP / домен)')), self.var_host, 28),
+            (t(t('Порт')), self.var_port, 6),
+            (t(t('SSH-пользователь')), self.var_user, 18),
         ]
         for row, (label, var, width) in enumerate(rows):
             tk.Label(body, text=label, bg=C["panel"], font=F_BASE).grid(
@@ -56,52 +56,52 @@ class ServersPage(tk.Frame):
 
         auth_row = tk.Frame(body, bg=C["panel"])
         auth_row.grid(row=0, column=2, sticky="w", padx=(16, 0), pady=4)
-        tk.Label(auth_row, text=t('Авторизация'), bg=C["panel"], font=F_BASE).pack(
+        tk.Label(auth_row, text=t(t('Авторизация')), bg=C["panel"], font=F_BASE).pack(
             side="left", padx=(0, 8))
         ttk.Combobox(auth_row, textvariable=self.var_auth, width=10,
                      state="readonly", values=("key", "password")).pack(side="left")
 
         key_row = tk.Frame(body, bg=C["panel"])
         key_row.grid(row=1, column=2, columnspan=2, sticky="w", padx=(16, 0), pady=4)
-        tk.Label(key_row, text=t('Файл ключа (необязательно)'), bg=C["panel"],
+        tk.Label(key_row, text=t(t('Файл ключа (необязательно)')), bg=C["panel"],
                  font=F_BASE).pack(side="left", padx=(0, 8))
         tk.Entry(key_row, textvariable=self.var_key, width=28, bd=1,
                  relief="solid", font=F_BASE).pack(side="left", padx=(0, 6))
-        ttk.Button(key_row, text=t('Обзор…'), width=8,
+        ttk.Button(key_row, text=t(t('Обзор…')), width=8,
                    command=self.pick_key).pack(side="left")
 
         pass_row = tk.Frame(body, bg=C["panel"])
         pass_row.grid(row=2, column=2, columnspan=2, sticky="w", padx=(16, 0), pady=4)
-        tk.Label(pass_row, text=t('Пароль SSH'), bg=C["panel"], font=F_BASE).pack(
+        tk.Label(pass_row, text=t(t('Пароль SSH')), bg=C["panel"], font=F_BASE).pack(
             side="left", padx=(0, 8))
         tk.Entry(pass_row, textvariable=self.var_password, show="•", width=24,
                  bd=1, relief="solid", font=F_BASE).pack(side="left", padx=(0, 8))
         self.secret_status = tk.StringVar(value="")
         tk.Label(pass_row, textvariable=self.secret_status, bg=C["panel"],
                  fg=C["muted"], font=F_SMALL).pack(side="left")
-        tk.Label(pass_row, text=t('«key» — вход по ключу/агенту; «password» — пароль из системного хранилища'), bg=C["panel"],
+        tk.Label(pass_row, text=t(t('«key» — вход по ключу/агенту; «password» — пароль из системного хранилища')), bg=C["panel"],
                  fg=C["muted"], font=F_SMALL).pack(side="left", padx=8)
 
         actions = tk.Frame(body, bg=C["panel"])
         actions.grid(row=3, column=0, columnspan=4, sticky="w", pady=(10, 0))
-        ttk.Button(actions, text=t('Сохранить сервер'), style="Accent.TButton",
+        ttk.Button(actions, text=t(t('Сохранить сервер')), style="Accent.TButton",
                    command=self.save_server).pack(side="left")
-        ttk.Button(actions, text=t('Удалить'), style="Danger.TButton",
+        ttk.Button(actions, text=t(t('Удалить')), style="Danger.TButton",
                    command=self.delete_server).pack(side="left", padx=8)
-        ttk.Button(actions, text=t('Проверить подключение'),
+        ttk.Button(actions, text=t(t('Проверить подключение')),
                    command=self.test_connection).pack(side="left", padx=8)
-        ttk.Button(actions, text=t('Информация о сервере'),
+        ttk.Button(actions, text=t(t('Информация о сервере')),
                    command=self.show_info).pack(side="left", padx=8)
 
         # Server list
-        list_card = Collapsible(self, t('Подключённые серверы'))
+        list_card = Collapsible(self, t(t('Подключённые серверы')))
         list_card.pack(fill="x", padx=24, pady=(0, 10))
         columns = ("name", "address", "auth", "status")
         self.tree = ttk.Treeview(list_card.body, columns=columns,
                                  show="headings", height=5)
         for col, title, width in [
-            ("name", t('Имя'), 120), ("address", t('Адрес'), 220),
-            ("auth", t('Вход'), 90), ("status", t('Состояние'), 260),
+            ("name", t(t('Имя')), 120), ("address", t(t('Адрес')), 220),
+            ("auth", t(t('Вход')), 90), ("status", t(t('Состояние')), 260),
         ]:
             self.tree.heading(col, text=title)
             self.tree.column(col, width=width)
@@ -109,16 +109,16 @@ class ServersPage(tk.Frame):
         self.tree.bind("<<TreeviewSelect>>", lambda _e: self._load_selected())
 
         # Remote command row
-        cmd_card = Collapsible(self, t('Команда на сервере'))
+        cmd_card = Collapsible(self, t(t('Команда на сервере')))
         cmd_card.pack(fill="x", padx=24, pady=(0, 10))
         row = tk.Frame(cmd_card.body, bg=C["panel"])
         row.pack(fill="x")
         self.cmd_var = tk.StringVar()
         tk.Entry(row, textvariable=self.cmd_var, bd=1, relief="solid",
                  font=F_MONO).pack(side="left", fill="x", expand=True, padx=(0, 8))
-        ttk.Button(row, text=t('▶ Выполнить'), style="Accent.TButton",
+        ttk.Button(row, text=t(t('▶ Выполнить')), style="Accent.TButton",
                    command=self.run_remote).pack(side="left")
-        ttk.Button(row, text=t('Очистить'),
+        ttk.Button(row, text=t(t('Очистить')),
                    command=lambda: set_text(self.results, "")).pack(side="left",
                                                                    padx=8)
         self.results = tk.Text(self, height=9, wrap="word", state="disabled",
@@ -130,7 +130,7 @@ class ServersPage(tk.Frame):
     # ------------------------------------------------------------- handlers
     def pick_key(self):
         path = filedialog.askopenfilename(
-            parent=self, title=t('Файл SSH-ключа'))
+            parent=self, title=t(t('Файл SSH-ключа')))
         if path:
             self.var_key.set(path)
 
@@ -155,7 +155,7 @@ class ServersPage(tk.Frame):
         try:
             manager = self._manager()
             self.secret_status.set(
-                t('пароль сохранён') if manager.has_password(entry.id) else t('пароль не сохранён'))
+                t(t('пароль сохранён')) if manager.has_password(entry.id) else t(t('пароль не сохранён')))
         except Exception:
             self.secret_status.set("")
 
@@ -198,28 +198,28 @@ class ServersPage(tk.Frame):
                 manager.set_password(entry.id, password)
             self.var_password.set("")
         except (ServerError, ValueError) as exc:
-            messagebox.showerror(t('Серверы'), str(exc), parent=self)
+            messagebox.showerror(t(t('Серверы')), str(exc), parent=self)
             return
         except Exception as exc:  # keyring etc.
-            messagebox.showerror(t('Серверы'), t('Не удалось сохранить: {exc}').format(exc=exc),
+            messagebox.showerror(t(t('Серверы')), t(t('Не удалось сохранить: {exc}')).format(exc=exc),
                                  parent=self)
             return
         self.refresh_list()
         self.app.refresh_terminal_targets()
-        self.app.activity.log("server", t('Сохранён сервер: {v1}').format(v1=entry.name))
+        self.app.activity.log("server", t(t('Сохранён сервер: {v1}')).format(v1=entry.name))
 
     def delete_server(self):
         entry = self._selected_entry()
         if entry is None:
-            messagebox.showinfo(t('Серверы'), t('Выберите сервер в списке.'), parent=self)
+            messagebox.showinfo(t(t('Серверы')), t(t('Выберите сервер в списке.')), parent=self)
             return
-        if not messagebox.askyesno(t('Удалить сервер'),
-                                   t('Удалить «{v1}»?').format(v1=entry.name), parent=self):
+        if not messagebox.askyesno(t(t('Удалить сервер')),
+                                   t(t('Удалить «{v1}»?')).format(v1=entry.name), parent=self):
             return
         try:
             self._manager().delete(entry.id)
         except Exception as exc:
-            messagebox.showerror(t('Серверы'), str(exc), parent=self)
+            messagebox.showerror(t(t('Серверы')), str(exc), parent=self)
             return
         self.refresh_list()
         self.app.refresh_terminal_targets()
@@ -234,19 +234,19 @@ class ServersPage(tk.Frame):
                 entry = self._entry_from_form()
                 entry.validate()
             except (ServerError, ValueError) as exc:
-                messagebox.showerror(t('Серверы'), str(exc), parent=self)
+                messagebox.showerror(t(t('Серверы')), str(exc), parent=self)
                 return
             task = lambda: self._test_unsaved(entry)
             label = entry.name or entry.host
 
         def done(result):
             stamp = time.strftime("%H:%M:%S")
-            mark = "ok" if result.get("ok") else t('ошибка')
+            mark = "ok" if result.get("ok") else t(t('ошибка'))
             set_text(self.results,
                      f"[{stamp}] {label}: {mark}\n" + str(result.get("output", "")))
             self.refresh_list({entry.id: mark})
 
-        self.app.start_async(t('Проверка: {label}').format(label=label), task, done)
+        self.app.start_async(t(t('Проверка: {label}')).format(label=label), task, done)
 
     def _test_unsaved(self, entry: ServerEntry) -> dict:
         manager = self._manager()
@@ -261,20 +261,20 @@ class ServersPage(tk.Frame):
     def show_info(self):
         entry = self._selected_entry()
         if entry is None:
-            messagebox.showinfo(t('Серверы'), t('Выберите сервер в списке.'), parent=self)
+            messagebox.showinfo(t(t('Серверы')), t(t('Выберите сервер в списке.')), parent=self)
             return
 
         def done(result):
             set_text(self.results, str(result.get("info", result.get("output", ""))))
 
-        self.app.start_async(t('Информация: {v1}').format(v1=entry.name),
+        self.app.start_async(t(t('Информация: {v1}')).format(v1=entry.name),
                              lambda: self._manager().info(entry.id), done)
 
     def run_remote(self):
         entry = self._selected_entry()
         command = self.cmd_var.get().strip()
         if entry is None:
-            messagebox.showinfo(t('Серверы'), t('Выберите сервер в списке.'), parent=self)
+            messagebox.showinfo(t(t('Серверы')), t(t('Выберите сервер в списке.')), parent=self)
             return
         if not command:
             return
@@ -283,12 +283,12 @@ class ServersPage(tk.Frame):
             stamp = time.strftime("%H:%M:%S")
             self.results.configure(state="normal")
             self.results.insert("end",
-                                t('\n$ {command}\n{v3}\n[код {v5} · {stamp}]\n').format(command=command, v3=result.get('output', ''), v5=result.get('exit_code', '?'), stamp=stamp))
+                                t(t('\n$ {command}\n{v3}\n[код {v5} · {stamp}]\n')).format(command=command, v3=result.get('output', ''), v5=result.get('exit_code', '?'), stamp=stamp))
             self.results.configure(state="disabled")
             self.results.see("end")
 
         self.app.start_async(
-            t('Команда на {v1}').format(v1=entry.name),
+            t(t('Команда на {v1}')).format(v1=entry.name),
             lambda: self._manager().run_command(entry.id, command),
             done,
         )

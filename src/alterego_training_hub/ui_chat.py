@@ -1,6 +1,7 @@
 """Right-side chat panel: mentor assistant or autonomous agent with tools."""
 from __future__ import annotations
 
+import threading
 import time
 import tkinter as tk
 from tkinter import messagebox, ttk
@@ -23,6 +24,7 @@ class ChatPage(tk.Frame):
         self.session = ChatSession()
         self._sessions_cache: list[ChatSession] = []
         self._busy = False
+        self._cancel_event: threading.Event | None = None
         self._last_usage: dict = {}
         self._last_model: str = ""
         self._last_question: str = ""
@@ -131,6 +133,11 @@ class ChatPage(tk.Frame):
         self.send_btn = ttk.Button(input_bar, text="➤", width=4,
                                    style="Accent.TButton", command=self.send)
         self.send_btn.pack(side="left", fill="y", padx=(6, 0))
+        self.stop_btn = ttk.Button(input_bar, text="⏹", width=4,
+                                   style="Danger.TButton",
+                                   command=self.stop_agent, state="disabled")
+        self.stop_btn.pack(side="left", fill="y", padx=(6, 0))
+        attach_tooltip(self.stop_btn, t('Остановить агента'))
 
         self._update_hint()
         self.refresh_sessions()
@@ -440,6 +447,9 @@ class ChatPage(tk.Frame):
                 t('↻ повтор запроса к модели (попытка {v1})').format(
                     v1=payload.get("attempt", "?")), "err")
             return
+        if kind == "cancelled":
+            self.log_activity("⏹ " + t('Агент остановлен пользователем'), "err")
+            return
         if kind == "parallel_batch":
             self.log_activity(
                 t('⚡ параллельно: {v1} чтений').format(
@@ -475,6 +485,13 @@ class ChatPage(tk.Frame):
                 for task in tasks[:6]))
             done = sum(1 for task in tasks if task.get("status") == "done")
             self.log_activity(t('план обновлён: {done}/{v3} шагов готово').format(done=done, v3=len(tasks)))
+
+    def stop_agent(self):
+        """Request cancellation of the running agent turn (этап 35)."""
+        if self._cancel_event is not None:
+            self._cancel_event.set()
+        self.log_activity(t('⏹ останавливаю агента…'), "err")
+        self.status_var.set(t('Остановка…'))
 
     def attach_file(self):
         """Attach a text file into the composer (ChatGPT-desktop 📎 pattern)."""
@@ -544,11 +561,20 @@ class ChatPage(tk.Frame):
         )
 
         self._busy = True
+        self._cancel_event = threading.Event()
         self.send_btn.configure(state="disabled")
+        try:
+            self.stop_btn.configure(state="normal")
+        except Exception:
+            pass
 
         def done(value):
             self._busy = False
             self.send_btn.configure(state="normal")
+            try:
+                self.stop_btn.configure(state="disabled")
+            except Exception:
+                pass
             reply = value
             self._last_question = text
             self._last_answer = reply.text or ""
@@ -567,6 +593,10 @@ class ChatPage(tk.Frame):
         def failed(_error: str):
             self._busy = False
             self.send_btn.configure(state="normal")
+            try:
+                self.stop_btn.configure(state="disabled")
+            except Exception:
+                pass
             for item in transcript:
                 self.session.messages.append(ChatMessage.from_dict(item))
             self.store.save(self.session)
@@ -586,6 +616,7 @@ class ChatPage(tk.Frame):
                 max_tokens=int(settings.mentor_max_tokens),
                 temperature=float(settings.mentor_temperature),
                 transcript=transcript,
+                cancel_event=self._cancel_event,
             )
             system_extra = str(getattr(settings, "agent_system_extra", "") or "")
             if autonomy == "agent":

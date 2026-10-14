@@ -546,6 +546,7 @@ class MentorAgent:
         transcript: list[dict[str, Any]] | None = None,
         readonly: bool = False,
         system_extra: str = "",
+        cancel_event: Any | None = None,
     ) -> MentorReply:
         """Run one agent turn.
 
@@ -564,12 +565,26 @@ class MentorAgent:
         ask_confirm = confirm or (lambda _name, _args, _desc: False)
         last_reply: MentorReply | None = None
         readonly_names = self._readonly_tool_names() if readonly else None
+        def cancelled() -> bool:
+            return bool(cancel_event is not None
+                        and cancel_event.is_set())
+
         stats = TurnStats()
         guard = LoopGuard(limit=getattr(self, "loop_limit", 3))
         error_streak = 0
         hint_given = False
 
         for step in range(self.max_steps):
+            if cancelled():
+                emit("cancelled", {"step": step})
+                final = ((last_reply.text if last_reply else "")
+                         + "\n\n[Остановлено пользователем.]").strip()
+                emit("finished", {"text": final, "stats": stats.as_dict()})
+                return MentorReply(
+                    text=final,
+                    model=last_reply.model if last_reply else self.mentor.model,
+                    usage=last_reply.usage if last_reply else {},
+                    request_id=last_reply.request_id if last_reply else None)
             if self.enable_tools:
                 tool_schemas = WORKSPACE_TOOL_SCHEMAS + self.extra_schemas
                 if readonly_names is not None:
@@ -613,6 +628,15 @@ class MentorAgent:
             messages.append(assistant_payload)
             if transcript is not None:
                 transcript.append(assistant_payload)
+            if cancelled():
+                emit("cancelled", {"step": step})
+                final = ((reply.text or "")
+                         + "\n\n[Остановлено пользователем: запрошенные "
+                           "действия не выполнялись.]").strip()
+                emit("finished", {"text": final, "stats": stats.as_dict()})
+                return MentorReply(text=final, model=reply.model,
+                                   usage=reply.usage,
+                                   request_id=reply.request_id)
             results = self._execute_calls(calls, ask_confirm, emit,
                                           readonly=readonly)
             for index, call in enumerate(calls):
@@ -673,6 +697,7 @@ class MentorAgent:
         verify: bool = True,
         system_extra: str = "",
         readonly: bool = False,
+        cancel_event: Any | None = None,
     ) -> MentorReply:
         """Autonomous turn: the agent plans, acts, then verifies its own work.
 
@@ -694,6 +719,7 @@ class MentorAgent:
             transcript=transcript,
             system_extra=system_extra,
             readonly=readonly,
+            cancel_event=cancel_event,
         )
         if not verify or not self._used_mutation:
             return reply

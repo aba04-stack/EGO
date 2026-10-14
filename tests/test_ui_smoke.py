@@ -1782,3 +1782,16 @@ def test_stage34_live_benchmark_button(fake_ui, tmp_path):
     app.mentor_client = lambda: ScriptedMentor(script)
     report = model_page.live_benchmark_text()
     assert "3/3" in report, report
+
+
+def test_stage35_stop_button(fake_ui, tmp_path):
+    import threading
+
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    chat = app.chat_panel
+    assert hasattr(chat, "stop_btn")
+    chat._cancel_event = threading.Event()
+    chat.stop_agent()
+    assert chat._cancel_event.is_set()
+    chat.on_agent_event("cancelled", {"step": 1})

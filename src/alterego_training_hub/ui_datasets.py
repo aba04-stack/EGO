@@ -322,24 +322,41 @@ class DatasetsPage(tk.Frame):
 
         self.app.start_async(t('SFT-валидация'), work, done)
 
-    def dedupe_near(self):
-        from .sft_data import dedupe_near as _dedupe
+    def _register_derived_file(self, entry, target, rows_count, suffix, label):
+        self._library().add(DatasetEntry(
+            name=f"{entry.name}-{suffix}", format=entry.format,
+            location=str(target), rows=rows_count,
+            size_bytes=target.stat().st_size))
+        self.refresh()
+        self.app.activity.log(
+            "system", label + f": {target.name} ({rows_count})")
+        return target
 
-        entry, rows = self._selected_rows()
+    def dedupe_near(self):
+        from .sft_data import dedupe_near_file
+
+        entry, _rows = self._selected_rows()
         if entry is None:
             return
+        source = Path(entry.location)
+        target = source.with_name(f"{source.stem}.dedup.{entry.format}")
+
+        def progress(done_rows):
+            self.app.post_event("progress", {
+                "text": t('Near-dup дедупликация: строк обработано {v1}').format(
+                    v1=done_rows)})
 
         def work():
-            return _dedupe(rows)
+            return dedupe_near_file(source, target, entry.format,
+                                    progress=progress)
 
         def done(result):
-            kept, removed = result
-            target = self._write_derived(entry, kept, "dedup",
-                                         t('Near-dup дедупликация'))
+            self._register_derived_file(entry, target, result.kept, "dedup",
+                                        t('Near-dup дедупликация'))
             messagebox.showinfo(
                 t('Near-dup дедупликация'),
                 t('Удалено почти-дублей: {v1}; осталось {v2}').format(
-                    v1=removed, v2=len(kept)) + f"\n{target}",
+                    v1=result.removed, v2=result.kept) + f"\n{target}",
                 parent=self)
 
         self.app.start_async(t('Near-dup дедупликация'), work, done)
@@ -347,24 +364,30 @@ class DatasetsPage(tk.Frame):
     def decontaminate(self):
         from tkinter import filedialog
 
-        from .datasets import read_rows
-        from .sft_data import decontaminate as _decontaminate
-
-        entry, rows = self._selected_rows()
+        entry, _rows = self._selected_rows()
         if entry is None:
             return
         eval_path = filedialog.askopenfilename(
             parent=self, title=t('Eval-датасет для деконтаминации'))
         if not eval_path:
             return
-        eval_rows = read_rows(Path(eval_path), entry.format)
+        from .sft_data import decontaminate_file
+
+        source = Path(entry.location)
+        target = source.with_name(f"{source.stem}.clean.{entry.format}")
+
+        def progress(done_rows):
+            self.app.post_event("progress", {
+                "text": t('Деконтаминация: строк обработано {v1}').format(
+                    v1=done_rows)})
 
         def work():
-            return _decontaminate(rows, eval_rows)
+            return decontaminate_file(source, Path(eval_path), target,
+                                      entry.format, progress=progress)
 
         def done(result):
-            target = self._write_derived(entry, result.cleaned, "clean",
-                                         t('Деконтаминация'))
+            self._register_derived_file(entry, target, result.kept, "clean",
+                                        t('Деконтаминация'))
             messagebox.showinfo(
                 t('Деконтаминация'),
                 result.render() + f"\n{target}", parent=self)

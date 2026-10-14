@@ -121,9 +121,10 @@ def _check_row(row, index: int) -> list[str]:
 
 
 def validate_sft(rows) -> SftReport:
-    items = list(rows or [])
-    report = SftReport(rows=len(items))
-    for index, row in enumerate(items):
+    """Validate any iterable of rows (streaming-friendly)."""
+    report = SftReport()
+    for index, row in enumerate(rows or []):
+        report.rows += 1
         fmt = _row_format(row)
         report.formats[fmt] = report.formats.get(fmt, 0) + 1
         problems = _check_row(row, index)
@@ -203,3 +204,98 @@ def decontaminate(train_rows, eval_rows, threshold: float = 0.8,
     bad = set(contaminated)
     cleaned = [row for k, row in enumerate(train) if k not in bad]
     return DecontaminationResult(contaminated=contaminated, cleaned=cleaned)
+
+
+# ------------------------------------------------- streaming file ops
+@dataclass
+class FileCleanResult:
+    kept: int = 0
+    removed: int = 0
+    contaminated: list[int] = field(default_factory=list)
+
+    def render(self) -> str:
+        return (f"Обработано потоково: оставлено {self.kept}, "
+                f"удалено {self.removed}")
+
+
+def _report(progress, count: int) -> None:
+    if progress is not None and count % 1000 == 0:
+        progress(count)
+
+
+def dedupe_near_file(source, target, fmt: str, threshold: float = 0.85,
+                     progress=None) -> FileCleanResult:
+    """Near-dup dedupe file→file in two streaming passes.
+
+    Pass 1 keeps only word-shingle sets (never the rows); pass 2 streams
+    the source again and writes surviving rows.  Peak memory is
+    proportional to distinct shingles, not to dataset bytes.
+    """
+    from .datasets import iter_rows, write_rows_iter
+
+    shingle_sets: list[set] = []
+    for count, row in enumerate(iter_rows(source, fmt), start=1):
+        shingle_sets.append(shingles(_text_of(row)))
+        _report(progress, count)
+    index: dict[tuple[str, ...], list[int]] = {}
+    for i, shingle_set in enumerate(shingle_sets):
+        for shingle in shingle_set:
+            index.setdefault(shingle, []).append(i)
+    candidates: set[tuple[int, int]] = set()
+    for holders in index.values():
+        # Шингл из тысяч строк («про обучение моделей…») не различает
+        # дубли и взрывает число пар — такие пропускаем, редких хватит.
+        if len(holders) > 200:
+            continue
+        for a in range(len(holders)):
+            for b in range(a + 1, len(holders)):
+                candidates.add((holders[a], holders[b]))
+    removed: set[int] = set()
+    for i, j in sorted(candidates):
+        if i not in removed and jaccard(shingle_sets[i], shingle_sets[j]) >= threshold:
+            removed.add(j)
+
+    def kept_rows():
+        for k, row in enumerate(iter_rows(source, fmt)):
+            _report(progress, k + 1)
+            if k not in removed:
+                yield row
+
+    kept = write_rows_iter(target, kept_rows(), fmt)
+    return FileCleanResult(kept=kept, removed=len(removed))
+
+
+def decontaminate_file(train_source, eval_source, target, fmt: str,
+                       threshold: float = 0.8,
+                       progress=None) -> FileCleanResult:
+    """Decontamination file→file: eval shingles indexed once, train streamed."""
+    from .datasets import iter_rows, write_rows_iter
+
+    eval_shingles: list[set] = []
+    eval_index: dict[tuple[str, ...], list[int]] = {}
+    for row in iter_rows(eval_source, fmt):
+        shingle_set = shingles(_text_of(row))
+        for shingle in shingle_set:
+            eval_index.setdefault(shingle, []).append(len(eval_shingles))
+        eval_shingles.append(shingle_set)
+
+    result = FileCleanResult()
+
+    def clean_rows():
+        n = 0
+        for row in iter_rows(train_source, fmt):
+            shingle_set = shingles(_text_of(row))
+            candidates: set[int] = set()
+            for shingle in shingle_set:
+                candidates.update(eval_index.get(shingle, []))
+            n += 1
+            _report(progress, n)
+            if any(jaccard(shingle_set, eval_shingles[k]) >= threshold
+                   for k in candidates):
+                result.contaminated.append(n - 1)
+                result.removed += 1
+                continue
+            yield row
+
+    result.kept = write_rows_iter(target, clean_rows(), fmt)
+    return result

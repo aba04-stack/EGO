@@ -58,8 +58,13 @@ def count_rows(path: Path, fmt: str) -> int:
     return 0
 
 
-def preview_rows(path: Path, fmt: str, limit: int = MAX_PREVIEW_ROWS) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
+def iter_rows(path: Path, fmt: str):
+    """Stream rows from a dataset file without loading it into memory.
+
+    jsonl/csv/tsv/txt are read line by line; ``json`` (a single document)
+    is parsed whole by nature of the format, then yielded item by item.
+    Bad jsonl lines become ``{"raw": ...}`` rows, mirroring preview.
+    """
     try:
         if fmt == "jsonl":
             with path.open("r", encoding="utf-8", errors="replace") as handle:
@@ -68,41 +73,100 @@ def preview_rows(path: Path, fmt: str, limit: int = MAX_PREVIEW_ROWS) -> list[di
                     if not line:
                         continue
                     try:
-                        rows.append(json.loads(line))
+                        yield json.loads(line)
                     except json.JSONDecodeError:
-                        rows.append({"raw": line[:300]})
-                    if len(rows) >= limit:
-                        break
+                        yield {"raw": line[:300]}
         elif fmt == "json":
             raw = json.loads(path.read_text(encoding="utf-8", errors="replace"))
             if isinstance(raw, list):
-                rows = raw[:limit]
+                yield from raw
             else:
-                rows = [raw]
+                yield raw
         elif fmt in {"csv", "tsv"}:
             delimiter = "\t" if fmt == "tsv" else ","
             with path.open("r", encoding="utf-8", errors="replace", newline="") as handle:
-                reader = csv.DictReader(handle, delimiter=delimiter)
-                for row in reader:
-                    rows.append(dict(row))
-                    if len(rows) >= limit:
-                        break
+                for row in csv.DictReader(handle, delimiter=delimiter):
+                    yield dict(row)
         elif fmt == "txt":
             with path.open("r", encoding="utf-8", errors="replace") as handle:
                 for line in handle:
                     if line.strip():
-                        rows.append({"text": line.strip()[:300]})
-                    if len(rows) >= limit:
-                        break
+                        yield {"text": line.strip()[:300]}
     except (OSError, json.JSONDecodeError):
-        return rows
+        return
+
+
+def preview_rows(path: Path, fmt: str, limit: int = MAX_PREVIEW_ROWS) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for row in iter_rows(path, fmt):
+        rows.append(row)
+        if len(rows) >= limit:
+            break
     return rows
 
 
 def read_rows(path: Path, fmt: str, limit: int = 0) -> list[dict[str, Any]]:
-    """Read a whole dataset file into rows (optionally capped)."""
-    rows = preview_rows(path, fmt, limit=limit if limit > 0 else 10**9)
+    """Read a whole dataset file into rows (optionally capped).
+
+    Prefer :func:`iter_rows` for large files: this one materialises.
+    """
+    rows: list[dict[str, Any]] = []
+    for row in iter_rows(path, fmt):
+        rows.append(row)
+        if limit > 0 and len(rows) >= limit:
+            break
     return rows
+
+
+def write_rows_iter(path: Path, rows, fmt: str, *, fieldnames=None) -> int:
+    """Stream rows into a dataset file; returns how many were written.
+
+    Memory stays O(1) in the number of rows.  For csv/tsv the header is
+    taken from ``fieldnames`` or the first row (later extra keys drop).
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    written = 0
+    if fmt == "jsonl":
+        with path.open("w", encoding="utf-8") as handle:
+            for row in rows:
+                handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+                written += 1
+    elif fmt == "json":
+        with path.open("w", encoding="utf-8") as handle:
+            handle.write("[\n")
+            first = True
+            for row in rows:
+                if not first:
+                    handle.write(",\n")
+                handle.write(json.dumps(row, ensure_ascii=False))
+                first = False
+                written += 1
+            handle.write("\n]\n")
+    elif fmt in {"csv", "tsv"}:
+        delimiter = "\t" if fmt == "tsv" else ","
+        iterator = iter(rows)
+        first_row = next(iterator, None)
+        keys = list(fieldnames or (list(first_row) if isinstance(first_row, dict) else []))
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=keys,
+                                    delimiter=delimiter, extrasaction="ignore")
+            if keys:
+                writer.writeheader()
+            if first_row is not None:
+                writer.writerow(first_row)
+                written += 1
+            for row in iterator:
+                writer.writerow(row)
+                written += 1
+    elif fmt == "txt":
+        with path.open("w", encoding="utf-8") as handle:
+            for row in rows:
+                text = row.get("text", "") if isinstance(row, dict) else str(row)
+                handle.write(str(text) + "\n")
+                written += 1
+    else:
+        raise DatasetError(f"Неподдерживаемый формат: {fmt}")
+    return written
 
 
 def write_rows(path: Path, rows: list[dict[str, Any]], fmt: str) -> Path:

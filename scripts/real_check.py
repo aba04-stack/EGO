@@ -218,6 +218,37 @@ def main() -> int:
         return f"найден {found[0].name} шаг 100 val_loss 1.25"
     check("чекпоинты: реальное сканирование папок", _checkpoints)
 
+    # 10b. Streaming big dataset -------------------------------------------
+    def _streaming():
+        import json as _json
+        import tracemalloc
+
+        from alterego_training_hub.data_audit import audit_rows
+        from alterego_training_hub.datasets import iter_rows
+        from alterego_training_hub.sft_data import dedupe_near_file
+
+        src = tmp / "big.jsonl"
+        total = 40_000
+        with src.open("w", encoding="utf-8") as handle:
+            for i in range(total):
+                text = f"строка {i} про обучение нейронных сетей и данные"
+                if i and i % 10_000 == 0:
+                    text = "строка 0 про обучение нейронных сетей и данные"
+                handle.write(_json.dumps({"text": text}, ensure_ascii=False) + "\n")
+        tracemalloc.start()
+        audit = audit_rows(iter_rows(src, "jsonl"))
+        _current, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+        assert audit.rows == total and audit.duplicates == 3, audit
+        assert peak < 20_000_000, f"пик памяти {peak} — файл грузится целиком?"
+        result = dedupe_near_file(src, tmp / "big.dedup.jsonl", "jsonl",
+                                  threshold=0.99)
+        assert result.removed == 3 and result.kept == total - 3, result
+        return (f"{total} строк потоково, пик аудита {peak / 1e6:.1f} МБ, "
+                f"near-dup удалено {result.removed}")
+    check("потоковая обработка: большой датасет без загрузки в память",
+          _streaming)
+
     # 11. Budget ledger math ------------------------------------------------
     def _budget():
         from alterego_training_hub.budget_guard import (

@@ -74,12 +74,18 @@ class DataAudit:
         return "\n".join(self.checklist())
 
 
-def audit_rows(rows, *, min_len: int = 10) -> DataAudit:
-    items = list(rows or [])
-    audit = DataAudit(rows=len(items))
+def audit_rows(rows, *, min_len: int = 10, progress=None) -> DataAudit:
+    """Audit any iterable of rows (streaming: no full materialisation).
+
+    ``progress(done_count)`` fires every 1000 rows when given.
+    """
+    audit = DataAudit()
     seen: set[str] = set()
     cyr = lat = 0
-    for row in items:
+    for row in rows or []:
+        audit.rows += 1
+        if progress is not None and audit.rows % 1000 == 0:
+            progress(audit.rows)
         text = _text_of(row).strip()
         audit.chars += len(text)
         if not text:

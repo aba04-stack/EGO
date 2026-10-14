@@ -770,6 +770,11 @@ class TrainingHubApp(tk.Tk):
             payload["box"]["ok"] = answer
             payload["event"].set()
             return
+        if kind == "progress":
+            text = str(payload.get("text", "") or "")
+            if text:
+                self.set_status(text)
+            return
         if kind == "budget":
             verdict = payload.get("verdict")
             if verdict is not None:

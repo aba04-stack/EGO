@@ -286,10 +286,9 @@ class ModelDashboardPage(tk.Frame):
 
     def wizard_audit(self):
         from .data_audit import audit_rows
-        from .datasets import read_rows
+        from .datasets import iter_rows
 
         path = self.wizard_dataset_var.get().strip()
-        rows = []
         if path:
             from pathlib import Path
 
@@ -299,13 +298,12 @@ class ModelDashboardPage(tk.Frame):
                 if fmt not in ("jsonl", "json", "csv", "tsv", "txt"):
                     fmt = "txt"
                 try:
-                    rows = read_rows(file, fmt, limit=5000)
-                    if fmt == "txt":
-                        rows = [line for line in
-                                file.read_text(encoding="utf-8", errors="replace").splitlines()]
+                    # Потоково по ВСЕМУ файлу: раньше аудит молча
+                    # смотрел только первые 5000 строк.
+                    return audit_rows(iter_rows(file, fmt))
                 except Exception:
-                    rows = []
-        return audit_rows(rows)
+                    pass
+        return audit_rows([])
 
     def _wizard_plan_obj(self):
         from .wizard_plan import build_plan

@@ -1,5 +1,6 @@
 """Right-side chat panel: mentor assistant or autonomous agent with tools."""
 from __future__ import annotations
+from .i18n import t
 
 import time
 import tkinter as tk
@@ -28,7 +29,7 @@ class ChatPage(tk.Frame):
     def _build(self):
         top = tk.Frame(self, bg=C["panel"])
         top.pack(fill="x", padx=10, pady=(10, 6))
-        tk.Label(top, text="Наставник", bg=C["panel"], fg=C["text"],
+        tk.Label(top, text=t('Наставник'), bg=C["panel"], fg=C["text"],
                  font=("Segoe UI", 11, "bold")).pack(anchor="w")
         row = tk.Frame(top, bg=C["panel"])
         row.pack(fill="x", pady=(6, 0))
@@ -39,14 +40,14 @@ class ChatPage(tk.Frame):
                    command=self.new_session).pack(side="left", padx=(4, 0))
         ttk.Button(row, text="✕", width=3, style="Danger.TButton",
                    command=self.delete_session).pack(side="left", padx=(3, 0))
-        ttk.Button(row, text="Выгрузить",
+        ttk.Button(row, text=t('Выгрузить'),
                    command=self.export_session).pack(side="left", padx=(8, 0))
-        ttk.Button(row, text="Импорт",
+        ttk.Button(row, text=t('Импорт'),
                    command=self.import_session).pack(side="left", padx=(3, 0))
 
         mode_row = tk.Frame(top, bg=C["panel"])
         mode_row.pack(fill="x", pady=(6, 0))
-        tk.Label(mode_row, text="Режим", bg=C["panel"], fg=C["muted"],
+        tk.Label(mode_row, text=t('Режим'), bg=C["panel"], fg=C["muted"],
                  font=F_SMALL).pack(side="left", padx=(0, 6))
         self.autonomy_var = tk.StringVar(value=self.app.settings.chat_autonomy)
         self.mode_btn = tk.Label(
@@ -88,12 +89,12 @@ class ChatPage(tk.Frame):
             font=F_SMALL, wraplength=340, justify="left", anchor="w")
         self.tasks_label.pack(fill="x", padx=8, pady=(2, 0))
         for label, builder in [
-            ("Оценка", lambda: self.app.assessment_prompt()),
-            ("Прогресс", lambda: (
-                "Проанализируй прогресс обучения и предложи улучшения.\n\n"
+            (t('Оценка'), lambda: self.app.assessment_prompt()),
+            (t('Прогресс'), lambda: (
+                t('Проанализируй прогресс обучения и предложи улучшения.\n\n')
                 + self.app.assessment_context())),
-            ("Ошибки", lambda: (
-                "Найди ошибки в логе обучения и предложи исправления.\n\n```\n"
+            (t('Ошибки'), lambda: (
+                t('Найди ошибки в логе обучения и предложи исправления.\n\n```\n')
                 + self.app.training.tail(8000) + "\n```")),
         ]:
             ttk.Button(quick, text=label, width=8,
@@ -116,10 +117,10 @@ class ChatPage(tk.Frame):
 
     def _render_mode(self):
         if self.autonomy_var.get() == "agent":
-            self.mode_btn.configure(text="● Режим агента — действует свободно",
+            self.mode_btn.configure(text=t('● Режим агента — действует свободно'),
                                     bg=C["success"])
         else:
-            self.mode_btn.configure(text="○ Ассистент — подтверждает действия",
+            self.mode_btn.configure(text=t('○ Ассистент — подтверждает действия'),
                                     bg=C["accent"])
 
     def toggle_mode(self):
@@ -132,11 +133,11 @@ class ChatPage(tk.Frame):
     # -------------------------------------------------------------- sessions
     def _update_hint(self):
         root = self.app.workspace_root()
-        mode = "агент" if self.autonomy_var.get() == "agent" else "ассистент"
+        mode = t('агент') if self.autonomy_var.get() == "agent" else t('ассистент')
         if root:
-            self.status_var.set(f"{mode} · папка: {root.name}")
+            self.status_var.set(t('{mode} · папка: {v2}').format(mode=mode, v2=root.name))
         else:
-            self.status_var.set(f"{mode} · рабочая папка не выбрана — инструменты файлов отключены")
+            self.status_var.set(t('{mode} · рабочая папка не выбрана — инструменты файлов отключены').format(mode=mode))
 
     def focus_input(self):
         try:
@@ -149,7 +150,7 @@ class ChatPage(tk.Frame):
 
     def refresh_sessions(self):
         self._sessions_cache = self.store.list_sessions()
-        labels = [session.title for session in self._sessions_cache] or ["Новый диалог"]
+        labels = [session.title for session in self._sessions_cache] or [t('Новый диалог')]
         self.sessions_combo.configure(values=labels)
         if not self.sessions_combo.get():
             self.sessions_combo.set(labels[0])
@@ -159,7 +160,7 @@ class ChatPage(tk.Frame):
         for session in self._sessions_cache:
             if session.title == title and session.id != self.session.id:
                 if self._busy:
-                    messagebox.showinfo("Чат", "Дождитесь завершения ответа.",
+                    messagebox.showinfo(t('Чат'), t('Дождитесь завершения ответа.'),
                                         parent=self)
                     return
                 self.session = session
@@ -168,24 +169,24 @@ class ChatPage(tk.Frame):
 
     def new_session(self):
         if self._busy:
-            messagebox.showinfo("Чат", "Дождитесь завершения ответа.", parent=self)
+            messagebox.showinfo(t('Чат'), t('Дождитесь завершения ответа.'), parent=self)
             return
         self.session = ChatSession()
         self.refresh_sessions()
-        self.sessions_combo.set("Новый диалог")
+        self.sessions_combo.set(t('Новый диалог'))
         self._render_messages()
 
     def delete_session(self):
         if self._busy:
             return
         if self.session.id and self.session.messages:
-            if not messagebox.askyesno("Удалить диалог",
-                                       f"Удалить «{self.session.title}»?", parent=self):
+            if not messagebox.askyesno(t('Удалить диалог'),
+                                       t('Удалить «{v1}»?').format(v1=self.session.title), parent=self):
                 return
             self.store.delete(self.session.id)
         self.session = ChatSession()
         self.refresh_sessions()
-        self.sessions_combo.set("Новый диалог")
+        self.sessions_combo.set(t('Новый диалог'))
         self._render_messages()
 
     def export_session(self):
@@ -194,11 +195,11 @@ class ChatPage(tk.Frame):
         from .session_share import export_session as _export
 
         if not self.session.messages:
-            messagebox.showinfo("Сессия", "Диалог пуст — нечего выгружать.",
+            messagebox.showinfo(t('Сессия'), t('Диалог пуст — нечего выгружать.'),
                                 parent=self)
             return
         path = filedialog.asksaveasfilename(
-            title="Выгрузить сессию", defaultextension=".md",
+            title=t('Выгрузить сессию'), defaultextension=".md",
             filetypes=[("Markdown", "*.md"), ("HTML", "*.html"),
                        ("JSON", "*.json")])
         if not path:
@@ -207,14 +208,12 @@ class ChatPage(tk.Frame):
         try:
             exported = _export(self.session, path, fmt=fmt)
         except Exception as exc:
-            messagebox.showerror("Сессия", str(exc), parent=self)
+            messagebox.showerror(t('Сессия'), str(exc), parent=self)
             return
         self.app.activity.log("share",
-                              f"Сессия выгружена: {exported.path} "
-                              f"({exported.messages} сообщений)")
-        messagebox.showinfo("Сессия",
-                            f"Готово: {exported.messages} сообщений → "
-                            f"{exported.path}", parent=self)
+                              t('Сессия выгружена: {v1} ({v3} сообщений)').format(v1=exported.path, v3=exported.messages))
+        messagebox.showinfo(t('Сессия'),
+                            t('Готово: {v1} сообщений → {v3}').format(v1=exported.messages, v3=exported.path), parent=self)
 
     def import_session(self):
         from tkinter import filedialog
@@ -222,14 +221,14 @@ class ChatPage(tk.Frame):
         from .session_share import import_session as _import
 
         path = filedialog.askopenfilename(
-            title="Импорт сессии", filetypes=[("JSON сессии", "*.json"),
-                                              ("Все файлы", "*.*")])
+            title=t('Импорт сессии'), filetypes=[(t('JSON сессии'), "*.json"),
+                                              (t('Все файлы'), "*.*")])
         if not path:
             return
         try:
             session = _import(path)
         except Exception as exc:
-            messagebox.showerror("Сессия", str(exc), parent=self)
+            messagebox.showerror(t('Сессия'), str(exc), parent=self)
             return
         self.session = session
         self.store.save(session)
@@ -237,7 +236,7 @@ class ChatPage(tk.Frame):
         self.sessions_combo.set(session.title)
         self._render_messages()
         self.app.activity.log("share",
-                              f"Сессия импортирована: {session.title}")
+                              t('Сессия импортирована: {v1}').format(v1=session.title))
 
     # --------------------------------------------------------------- render
     def _render_messages(self):
@@ -246,18 +245,15 @@ class ChatPage(tk.Frame):
         if not self.session.messages:
             self.messages.insert(
                 "end",
-                "Диалог пуст. Попросите наставника разобрать код, найти ошибку "
-                "или запустите режим агента и дайте цель.\n\n"
-                "Пример цели для агента:\n"
-                "«Запусти тесты, найди падающий, почини и проверь снова.»\n",
+                t('Диалог пуст. Попросите наставника разобрать код, найти ошибку или запустите режим агента и дайте цель.\n\nПример цели для агента:\n«Запусти тесты, найди падающий, почини и проверь снова.»\n'),
                 "sys",
             )
         for message in self.session.messages:
             if message.role == "user":
-                self._insert_bubble("Вы", message.content, "user", message.created_at)
+                self._insert_bubble(t('Вы'), message.content, "user", message.created_at)
             elif message.role == "assistant":
                 if message.content:
-                    self._insert_bubble("Наставник", message.content, "assistant",
+                    self._insert_bubble(t('Наставник'), message.content, "assistant",
                                         message.created_at)
                 for call in message.tool_calls:
                     fn = call.get("function", {})
@@ -299,9 +295,9 @@ class ChatPage(tk.Frame):
         elif kind == "assistant":
             count = payload.get("tool_calls", 0)
             if count:
-                self.log_activity(f"инструментов к вызову: {count}")
+                self.log_activity(t('инструментов к вызову: {count}').format(count=count))
             elif payload.get("text"):
-                self.log_activity("наставник формирует ответ")
+                self.log_activity(t('наставник формирует ответ'))
         elif kind == "plan":
             tasks = payload.get("tasks") or []
             marks = {"done": "✓", "failed": "✗", "in_progress": "▶", "pending": "○"}
@@ -310,7 +306,7 @@ class ChatPage(tk.Frame):
                 f"{str(task.get('title', ''))[:40]}"
                 for task in tasks[:6]))
             done = sum(1 for task in tasks if task.get("status") == "done")
-            self.log_activity(f"план обновлён: {done}/{len(tasks)} шагов готово")
+            self.log_activity(t('план обновлён: {done}/{v3} шагов готово').format(done=done, v3=len(tasks)))
 
     # ----------------------------------------------------------------- send
     def send(self):
@@ -322,12 +318,12 @@ class ChatPage(tk.Frame):
 
     def send_preset(self, text: str):
         if self._busy:
-            messagebox.showinfo("Чат", "Дождитесь завершения ответа.", parent=self)
+            messagebox.showinfo(t('Чат'), t('Дождитесь завершения ответа.'), parent=self)
             return
         try:
             mentor = self.app.mentor_client()
         except MentorError as exc:
-            messagebox.showerror("ИИ-наставник", str(exc), parent=self)
+            messagebox.showerror(t('ИИ-наставник'), str(exc), parent=self)
             self.app.show_page("settings")
             return
 
@@ -337,7 +333,7 @@ class ChatPage(tk.Frame):
             try:
                 workspace = WorkspaceTools(root, backup_dir=self.app.backup_dir())
             except Exception as exc:
-                self.log_activity(f"ошибка рабочей папки: {exc}", "err")
+                self.log_activity(t('ошибка рабочей папки: {exc}').format(exc=exc), "err")
 
         self.session.add("user", text)
         self.store.save(self.session)
@@ -390,7 +386,7 @@ class ChatPage(tk.Frame):
             common = dict(
                 confirm=None if autonomy == "agent" else (
                     lambda name, args, desc: self.app.confirm_from_worker(
-                        "Действие наставника", f"{desc}\n\nПодтвердить выполнение?")),
+                        t('Действие наставника'), t('{desc}\n\nПодтвердить выполнение?').format(desc=desc))),
                 on_event=lambda kind, payload: self.app.post_event(
                     "chat_event", {"kind": kind, "payload": payload}),
                 max_tokens=int(settings.mentor_max_tokens),
@@ -405,7 +401,7 @@ class ChatPage(tk.Frame):
             return agent.run_turn(history, **common, system_extra=system_extra,
                                   readonly=guest)
 
-        self.app.start_async("Ответ наставника", work, done, failed)
+        self.app.start_async(t('Ответ наставника'), work, done, failed)
 
     def _maybe_save_report(self, text: str):
         from .report import parse_report
@@ -420,7 +416,7 @@ class ChatPage(tk.Frame):
         self.app.reports.save(report)
         self.app.activity.log(
             "report",
-            "Сохранена оценка наставника"
+            t('Сохранена оценка наставника')
             + (f" ({report.score:g}/10)" if report.score is not None else ""),
         )
-        self.log_activity("оценка сохранена в «Модель и прогресс»", "ok")
+        self.log_activity(t('оценка сохранена в «Модель и прогресс»'), "ok")

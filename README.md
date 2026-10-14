@@ -180,6 +180,9 @@ This is a desktop control-plane MVP, not yet an end-to-end training orchestratio
 The next milestone is a typed remote training worker with resumable checkpoint/data transfers, explicit elapsed-time and total-cost guards, live logs, and end-to-end tests on a short disposable job.
 
 ## Releases
+- 0.20.0: full English interface — every page, dialog and help string is
+  localized (RU/EN packs, message-as-key safe fallback, extraction tooling
+  and coverage tests).
 - 0.19.1: stabilization — RunPod plan shape fix, overfitting detection on
   restarted logs, shifted hotkey case variants, live hotkey rebinding,
   accurate package version, full-pipeline integration tests.

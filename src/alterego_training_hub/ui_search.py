@@ -1,5 +1,6 @@
 """Search page: regex search across the workspace with jump-to-line results."""
 from __future__ import annotations
+from .i18n import t
 
 import tkinter as tk
 from pathlib import Path
@@ -21,46 +22,44 @@ class SearchPage(tk.Frame):
     def _build(self):
         header = page_header(
             self,
-            "Поиск по проекту",
-            "Поиск по содержимому файлов рабочей папки (регулярные выражения). "
-            "Двойной клик по результату открывает файл в редакторе на нужной "
-            "строке; Ctrl+Shift+F — сюда.",
+            t('Поиск по проекту'),
+            t('Поиск по содержимому файлов рабочей папки (регулярные выражения). Двойной клик по результату открывает файл в редакторе на нужной строке; Ctrl+Shift+F — сюда.'),
         )
         header.pack(fill="x", padx=24, pady=(20, 10))
 
-        params = Collapsible(self, "Параметры поиска")
+        params = Collapsible(self, t('Параметры поиска'))
         params.pack(fill="x", padx=24, pady=(0, 10))
-        params.set_hint("свернуть/развернуть")
+        params.set_hint(t('свернуть/развернуть'))
         row = tk.Frame(params.body, bg=C["panel"])
         row.pack(fill="x")
-        tk.Label(row, text="Шаблон (regex)", bg=C["panel"], font=F_BASE).pack(
+        tk.Label(row, text=t('Шаблон (regex)'), bg=C["panel"], font=F_BASE).pack(
             side="left", padx=(0, 8))
         self.query_var = tk.StringVar()
         self.query_entry = tk.Entry(row, textvariable=self.query_var, bd=1,
                                     relief="solid", font=F_MONO, width=36)
         self.query_entry.pack(side="left", padx=(0, 8))
         self.query_entry.bind("<Return>", lambda _e: self.run_search())
-        tk.Label(row, text="Файлы (glob)", bg=C["panel"], font=F_BASE).pack(
+        tk.Label(row, text=t('Файлы (glob)'), bg=C["panel"], font=F_BASE).pack(
             side="left", padx=(8, 8))
         self.glob_var = tk.StringVar(value="**/*")
         tk.Entry(row, textvariable=self.glob_var, bd=1, relief="solid",
                  font=F_MONO, width=18).pack(side="left", padx=(0, 8))
-        ttk.Button(row, text="Найти", style="Accent.TButton",
+        ttk.Button(row, text=t('Найти'), style="Accent.TButton",
                    command=self.run_search).pack(side="left")
-        ttk.Button(row, text="Очистить",
+        ttk.Button(row, text=t('Очистить'),
                    command=self.clear_results).pack(side="left", padx=8)
-        self.status_var = tk.StringVar(value="Введите шаблон и нажмите «Найти».")
+        self.status_var = tk.StringVar(value=t('Введите шаблон и нажмите «Найти».'))
         tk.Label(row, textvariable=self.status_var, bg=C["panel"], fg=C["muted"],
                  font=F_SMALL).pack(side="left", padx=10)
 
-        results_card = card(self, "Результаты")
+        results_card = card(self, t('Результаты'))
         results_card.pack(fill="both", expand=True, padx=24, pady=(0, 14))
         columns = ("file", "line", "text")
         self.tree = ttk.Treeview(results_card, columns=columns, show="headings",
                                  height=14)
         for col, title, width in [
-            ("file", "Файл", 220), ("line", "Строка", 70),
-            ("text", "Совпадение", 560),
+            ("file", t('Файл'), 220), ("line", t('Строка'), 70),
+            ("text", t('Совпадение'), 560),
         ]:
             self.tree.heading(col, text=title)
             self.tree.column(col, width=width)
@@ -73,12 +72,12 @@ class SearchPage(tk.Frame):
         for item in self.tree.get_children():
             self.tree.delete(item)
         self._results = []
-        self.status_var.set("Результаты очищены.")
+        self.status_var.set(t('Результаты очищены.'))
 
     def run_search(self):
         root = self.app.workspace_root()
         if root is None:
-            messagebox.showinfo("Поиск", "Сначала выберите рабочую папку.",
+            messagebox.showinfo(t('Поиск'), t('Сначала выберите рабочую папку.'),
                                 parent=self)
             return
         pattern = self.query_var.get()
@@ -96,13 +95,12 @@ class SearchPage(tk.Frame):
                 item_id = self.tree.insert("", "end", values=(
                     rel, line_no, snippet))
                 self._results.append((item_id, root / rel, line_no))
-            self.status_var.set(f"Совпадений: {len(matches)}"
-                                + (" (показаны первые "
-                                   f"{min(len(matches), MAX_RESULTS)})"
+            self.status_var.set(t('Совпадений: {v1}').format(v1=len(matches))
+                                + (t(' (показаны первые {v1})').format(v1=min(len(matches), MAX_RESULTS))
                                    if len(matches) > MAX_RESULTS else ""))
 
         self.app.start_async(
-            f"Поиск: {pattern}",
+            t('Поиск: {pattern}').format(pattern=pattern),
             lambda: WorkspaceTools(root).search_files(pattern, glob),
             done,
         )

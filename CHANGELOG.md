@@ -2,6 +2,19 @@
 
 Все заметные изменения проекта. Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.20.0] — 2026-10-14
+
+### Added
+- Full English interface translation: every string in all 20 `ui*.py` pages
+  and dialogs now goes through `t()` (702 messages, RU/EN packs complete).
+- Message-as-key localization: the Russian text is the key, so a missing
+  translation safely falls back to the original Russian.
+- `scripts/l10n_extract.py` (`--dump` / `--write` / `--pack`) extracts UI
+  strings and compiles `scripts/l10n_en/*.json` translations into the
+  generated `_l10n_ui.py` pack.
+- `tests/test_i18n_coverage.py`: pack parity, Cyrillic-free EN values, no
+  untranslatable literals left in UI modules, format-pattern safety.
+
 ## [0.19.1] — 2026-10-13
 
 ### Fixed

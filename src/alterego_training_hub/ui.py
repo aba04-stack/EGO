@@ -79,11 +79,11 @@ class TrainingHubApp(tk.Tk):
     def _build_layout(self):
         self.status_bar = tk.Frame(self, bg=C["statusbar"])
         self.status_bar.pack(side="bottom", fill="x")
-        self.status_text = tk.StringVar(value="Готово")
+        self.status_text = tk.StringVar(value=t('Готово'))
         tk.Label(self.status_bar, textvariable=self.status_text, bg=C["statusbar"],
                  fg=C["muted"], font=ui_common.F_SMALL, anchor="w",
                  padx=12).pack(side="left", fill="x", expand=True)
-        self.workspace_badge = tk.StringVar(value="папка не выбрана")
+        self.workspace_badge = tk.StringVar(value=t('папка не выбрана'))
         tk.Label(self.status_bar, textvariable=self.workspace_badge,
                  bg=C["statusbar"],
                  fg=C["muted"], font=ui_common.F_SMALL, padx=12).pack(side="right")
@@ -201,25 +201,25 @@ class TrainingHubApp(tk.Tk):
         bottom_bar.pack(fill="x")
         self._bottom_view = "terminal"
         self._bottom_visible = True
-        self.terminal_tab = tk.Label(bottom_bar, text="ТЕРМИНАЛ", bg=C["panel"],
+        self.terminal_tab = tk.Label(bottom_bar, text=t('ТЕРМИНАЛ'), bg=C["panel"],
                                      fg=C["accent"], font=F_NAV_SMALL, padx=12,
                                      pady=6, cursor="hand2")
         self.terminal_tab.pack(side="left")
         self.terminal_tab.bind("<Button-1>",
                                lambda _e: self.show_bottom("terminal"))
-        self.problems_tab = tk.Label(bottom_bar, text="ПРОБЛЕМЫ", bg=C["panel"],
+        self.problems_tab = tk.Label(bottom_bar, text=t('ПРОБЛЕМЫ'), bg=C["panel"],
                                      fg=C["muted"], font=F_NAV_SMALL, padx=12,
                                      pady=6, cursor="hand2")
         self.problems_tab.pack(side="left")
         self.problems_tab.bind("<Button-1>",
                                lambda _e: self.show_bottom("problems"))
-        self.git_tab = tk.Label(bottom_bar, text="ГИТ", bg=C["panel"],
+        self.git_tab = tk.Label(bottom_bar, text=t('ГИТ'), bg=C["panel"],
                                 fg=C["muted"], font=F_NAV_SMALL, padx=12,
                                 pady=6, cursor="hand2")
         self.git_tab.pack(side="left")
         self.git_tab.bind("<Button-1>",
                           lambda _e: self.show_bottom("git"))
-        tk.Label(bottom_bar, text="Ctrl+J — свернуть панель", bg=C["panel"],
+        tk.Label(bottom_bar, text=t('Ctrl+J — свернуть панель'), bg=C["panel"],
                  fg=C["muted"], font=F_NAV_SMALL, padx=12).pack(side="right")
 
         self.terminal = TerminalPanel(self.bottom, self)
@@ -346,7 +346,7 @@ class TrainingHubApp(tk.Tk):
         on_show = getattr(page, "on_show", None) if page is not None else None
         if callable(on_show):
             on_show()
-            self.set_status("Обновлено: " + self._current_page)
+            self.set_status(t('Обновлено: ') + self._current_page)
 
     def toggle_theme(self, name: str | None = None):
         """Switch between the light and dark palettes live."""
@@ -365,34 +365,15 @@ class TrainingHubApp(tk.Tk):
         page = self.pages.get("settings")
         status = getattr(page, "theme_status", None) if page is not None else None
         if status is not None:
-            status.set("Текущая тема: " + ("тёмная" if target == "dark"
-                                           else "светлая") + ".")
-        self.set_status("Тема: " + ("тёмная" if target == "dark" else "светлая")
-                        + " · переключение сохранено")
+            status.set(t('Текущая тема: ') + (t('тёмная') if target == "dark"
+                                           else t('светлая')) + ".")
+        self.set_status(t('Тема: ') + (t('тёмная') if target == "dark" else t('светлая'))
+                        + t(' · переключение сохранено'))
 
     def show_shortcuts_help(self):
         messagebox.showinfo(
-            "Горячие клавиши",
-            "Ctrl+1…Ctrl+9 — страницы (редактор, папка, модели, датасеты,\n"
-            "   модель, playground, обучение, GPU, серверы)\n"
-            "Ctrl+0 — настройки\n"
-            "Ctrl+P — быстрое открытие файла\n"
-            "Ctrl+Shift+P — палитра команд\n"
-            "Ctrl+Shift+F — поиск по проекту\n"
-            "Ctrl+K — фокус в чат наставника\n"
-            "Ctrl+J — свернуть/развернуть нижнюю панель\n"
-            "Ctrl+Shift+M — панель «Проблемы»\n"
-            "Ctrl+W — закрыть вкладку редактора\n"
-            "Ctrl+Tab — следующая вкладка редактора\n"
-            "Ctrl+F / Ctrl+H — поиск и замена в редакторе\n"
-            "F3 / Shift+F3 — следующее/предыдущее совпадение\n"
-            "Ctrl+F2 — закладка, F2 / Shift+F2 — между закладками\n"
-            "Ctrl+G — перейти к строке; Ctrl+Shift+G — панель Git\n"
-            "Ctrl+\\ — разделённый вид; Ctrl++ / Ctrl+- — масштаб шрифта\n"
-            "F5 — обновить текущую страницу\n"
-            "F1 — эта справка\n"
-            "Ctrl+Enter — отправить сообщение в чате\n"
-            "Ctrl+S — сохранить файл в редакторе",
+            t('Горячие клавиши'),
+            t('Ctrl+1…Ctrl+9 — страницы (редактор, папка, модели, датасеты,\n   модель, playground, обучение, GPU, серверы)\nCtrl+0 — настройки\nCtrl+P — быстрое открытие файла\nCtrl+Shift+P — палитра команд\nCtrl+Shift+F — поиск по проекту\nCtrl+K — фокус в чат наставника\nCtrl+J — свернуть/развернуть нижнюю панель\nCtrl+Shift+M — панель «Проблемы»\nCtrl+W — закрыть вкладку редактора\nCtrl+Tab — следующая вкладка редактора\nCtrl+F / Ctrl+H — поиск и замена в редакторе\nF3 / Shift+F3 — следующее/предыдущее совпадение\nCtrl+F2 — закладка, F2 / Shift+F2 — между закладками\nCtrl+G — перейти к строке; Ctrl+Shift+G — панель Git\nCtrl+\\ — разделённый вид; Ctrl++ / Ctrl+- — масштаб шрифта\nF5 — обновить текущую страницу\nF1 — эта справка\nCtrl+Enter — отправить сообщение в чате\nCtrl+S — сохранить файл в редакторе'),
             parent=self)
 
     def _make_nav_item(self, parent, key: str, label: str):
@@ -469,7 +450,7 @@ class TrainingHubApp(tk.Tk):
         try:
             self.executor.submit(work)
         except RuntimeError:
-            self.set_status("Приложение закрывается")
+            self.set_status(t('Приложение закрывается'))
 
     def set_status(self, text: str):
         self.status_text.set(text)
@@ -483,14 +464,14 @@ class TrainingHubApp(tk.Tk):
                 try:
                     self._handle_event(kind, payload)
                 except Exception as exc:  # noqa: BLE001 - one bad event must not kill the loop
-                    self.set_status(f"Ошибка обработки события: {exc}")
+                    self.set_status(t('Ошибка обработки события: {exc}').format(exc=exc))
         except queue.Empty:
             pass
         self.after(100, self._poll_events)
 
     def _handle_event(self, kind: str, payload: dict):
         if kind == "confirm":
-            answer = messagebox.askyesno(payload.get("title", "Подтверждение"),
+            answer = messagebox.askyesno(payload.get("title", t('Подтверждение')),
                                          payload.get("message", ""), parent=self)
             payload["box"]["ok"] = answer
             payload["event"].set()
@@ -506,21 +487,20 @@ class TrainingHubApp(tk.Tk):
             return
         if kind == "result":
             if payload.get("ok"):
-                self.set_status("Готово: " + str(payload.get("label", "")))
+                self.set_status(t('Готово: ') + str(payload.get("label", "")))
                 callback = payload.get("callback")
                 if callback:
                     try:
                         callback(payload.get("value"))
                     except Exception as exc:  # noqa: BLE001
                         log_worker_error("callback", exc)
-                        self.set_status("Ошибка обработки результата")
+                        self.set_status(t('Ошибка обработки результата'))
                         messagebox.showerror("AlterEgo Training Hub",
-                                             f"Операция завершилась, но интерфейс не смог "
-                                             f"обновить результат: {exc}", parent=self)
+                                             t('Операция завершилась, но интерфейс не смог обновить результат: {exc}').format(exc=exc), parent=self)
             else:
-                self.set_status("Ошибка: " + str(payload.get("label", "")))
+                self.set_status(t('Ошибка: ') + str(payload.get("label", "")))
                 messagebox.showerror("AlterEgo Training Hub",
-                                     str(payload.get("error", "Неизвестная ошибка")),
+                                     str(payload.get("error", t('Неизвестная ошибка'))),
                                      parent=self)
                 on_error = payload.get("on_error")
                 if on_error:
@@ -556,23 +536,23 @@ class TrainingHubApp(tk.Tk):
         from .watchdog import detect_issues
 
         summary = parse_log(self.training.tail())
-        context = ReportContext(title="Отчёт по обучению — AlterEgo Training Hub")
+        context = ReportContext(title=t('Отчёт по обучению — AlterEgo Training Hub'))
         entry = None
         for candidate in self.model_registry().load():
             if candidate.id == self.settings.active_model_id:
                 entry = candidate
                 break
         context.model_info = {
-            "Модель": entry.name if entry else self.settings.active_model_id or "—",
-            "Тип": entry.kind if entry else "—",
-            "Расположение": entry.location if entry else "—",
-            "Команда обучения": self.settings.training_command or "—",
+            t('Модель'): entry.name if entry else self.settings.active_model_id or "—",
+            t('Тип'): entry.kind if entry else "—",
+            t('Расположение'): entry.location if entry else "—",
+            t('Команда обучения'): self.settings.training_command or "—",
         }
         context.metrics_lines = [
             f"- {key}: {value:g}" for key, value in sorted(summary.last.items())]
         if summary.trend:
             context.metrics_lines.append(
-                "- тренды: " + ", ".join(f"{k}={v}"
+                t('- тренды: ') + ", ".join(f"{k}={v}"
                                          for k, v in summary.trend.items()))
         context.eval_lines = build_eval_report(self.training.tail()).lines()
         status = self.training.status()
@@ -580,19 +560,19 @@ class TrainingHubApp(tk.Tk):
             issue.line() for issue in detect_issues(
                 summary, running=status.running)]
         context.plan_tasks = list(self.agent_tasks or
-                                  [{"title": t, "status": "pending"}
-                                   for t in self.agent_plan])
+                                  [{"title": task, "status": "pending"}
+                                   for task in self.agent_plan])
         context.activity_lines = [
             f"{item.kind}: {item.summary[:120]}"
             for item in self.activity.recent(15)]
         report = self.reports.latest()
         if report is not None and not report.is_empty():
             if report.score is not None:
-                context.assessment_lines.append(f"Оценка: {report.score:g}/10")
-            for label, items in (("Сильные стороны", report.strengths),
-                                 ("Слабые стороны", report.weaknesses),
-                                 ("Риски", report.risks),
-                                 ("Рекомендации", report.recommendations)):
+                context.assessment_lines.append(t('Оценка: {v1:g}/10').format(v1=report.score))
+            for label, items in ((t('Сильные стороны'), report.strengths),
+                                 (t('Слабые стороны'), report.weaknesses),
+                                 (t('Риски'), report.risks),
+                                 (t('Рекомендации'), report.recommendations)):
                 for item in items:
                     context.assessment_lines.append(f"- ({label}) {item}")
             if report.reasoning:
@@ -633,7 +613,7 @@ class TrainingHubApp(tk.Tk):
                     self.activity.log("watchdog", issue.line(),
                                       ok=issue.severity == "info")
                 if any(issue.severity == "crit" for issue in report.issues):
-                    self.set_status("⚠ Watchdog: критическая проблема обучения")
+                    self.set_status(t('⚠ Watchdog: критическая проблема обучения'))
             else:
                 self._watchdog_tail = (0, 0.0)
                 self.watchdog.reset()
@@ -646,7 +626,7 @@ class TrainingHubApp(tk.Tk):
 
     def _refresh_workspace_badge(self):
         path = (self.settings.workspace_path or "").strip()
-        self.workspace_badge.set(f"папка: {Path(path).name}" if path else "папка не выбрана")
+        self.workspace_badge.set(t('папка: {v1}').format(v1=Path(path).name) if path else t('папка не выбрана'))
         self._refresh_git_badge()
 
     def _refresh_git_badge(self):
@@ -691,7 +671,7 @@ class TrainingHubApp(tk.Tk):
             raise MentorError(str(exc)) from None
         if not base_url or not model or not key:
             raise MentorError(
-                "Настройте провайдера, модель и API-ключ на странице «Настройки»."
+                t('Настройте провайдера, модель и API-ключ на странице «Настройки».')
             )
         from .mentor import build_mentor
 
@@ -764,25 +744,25 @@ class TrainingHubApp(tk.Tk):
             command = str(args.get("command") or "").strip() or self.settings.training_command
             root = self.workspace_root()
             if root is None:
-                return {"ok": False, "error": "Рабочая папка не выбрана."}
+                return {"ok": False, "error": t('Рабочая папка не выбрана.')}
             try:
                 log_path = self.training.start(command, root)
             except Exception as exc:
                 return {"ok": False, "error": str(exc)}
             record = self.runs.start(command, str(root), log_path)
             self.watchdog.reset()
-            self.activity.log("training", f"Агент запустил обучение: {command}",
+            self.activity.log("training", t('Агент запустил обучение: {command}').format(command=command),
                               run_id=record.id)
             return {"ok": True, "log_path": log_path, "run_id": record.id}
 
         def stop_training(_args):
             if not self.training.status().running:
-                return {"ok": True, "note": "Обучение не запущено."}
+                return {"ok": True, "note": t('Обучение не запущено.')}
             try:
                 self.training.stop()
             except Exception as exc:
                 return {"ok": False, "error": str(exc)}
-            self.activity.log("training", "Агент остановил обучение")
+            self.activity.log("training", t('Агент остановил обучение'))
             return {"ok": True}
 
         def diagnostics(_args):
@@ -871,7 +851,7 @@ class TrainingHubApp(tk.Tk):
         def get_training_control(_args):
             root = self.workspace_root()
             if root is None:
-                return {"ok": False, "error": "Рабочая папка не выбрана."}
+                return {"ok": False, "error": t('Рабочая папка не выбрана.')}
             from .training import CONTROL_KEYS, read_control as read_hot_control
 
             return {"ok": True, "control": read_hot_control(root),
@@ -880,7 +860,7 @@ class TrainingHubApp(tk.Tk):
         def set_training_control(args):
             root = self.workspace_root()
             if root is None:
-                return {"ok": False, "error": "Рабочая папка не выбрана."}
+                return {"ok": False, "error": t('Рабочая папка не выбрана.')}
             from .training import write_control
 
             params = {key: value for key, value in (args or {}).items()
@@ -891,26 +871,26 @@ class TrainingHubApp(tk.Tk):
                 return {"ok": False, "error": str(exc)}
             self.activity.log(
                 "training",
-                "Агент скорректировал обучение: "
+                t('Агент скорректировал обучение: ')
                 + ", ".join(f"{key}={value}" for key, value in params.items()),
             )
             return {"ok": True, "control": current,
-                    "note": "Изменения применяются со следующей эпохи обучения."}
+                    "note": t('Изменения применяются со следующей эпохи обучения.')}
 
         def set_plan(args):
             steps = args.get("steps") or []
             if not isinstance(steps, list) or not steps:
-                return {"ok": False, "error": "План должен содержать шаги."}
+                return {"ok": False, "error": t('План должен содержать шаги.')}
             clean = [str(step).strip()[:200] for step in steps if str(step).strip()][:12]
             self.agent_plan = clean
             self.agent_tasks = [{"title": step, "status": "pending"} for step in clean]
-            self.activity.log("plan", "План агента:\n- " + "\n- ".join(clean))
+            self.activity.log("plan", t('План агента:\n- ') + "\n- ".join(clean))
             return {"ok": True, "steps": clean}
 
         def update_plan(args):
             raw_steps = args.get("steps") or []
             if not isinstance(raw_steps, list) or not raw_steps:
-                return {"ok": False, "error": "План должен содержать шаги."}
+                return {"ok": False, "error": t('План должен содержать шаги.')}
             allowed = {"pending", "in_progress", "done", "failed"}
             tasks: list[dict] = []
             for item in raw_steps[:12]:
@@ -924,11 +904,11 @@ class TrainingHubApp(tk.Tk):
                                   "status": status if status in allowed
                                   else "pending"})
             if not tasks:
-                return {"ok": False, "error": "План должен содержать шаги."}
+                return {"ok": False, "error": t('План должен содержать шаги.')}
             self.agent_tasks = tasks
             self.agent_plan = [task["title"] for task in tasks]
             marks = {"done": "✓", "failed": "✗", "in_progress": "▶", "pending": "○"}
-            self.activity.log("plan", "План агента:\n" + "\n".join(
+            self.activity.log("plan", t('План агента:\n') + "\n".join(
                 f"{marks.get(task['status'], '○')} {task['title']}"
                 for task in tasks))
             chat_panel = getattr(self, "chat_panel", None)
@@ -962,7 +942,7 @@ class TrainingHubApp(tk.Tk):
                          "reason": s.reason, "confidence": s.confidence}
                         for s in suggestions],
                     "lines": [s.line() for s in suggestions],
-                    "note": "Применяй выбранные параметры через set_training_control."}
+                    "note": t('Применяй выбранные параметры через set_training_control.')}
 
         def compare_runs(args):
             from .compare import compare_runs as _compare, overlay_series
@@ -972,14 +952,14 @@ class TrainingHubApp(tk.Tk):
                        if record.log_path and Path(record.log_path).is_file()]
             if len(records) < 2:
                 return {"ok": False,
-                        "error": "Нужны два завершённых запуска с логами."}
+                        "error": t('Нужны два завершённых запуска с логами.')}
             first, second = records[0], records[1]
             summary_a = parse_log(Path(first.log_path).read_text(
                 encoding="utf-8", errors="replace"))
             summary_b = parse_log(Path(second.log_path).read_text(
                 encoding="utf-8", errors="replace"))
             report = _compare(summary_a, summary_b,
-                              label_a="Запуск 1", label_b="Запуск 2")
+                              label_a=t('Запуск 1'), label_b=t('Запуск 2'))
             return {"ok": True,
                     "run_a": first.command, "run_b": second.command,
                     "series": overlay_series(key, summary_a, summary_b),
@@ -992,14 +972,14 @@ class TrainingHubApp(tk.Tk):
 
             root = self.workspace_root()
             if root is None:
-                return {"ok": False, "error": "Рабочая папка не выбрана."}
+                return {"ok": False, "error": t('Рабочая папка не выбрана.')}
             rel = str(args.get("path") or "")
             source = Path(root) / rel
             if not source.is_file():
-                return {"ok": False, "error": f"Файл не найден: {rel}"}
+                return {"ok": False, "error": t('Файл не найден: {rel}').format(rel=rel)}
             fmt = source.suffix.lstrip(".").lower()
             if fmt not in {"jsonl", "json", "csv", "tsv", "txt"}:
-                return {"ok": False, "error": f"Неподдерживаемый формат: {fmt}"}
+                return {"ok": False, "error": t('Неподдерживаемый формат: {fmt}').format(fmt=fmt)}
             try:
                 rows = read_rows(source, fmt)
                 rows = filter_rows(
@@ -1024,7 +1004,7 @@ class TrainingHubApp(tk.Tk):
                 written[part] = {"path": str(target.relative_to(root)),
                                  "rows": len(part_rows)}
             self.activity.log("dataset",
-                              "Агент разбил датасет: "
+                              t('Агент разбил датасет: ')
                               + ", ".join(f"{k}={v['rows']}" for k, v in written.items()))
             return {"ok": True, "splits": written, "filtered_rows": len(rows)}
 
@@ -1044,7 +1024,7 @@ class TrainingHubApp(tk.Tk):
             source = str(args.get("source") or (entry.location if entry else ""))
             if entry and entry.kind == "cloud":
                 return {"ok": False,
-                        "error": "Облачную модель нельзя экспортировать локально."}
+                        "error": t('Облачную модель нельзя экспортировать локально.')}
             fmt = str(args.get("format") or "gguf").lower()
             library = self.model_registry().library_dir
             request = ExportRequest(
@@ -1054,7 +1034,7 @@ class TrainingHubApp(tk.Tk):
             result = run_export(request)
             self.activity.log(
                 "model",
-                f"Экспорт {fmt}: " + ("успешно" if result.ok else result.error))
+                t('Экспорт {fmt}: ').format(fmt=fmt) + (t('успешно') if result.ok else result.error))
             return {"ok": result.ok, "format": fmt, "command": result.command,
                     "output_path": result.output_path,
                     "size_bytes": result.size_bytes,
@@ -1081,8 +1061,8 @@ class TrainingHubApp(tk.Tk):
             result = run_quantize(source, destination, quant_type)
             self.activity.log(
                 "model",
-                f"Квантизация {quant_type}: "
-                + ("успешно" if result.ok else result.error))
+                t('Квантизация {quant_type}: ').format(quant_type=quant_type)
+                + (t('успешно') if result.ok else result.error))
             return {"ok": result.ok, "recipe": quant_type,
                     "command": result.command, "output_path": result.output_path,
                     "checks": result.checks, "error": result.error}
@@ -1098,7 +1078,7 @@ class TrainingHubApp(tk.Tk):
             except (TypeError, ValueError):
                 iterations = 3
             if command:
-                result = run_benchmark("команда", command, iterations=iterations)
+                result = run_benchmark(t('команда'), command, iterations=iterations)
             elif entry and entry.base_url:
                 client = _endpoint_client(entry)
                 durations: list[int] = []
@@ -1106,7 +1086,7 @@ class TrainingHubApp(tk.Tk):
                 error = ""
                 for _ in range(iterations):
                     try:
-                        probe = client.generate("Скажи «ок».", max_tokens=8,
+                        probe = client.generate(t('Скажи «ок».'), max_tokens=8,
                                                 temperature=0.0)
                         if probe.error:
                             error = probe.error
@@ -1127,7 +1107,7 @@ class TrainingHubApp(tk.Tk):
                                          output_chars=tokens_chars)
             else:
                 return {"ok": False,
-                        "error": "Укажите model_id (модель с endpoint) или command."}
+                        "error": t('Укажите model_id (модель с endpoint) или command.')}
             library = self.model_registry().library_dir
             BenchStore(library).add(result)
             self.activity.log("bench", result.line())
@@ -1148,8 +1128,7 @@ class TrainingHubApp(tk.Tk):
                 settings = self.settings
                 if not (settings.mentor_base_url and settings.mentor_model):
                     return {"ok": False,
-                            "error": "Нужна модель с endpoint (model_id) "
-                                     "или настроенный провайдер."}
+                            "error": t('Нужна модель с endpoint (model_id) или настроенный провайдер.')}
                 client = _endpoint_client(type("E", (), {
                     "base_url": settings.mentor_base_url,
                     "model_id": settings.mentor_model,
@@ -1161,7 +1140,7 @@ class TrainingHubApp(tk.Tk):
                     root = self.workspace_root()
                     if root is None:
                         return {"ok": False,
-                                "error": "Рабочая папка не выбрана."}
+                                "error": t('Рабочая папка не выбрана.')}
                     cases = load_suite(Path(root) / suite_rel)
                 else:
                     cases = default_suite()
@@ -1173,7 +1152,7 @@ class TrainingHubApp(tk.Tk):
                                    max_tokens=max_tokens)
             except Exception as exc:
                 return {"ok": False, "error": str(exc)}
-            self.activity.log("suite", f"Промпт-набор: {result.passed}/{result.total}")
+            self.activity.log("suite", t('Промпт-набор: {v1}/{v3}').format(v1=result.passed, v3=result.total))
             return {"ok": True, "model": model_name,
                     "passed": result.passed, "total": result.total,
                     "mean_latency_ms": result.mean_latency_ms,
@@ -1184,7 +1163,7 @@ class TrainingHubApp(tk.Tk):
 
             root = self.workspace_root()
             if root is None:
-                return {"ok": False, "error": "Рабочая папка не выбрана."}
+                return {"ok": False, "error": t('Рабочая папка не выбрана.')}
             rel = str(args.get("path") or "reports/report")
             fmt = str(args.get("format") or "md").lower()
             try:
@@ -1192,7 +1171,7 @@ class TrainingHubApp(tk.Tk):
                                        fmt=fmt)
             except Exception as exc:
                 return {"ok": False, "error": str(exc)}
-            self.activity.log("report", f"Отчёт сохранён: {exported.path}")
+            self.activity.log("report", t('Отчёт сохранён: {v1}').format(v1=exported.path))
             return {"ok": True, "path": exported.path, "format": exported.fmt,
                     "note": exported.note}
 
@@ -1217,7 +1196,7 @@ class TrainingHubApp(tk.Tk):
                 return {"ok": False, "error": str(exc)}
             try:
                 job = CloudJob(
-                    name=str(args.get("name") or "задание"),
+                    name=str(args.get("name") or t('задание')),
                     command=str(args.get("command") or ""),
                     image=str(args.get("image") or
                               "runpod/pytorch:2.8.0-py3.11-cuda12.8.1"),
@@ -1231,17 +1210,17 @@ class TrainingHubApp(tk.Tk):
                 queued = queue.submit(job.id, client)
             except Exception as exc:
                 return {"ok": False, "error": str(exc)}
-            self.activity.log("cloud", f"Облачное задание: {queued.line()}")
+            self.activity.log("cloud", t('Облачное задание: {v1}').format(v1=queued.line()))
             return {"ok": queued.status == "submitted", "job": queued.line(),
                     "status": queued.status, "pod_id": queued.pod_id,
                     "error": queued.error}
 
         def spawn_subagent(args):
             if not self.settings.agent_subagents:
-                return {"ok": False, "error": "Подагенты отключены в настройках агента."}
+                return {"ok": False, "error": t('Подагенты отключены в настройках агента.')}
             goal = str(args.get("goal") or "").strip()
             if not goal:
-                return {"ok": False, "error": "Укажите подзадачу (goal)."}
+                return {"ok": False, "error": t('Укажите подзадачу (goal).')}
             try:
                 steps = max(2, min(int(args.get("max_steps", 6)), 10))
             except (TypeError, ValueError):
@@ -1307,18 +1286,16 @@ class TrainingHubApp(tk.Tk):
         schemas = list(TRAINING_CONTEXT_TOOL_SCHEMAS) + list(MODEL_TOOLS_SCHEMAS) + [
             {"type": "function", "function": {
                 "name": "start_training",
-                "description": "Запустить обучение в рабочей папке (командой из настроек "
-                               "или из аргумента command).",
+                "description": t('Запустить обучение в рабочей папке (командой из настроек или из аргумента command).'),
                 "parameters": {"type": "object", "properties": {
                     "command": {"type": "string"}}, "required": []}}},
             {"type": "function", "function": {
                 "name": "stop_training",
-                "description": "Остановить текущее обучение.",
+                "description": t('Остановить текущее обучение.'),
                 "parameters": {"type": "object", "properties": {}, "required": []}}},
             {"type": "function", "function": {
                 "name": "run_diagnostics",
-                "description": "Проверка окружения: Python, хранилище ключей, SSH, Git, "
-                               "рабочая папка, диск, настройки наставника.",
+                "description": t('Проверка окружения: Python, хранилище ключей, SSH, Git, рабочая папка, диск, настройки наставника.'),
                 "parameters": {"type": "object", "properties": {}, "required": []}}},
         ]
         mutations = {"start_training", "stop_training", "set_training_control",
@@ -1356,7 +1333,7 @@ class TrainingHubApp(tk.Tk):
             # Guest role: every mutation is refused up-front (read-only agent).
             def _denied(_args):
                 return {"ok": False,
-                        "error": "Гостевой режим (роль «гость»): действие недоступно."}
+                        "error": t('Гостевой режим (роль «гость»): действие недоступно.')}
 
             for name in sorted(mutations):
                 handlers[name] = _denied
@@ -1376,37 +1353,36 @@ class TrainingHubApp(tk.Tk):
             entry = None
         if entry is not None:
             lines += [
-                f"Модель: {entry.name} ({entry.kind})",
-                f"Путь/URI: {entry.location}",
+                t('Модель: {v1} ({v3})').format(v1=entry.name, v3=entry.kind),
+                t('Путь/URI: {v1}').format(v1=entry.location),
                 f"API model id: {entry.model_id or '—'}",
-                f"Заметки: {entry.notes or '—'}",
+                t('Заметки: {v1}').format(v1=entry.notes or '—'),
                 "",
             ]
         else:
-            lines += ["Модель не выбрана в каталоге.", ""]
+            lines += [t('Модель не выбрана в каталоге.'), ""]
 
         status = self.training.status()
         summary = parse_log(self.training.tail())
         lines += [
-            f"Обучение: {'выполняется' if status.running else 'остановлено'}",
-            f"Команда: {status.command or '—'}",
-            f"Код возврата: {status.returncode}",
-            f"Метрики: {metrics_brief(summary)}",
+            t('Обучение: {v1}').format(v1=t('выполняется') if status.running else t('остановлено')),
+            t('Команда: {v1}').format(v1=status.command or '—'),
+            t('Код возврата: {v1}').format(v1=status.returncode),
+            t('Метрики: {v1}').format(v1=metrics_brief(summary)),
         ]
         if summary.anomalies:
-            lines.append("Аномалии: " + "; ".join(summary.anomalies))
+            lines.append(t('Аномалии: ') + "; ".join(summary.anomalies))
         recent_runs = self.runs.list(5)
         if recent_runs:
             lines.append("")
-            lines.append("Последние запуски:")
+            lines.append(t('Последние запуски:'))
             for record in recent_runs:
                 lines.append(
-                    f"- {record.command} → {record.status_ru}; "
-                    f"метрики: {record.metrics_last or '—'}"
+                    t('- {v1} → {v3}; метрики: {v5}').format(v1=record.command, v3=record.status_ru, v5=record.metrics_last or '—')
                 )
         tail = self.training.tail(6000)
         if tail.strip():
-            lines += ["", "Хвост лога:", "```", tail, "```"]
+            lines += ["", t('Хвост лога:'), "```", tail, "```"]
         return "\n".join(lines)
 
     def assessment_prompt(self) -> str:

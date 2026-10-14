@@ -1,10 +1,16 @@
 """Interface localization: curated RU/EN string packs with safe fallbacks.
 
-Coverage grows progressively; every key exists in every language pack.
-``t(key)`` falls back to Russian, then to the key itself — a missing
-translation must never break the UI.
+Every key exists in every language pack. ``t(key)`` falls back to Russian,
+then to the key itself — a missing translation must never break the UI.
+
+UI sentences extracted from ``ui*.py`` use message-as-key style: the Russian
+text is the key (``t("Сохранить")``), and ``_l10n_ui.UI_MESSAGES`` maps it
+to English. This keeps a safe Russian fallback even if the generated pack
+is absent.
 """
 from __future__ import annotations
+
+from ._l10n_ui import UI_MESSAGES
 
 LANGUAGES: dict[str, str] = {"ru": "Русский", "en": "English"}
 DEFAULT_LANGUAGE = "ru"
@@ -38,7 +44,7 @@ _STRINGS_RU: dict[str, str] = {
     "platform.apply_layout": "Применить раскладку",
     "platform.save_layout": "Сохранить текущую как…",
     "platform.hotkeys_hint": "Формат: <Control-Key-5>, <F5>, <Control-j>. "
-                             "Изменения вступят в силу после перезапуска.",
+                             "Изменения применяются сразу.",
     "platform.save_hotkeys": "Сохранить клавиши",
     "platform.reset_hotkeys": "Сбросить к умолчаниям",
     "platform.plugins": "Плагины (plugins/*.py)",
@@ -75,7 +81,7 @@ _STRINGS_EN: dict[str, str] = {
     "platform.apply_layout": "Apply layout",
     "platform.save_layout": "Save current as…",
     "platform.hotkeys_hint": "Format: <Control-Key-5>, <F5>, <Control-j>. "
-                             "Changes apply after restart.",
+                             "Changes apply immediately.",
     "platform.save_hotkeys": "Save hotkeys",
     "platform.reset_hotkeys": "Reset to defaults",
     "platform.plugins": "Plugins (plugins/*.py)",
@@ -83,7 +89,10 @@ _STRINGS_EN: dict[str, str] = {
     "platform.language_note": "Language changes apply after restart.",
 }
 
-STRINGS: dict[str, dict[str, str]] = {"ru": _STRINGS_RU, "en": _STRINGS_EN}
+STRINGS: dict[str, dict[str, str]] = {
+    "ru": {**_STRINGS_RU, **{key: key for key in UI_MESSAGES}},
+    "en": {**_STRINGS_EN, **UI_MESSAGES},
+}
 
 _current = DEFAULT_LANGUAGE
 

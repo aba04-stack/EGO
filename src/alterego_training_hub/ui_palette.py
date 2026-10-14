@@ -1,5 +1,6 @@
 """Command palette and quick file open — the Ctrl+P / Ctrl+Shift+P experience."""
 from __future__ import annotations
+from .i18n import t
 
 import tkinter as tk
 from pathlib import Path
@@ -29,8 +30,8 @@ class CommandPalette(tk.Toplevel):
         self.mode = mode
         self._items: list[tuple[str, Callable[[], Any] | Path]] = []
         self._filtered: list[int] = []
-        title = "Быстрое открытие (Ctrl+P)" if mode == "files" else \
-            "Палитра команд (Ctrl+Shift+P)"
+        title = t('Быстрое открытие (Ctrl+P)') if mode == "files" else \
+            t('Палитра команд (Ctrl+Shift+P)')
         try:
             self.title(title)
             self.transient(app)
@@ -75,56 +76,56 @@ class CommandPalette(tk.Toplevel):
                         label = str(path)
                     self._items.append((label, path))
             else:
-                self._items.append(("Рабочая папка не выбрана", None))
+                self._items.append((t('Рабочая папка не выбрана'), None))
             return
 
         commands: list[tuple[str, Callable[[], Any]]] = [
-            ("Перейти: Редактор кода", lambda: app.show_page("editor")),
-            ("Перейти: Рабочая папка", lambda: app.show_page("workspace")),
-            ("Перейти: Поиск по проекту", lambda: app.show_page("search")),
-            ("Перейти: Модели", lambda: app.show_page("models")),
-            ("Перейти: Датасеты", lambda: app.show_page("datasets")),
-            ("Перейти: Модель и прогресс", lambda: app.show_page("model")),
-            ("Перейти: Playground", lambda: app.show_page("playground")),
-            ("Перейти: Обучение", lambda: app.show_page("training")),
-            ("Перейти: Внешние GPU", lambda: app.show_page("gpu")),
-            ("Перейти: Серверы", lambda: app.show_page("servers")),
-            ("Перейти: Коннекторы", lambda: app.show_page("connectors")),
-            ("Перейти: Настройки", lambda: app.show_page("settings")),
-            ("Чат: фокус в поле ввода", lambda: app.show_page("chat")),
-            ("Панель: терминал / проблемы", lambda: app.show_bottom("terminal")),
-            ("Проблемы: открыть и обновить",
+            (t('Перейти: Редактор кода'), lambda: app.show_page("editor")),
+            (t('Перейти: Рабочая папка'), lambda: app.show_page("workspace")),
+            (t('Перейти: Поиск по проекту'), lambda: app.show_page("search")),
+            (t('Перейти: Модели'), lambda: app.show_page("models")),
+            (t('Перейти: Датасеты'), lambda: app.show_page("datasets")),
+            (t('Перейти: Модель и прогресс'), lambda: app.show_page("model")),
+            (t('Перейти: Playground'), lambda: app.show_page("playground")),
+            (t('Перейти: Обучение'), lambda: app.show_page("training")),
+            (t('Перейти: Внешние GPU'), lambda: app.show_page("gpu")),
+            (t('Перейти: Серверы'), lambda: app.show_page("servers")),
+            (t('Перейти: Коннекторы'), lambda: app.show_page("connectors")),
+            (t('Перейти: Настройки'), lambda: app.show_page("settings")),
+            (t('Чат: фокус в поле ввода'), lambda: app.show_page("chat")),
+            (t('Панель: терминал / проблемы'), lambda: app.show_bottom("terminal")),
+            (t('Проблемы: открыть и обновить'),
              lambda: app.show_bottom("problems")),
-            ("Панель: свернуть/развернуть (Ctrl+J)", app.toggle_bottom),
-            ("Страница: обновить (F5)", app.refresh_current),
-            ("Редактор: сохранить файл", lambda: app.pages["editor"].save_file()),
-            ("Редактор: закрыть вкладку", lambda: app.pages["editor"].close_tab()),
-            ("Редактор: поиск (Ctrl+F)", lambda: app.pages["editor"].open_find()),
-            ("Редактор: заменить (Ctrl+H)",
+            (t('Панель: свернуть/развернуть (Ctrl+J)'), app.toggle_bottom),
+            (t('Страница: обновить (F5)'), app.refresh_current),
+            (t('Редактор: сохранить файл'), lambda: app.pages["editor"].save_file()),
+            (t('Редактор: закрыть вкладку'), lambda: app.pages["editor"].close_tab()),
+            (t('Редактор: поиск (Ctrl+F)'), lambda: app.pages["editor"].open_find()),
+            (t('Редактор: заменить (Ctrl+H)'),
              lambda: app.pages["editor"].open_find(replace=True)),
-            ("Редактор: перейти к строке (Ctrl+G)",
+            (t('Редактор: перейти к строке (Ctrl+G)'),
              lambda: app.pages["editor"].open_goto_line()),
-            ("Редактор: форматировать файл",
+            (t('Редактор: форматировать файл'),
              lambda: app.pages["editor"].format_file()),
-            ("Редактор: разделённый вид (Ctrl+\\)",
+            (t('Редактор: разделённый вид (Ctrl+\\)'),
              lambda: app.pages["editor"].toggle_split()),
-            ("Редактор: проверить файл (линт)",
+            (t('Редактор: проверить файл (линт)'),
              lambda: app.pages["editor"].run_lint()),
-            ("Масштаб: увеличить шрифт (Ctrl+)",
+            (t('Масштаб: увеличить шрифт (Ctrl+)'),
              lambda: app.pages["editor"].zoom_in()),
-            ("Масштаб: уменьшить шрифт (Ctrl-)",
+            (t('Масштаб: уменьшить шрифт (Ctrl-)'),
              lambda: app.pages["editor"].zoom_out()),
-            ("Закладка: переключить (Ctrl+F2)",
+            (t('Закладка: переключить (Ctrl+F2)'),
              lambda: app.pages["editor"].toggle_bookmark()),
-            ("Git: открыть исходный контроль (Ctrl+Shift+G)",
+            (t('Git: открыть исходный контроль (Ctrl+Shift+G)'),
              lambda: app.show_bottom("git")),
-            ("Git: обновить статус", lambda: app.git_panel.refresh()),
-            ("Тема: переключить светлая/тёмная",
+            (t('Git: обновить статус'), lambda: app.git_panel.refresh()),
+            (t('Тема: переключить светлая/тёмная'),
              lambda: app.toggle_theme()),
-            ("Диагностика: запустить проверку",
+            (t('Диагностика: запустить проверку'),
              lambda: app.pages["settings"].run_check()),
-            ("Обучение: запустить", lambda: app.pages["training"].start_training()),
-            ("Обучение: остановить", lambda: app.pages["training"].stop_training()),
+            (t('Обучение: запустить'), lambda: app.pages["training"].start_training()),
+            (t('Обучение: остановить'), lambda: app.pages["training"].stop_training()),
         ]
         self._items.extend(commands)
 

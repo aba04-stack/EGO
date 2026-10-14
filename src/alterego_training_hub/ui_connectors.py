@@ -1,5 +1,6 @@
 """Connectors page: GitHub, Hugging Face, Gmail — status, secrets, test actions."""
 from __future__ import annotations
+from .i18n import t
 
 import json
 import tkinter as tk
@@ -22,10 +23,8 @@ class ConnectorsPage(tk.Frame):
     def _build(self):
         header = page_header(
             self,
-            "Коннекторы",
-            "Сервисы, которые помогают разработке: GitHub, Hugging Face, Gmail. "
-            "Токены хранятся только в системном хранилище; агент-наставник "
-            "использует коннекторы как инструменты.",
+            t('Коннекторы'),
+            t('Сервисы, которые помогают разработке: GitHub, Hugging Face, Gmail. Токены хранятся только в системном хранилище; агент-наставник использует коннекторы как инструменты.'),
         )
         header.pack(fill="x", padx=24, pady=(20, 12))
 
@@ -45,43 +44,43 @@ class ConnectorsPage(tk.Frame):
             status_var = tk.StringVar()
             tk.Label(row, textvariable=status_var, bg=C["panel"], fg=C["muted"],
                      font=F_SMALL).pack(side="left", padx=10)
-            ttk.Button(row, text="Сохранить",
+            ttk.Button(row, text=t('Сохранить'),
                        command=lambda s=spec.id, v=secret_var, st=status_var:
                        self.save_secret(s, v, st)).pack(side="left")
-            ttk.Button(row, text="Удалить", style="Danger.TButton",
+            ttk.Button(row, text=t('Удалить'), style="Danger.TButton",
                        command=lambda s=spec.id, v=secret_var, st=status_var:
                        self.delete_secret(s, v, st)).pack(side="left", padx=6)
             self.cards[spec.id] = {"status": status_var, "secret": secret_var}
 
         # Actions
-        actions_section = Collapsible(self, "Действия")
+        actions_section = Collapsible(self, t('Действия'))
         actions_section.pack(fill="x", padx=24, pady=(0, 10))
         actions = actions_section.body
         row1 = tk.Frame(actions, bg=C["panel"])
         row1.pack(fill="x", pady=2)
-        tk.Label(row1, text="GitHub / HF поиск", bg=C["panel"], font=F_BASE).pack(
+        tk.Label(row1, text=t('GitHub / HF поиск'), bg=C["panel"], font=F_BASE).pack(
             side="left", padx=(0, 8))
         self.query_var = tk.StringVar(value="llm training")
         tk.Entry(row1, textvariable=self.query_var, bd=1, relief="solid",
                  font=F_BASE, width=30).pack(side="left", padx=(0, 8))
-        ttk.Button(row1, text="GitHub репозитории",
+        ttk.Button(row1, text=t('GitHub репозитории'),
                    command=self.search_github).pack(side="left", padx=4)
-        ttk.Button(row1, text="HF модели",
+        ttk.Button(row1, text=t('HF модели'),
                    command=self.search_huggingface).pack(side="left", padx=4)
 
         row2 = tk.Frame(actions, bg=C["panel"])
         row2.pack(fill="x", pady=(6, 2))
-        tk.Label(row2, text="Письмо: кому", bg=C["panel"], font=F_BASE).pack(
+        tk.Label(row2, text=t('Письмо: кому'), bg=C["panel"], font=F_BASE).pack(
             side="left", padx=(0, 6))
         self.mail_to = tk.StringVar()
         tk.Entry(row2, textvariable=self.mail_to, bd=1, relief="solid", width=24,
                  font=F_BASE).pack(side="left", padx=(0, 8))
-        tk.Label(row2, text="отправитель", bg=C["panel"], font=F_BASE).pack(
+        tk.Label(row2, text=t('отправитель'), bg=C["panel"], font=F_BASE).pack(
             side="left", padx=(0, 6))
         self.mail_from = tk.StringVar(value=self.app.settings.gmail_from)
         tk.Entry(row2, textvariable=self.mail_from, bd=1, relief="solid", width=24,
                  font=F_BASE).pack(side="left", padx=(0, 8))
-        ttk.Button(row2, text="Тест письма",
+        ttk.Button(row2, text=t('Тест письма'),
                    command=self.send_test_mail).pack(side="left", padx=4)
 
         self.results = tk.Text(self, height=9, wrap="word", state="disabled",
@@ -102,12 +101,12 @@ class ConnectorsPage(tk.Frame):
     def save_secret(self, connector_id, secret_var, status_var):
         value = secret_var.get().strip()
         if not value:
-            messagebox.showinfo("Коннекторы", "Введите значение.", parent=self)
+            messagebox.showinfo(t('Коннекторы'), t('Введите значение.'), parent=self)
             return
         try:
             self._manager().set_secret(connector_id, value)
         except Exception as exc:
-            messagebox.showerror("Коннекторы", str(exc), parent=self)
+            messagebox.showerror(t('Коннекторы'), str(exc), parent=self)
             return
         secret_var.set("")
         self.refresh_status()
@@ -116,14 +115,14 @@ class ConnectorsPage(tk.Frame):
         try:
             self._manager().delete_secret(connector_id)
         except Exception as exc:
-            messagebox.showerror("Коннекторы", str(exc), parent=self)
+            messagebox.showerror(t('Коннекторы'), str(exc), parent=self)
             return
         secret_var.set("")
         self.refresh_status()
 
     def search_github(self):
         self.app.start_async(
-            "Поиск на GitHub",
+            t('Поиск на GitHub'),
             lambda: self._manager().github_search(self.query_var.get()),
             lambda rows: set_text(self.results,
                                   json.dumps(rows, ensure_ascii=False, indent=2)),
@@ -131,7 +130,7 @@ class ConnectorsPage(tk.Frame):
 
     def search_huggingface(self):
         self.app.start_async(
-            "Поиск на Hugging Face",
+            t('Поиск на Hugging Face'),
             lambda: self._manager().huggingface_search(self.query_var.get()),
             lambda rows: set_text(self.results,
                                   json.dumps(rows, ensure_ascii=False, indent=2)),
@@ -141,23 +140,23 @@ class ConnectorsPage(tk.Frame):
         self.app.settings.gmail_from = self.mail_from.get().strip()
         self.app.save_settings()
         if not messagebox.askyesno(
-            "Отправить письмо",
-            f"Отправить тестовое письмо на {self.mail_to.get().strip()}?",
+            t('Отправить письмо'),
+            t('Отправить тестовое письмо на {v1}?').format(v1=self.mail_to.get().strip()),
             parent=self,
         ):
             return
 
         def done(result):
-            messagebox.showinfo("Коннекторы",
-                                f"Письмо отправлено: {result.get('to')}",
+            messagebox.showinfo(t('Коннекторы'),
+                                t('Письмо отправлено: {v1}').format(v1=result.get('to')),
                                 parent=self)
 
         self.app.start_async(
-            "Отправка письма",
+            t('Отправка письма'),
             lambda: self._manager().gmail_send(
                 self.mail_to.get().strip(),
-                "AlterEgo Training Hub — тест",
-                "Тестовое уведомление от AlterEgo Training Hub.",
+                t('AlterEgo Training Hub — тест'),
+                t('Тестовое уведомление от AlterEgo Training Hub.'),
             ),
             done,
         )

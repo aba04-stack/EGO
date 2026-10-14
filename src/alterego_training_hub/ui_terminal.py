@@ -1,5 +1,6 @@
 """Bottom terminal panel: run commands locally or on a connected server."""
 from __future__ import annotations
+from .i18n import t
 
 import time
 import tkinter as tk
@@ -8,7 +9,7 @@ from tkinter import messagebox, ttk
 from .tools import WorkspaceTools
 from .ui_common import C, F_MONO, F_SMALL
 
-LOCAL_TARGET = "Локально"
+LOCAL_TARGET = t('Локально')
 
 
 class TerminalPanel(tk.Frame):
@@ -25,13 +26,13 @@ class TerminalPanel(tk.Frame):
         self.arrow = tk.Label(bar, text="▼", bg=C["panel"], fg=C["muted"],
                               font=F_SMALL, cursor="hand2")
         self.arrow.pack(side="left")
-        title = tk.Label(bar, text="ввод команды", bg=C["panel"], fg=C["muted"],
+        title = tk.Label(bar, text=t('ввод команды'), bg=C["panel"], fg=C["muted"],
                          font=F_SMALL, cursor="hand2")
         title.pack(side="left", padx=(2, 10))
         for widget in (self.arrow, title):
             widget.bind("<Button-1>", lambda _e: self.toggle())
 
-        tk.Label(bar, text="Цель", bg=C["panel"], fg=C["muted"], font=F_SMALL).pack(
+        tk.Label(bar, text=t('Цель'), bg=C["panel"], fg=C["muted"], font=F_SMALL).pack(
             side="left", padx=(0, 4))
         self.target = ttk.Combobox(bar, width=16, state="readonly",
                                    values=(LOCAL_TARGET,))
@@ -45,7 +46,7 @@ class TerminalPanel(tk.Frame):
         self.cmd_entry.pack(fill="x", padx=7, pady=(0, 4))
         self.cmd_entry.bind("<Return>", lambda _e: self.run_command())
         self.cmd_entry.bind("<Up>", lambda _e: self._history_up())
-        ttk.Button(self.body, text="▶ Выполнить", style="Accent.TButton",
+        ttk.Button(self.body, text=t('▶ Выполнить'), style="Accent.TButton",
                    command=self.run_command).pack(anchor="w", padx=7)
         self.output = tk.Text(self.body, height=7, wrap="word", state="disabled",
                               bg=C["code_bg"], fg=C["code_fg"], font=F_MONO,
@@ -104,10 +105,10 @@ class TerminalPanel(tk.Frame):
             def done(result):
                 stamp = time.strftime("%H:%M:%S")
                 code = result.get("exit_code", "?")
-                self.append(result.get("output", "") + f"\n[код {code} · {stamp}]\n")
+                self.append(result.get("output", "") + t('\n[код {code} · {stamp}]\n').format(code=code, stamp=stamp))
 
             self.app.start_async(
-                f"Команда на {target}",
+                t('Команда на {target}').format(target=target),
                 lambda: self.app.server_manager().run_command(target, command),
                 done,
             )
@@ -115,7 +116,7 @@ class TerminalPanel(tk.Frame):
 
         root = self.app.workspace_root()
         if root is None:
-            messagebox.showinfo("Терминал", "Сначала выберите рабочую папку.",
+            messagebox.showinfo(t('Терминал'), t('Сначала выберите рабочую папку.'),
                                 parent=self)
             return
         workspace = WorkspaceTools(root)
@@ -123,10 +124,10 @@ class TerminalPanel(tk.Frame):
         def done_local(result):
             stamp = time.strftime("%H:%M:%S")
             code = result.get("returncode", "?")
-            self.append(result.get("output", "") + f"\n[код {code} · {stamp}]\n")
+            self.append(result.get("output", "") + t('\n[код {code} · {stamp}]\n').format(code=code, stamp=stamp))
 
         self.app.start_async(
-            f"Выполнение: {command}",
+            t('Выполнение: {command}').format(command=command),
             lambda: workspace.run_command(command, timeout_seconds=120),
             done_local,
         )

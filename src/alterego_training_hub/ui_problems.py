@@ -1,5 +1,6 @@
 """Problems panel: errors from training logs/metrics with jump-to-code."""
 from __future__ import annotations
+from .i18n import t
 
 import tkinter as tk
 from pathlib import Path
@@ -21,17 +22,16 @@ class ProblemsPanel(tk.Frame):
     def _build(self):
         bar = tk.Frame(self, bg=C["panel"])
         bar.pack(fill="x", padx=8, pady=(6, 4))
-        self.count_var = tk.StringVar(value="ПРОБЛЕМЫ")
+        self.count_var = tk.StringVar(value=t('ПРОБЛЕМЫ'))
         tk.Label(bar, textvariable=self.count_var, bg=C["panel"], fg=C["muted"],
                  font=F_SMALL).pack(side="left")
-        ttk.Button(bar, text="Обновить", command=self.refresh).pack(side="left",
+        ttk.Button(bar, text=t('Обновить'), command=self.refresh).pack(side="left",
                                                                    padx=8)
-        ttk.Button(bar, text="Наставнику",
+        ttk.Button(bar, text=t('Наставнику'),
                    command=self.send_to_mentor).pack(side="left", padx=4)
-        ttk.Button(bar, text="Очистить",
+        ttk.Button(bar, text=t('Очистить'),
                    command=self.clear).pack(side="left", padx=4)
-        self.status_var = tk.StringVar(value="Ошибки из логов обучения — "
-                                             "двойной клик открывает код.")
+        self.status_var = tk.StringVar(value=t('Ошибки из логов обучения — двойной клик открывает код.'))
         tk.Label(bar, textvariable=self.status_var, bg=C["panel"], fg=C["muted"],
                  font=F_SMALL).pack(side="left", padx=10)
 
@@ -39,8 +39,8 @@ class ProblemsPanel(tk.Frame):
         self.tree = ttk.Treeview(self, columns=columns, show="headings",
                                  height=6)
         for col, title, width in [
-            ("severity", "!", 40), ("message", "Проблема", 520),
-            ("file", "Файл", 240),
+            ("severity", "!", 40), ("message", t('Проблема'), 520),
+            ("file", t('Файл'), 240),
         ]:
             self.tree.heading(col, text=title)
             self.tree.column(col, width=width)
@@ -54,8 +54,8 @@ class ProblemsPanel(tk.Frame):
             self.tree.delete(item)
         self._items = []
         self.file_items = []
-        self.count_var.set("ПРОБЛЕМЫ (0)")
-        self.status_var.set("Очищено.")
+        self.count_var.set(t('ПРОБЛЕМЫ (0)'))
+        self.status_var.set(t('Очищено.'))
 
     def collect(self) -> list[dict]:
         problems = list(self.file_items)
@@ -79,8 +79,8 @@ class ProblemsPanel(tk.Frame):
                                           if problem["line"] else "")
             self.tree.insert("", "end", values=(mark, problem["message"],
                                                 location))
-        self.count_var.set(f"ПРОБЛЕМЫ ({len(self._items)})")
-        self.status_var.set("Найдено: " + str(len(self._items)))
+        self.count_var.set(t('ПРОБЛЕМЫ ({v1})').format(v1=len(self._items)))
+        self.status_var.set(t('Найдено: ') + str(len(self._items)))
         editor = self.app.pages.get("editor")
         regen = getattr(editor, "_regen_gutter", None) if editor else None
         if callable(regen):
@@ -99,8 +99,8 @@ class ProblemsPanel(tk.Frame):
             return
         problem = self._items[index]
         if not problem["path"]:
-            messagebox.showinfo("Проблемы",
-                                "Для этой проблемы нет привязки к файлу.",
+            messagebox.showinfo(t('Проблемы'),
+                                t('Для этой проблемы нет привязки к файлу.'),
                                 parent=self)
             return
         root = self.app.workspace_root()
@@ -108,7 +108,7 @@ class ProblemsPanel(tk.Frame):
         if root is not None and not path.is_absolute():
             path = root / path
         if not path.exists():
-            messagebox.showinfo("Проблемы", f"Файл не найден: {path}",
+            messagebox.showinfo(t('Проблемы'), t('Файл не найден: {path}').format(path=path),
                                 parent=self)
             return
         self.app.show_page("editor")
@@ -118,12 +118,11 @@ class ProblemsPanel(tk.Frame):
         if not self._items:
             self.refresh()
         if not self._items:
-            self.status_var.set("Проблем не найдено.")
+            self.status_var.set(t('Проблем не найдено.'))
             return
         lines = [f"- [{p['severity']}] {p['message']}"
                  + (f" ({p['path']}:{p['line']})" if p["path"] else "")
                  for p in self._items[:30]]
-        prompt = ("Разбери эти проблемы из лога обучения, найди причины и "
-                  "предложи исправления:\n\n" + "\n".join(lines))
+        prompt = (t('Разбери эти проблемы из лога обучения, найди причины и предложи исправления:\n\n') + "\n".join(lines))
         self.app.show_page("chat")
         self.app.pages["chat"].send_preset(prompt)

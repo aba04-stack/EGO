@@ -1,5 +1,6 @@
 """Model dashboard: model card, training progress, mentor assessment, actions."""
 from __future__ import annotations
+from .i18n import t
 
 import time
 import tkinter as tk
@@ -19,15 +20,14 @@ class ModelDashboardPage(tk.Frame):
     def _build(self):
         header = page_header(
             self,
-            "Модель и прогресс",
-            "Сводка по выбранной модели: прогресс обучения с графиком метрик, "
-            "оценка наставника (что хорошо / что плохо / риски) и журнал действий.",
+            t('Модель и прогресс'),
+            t('Сводка по выбранной модели: прогресс обучения с графиком метрик, оценка наставника (что хорошо / что плохо / риски) и журнал действий.'),
         )
         header.pack(fill="x", padx=24, pady=(18, 10))
 
         bar = tk.Frame(self, bg=C["bg"])
         bar.pack(fill="x", padx=24, pady=(0, 10))
-        tk.Label(bar, text="Модель", bg=C["bg"], font=F_BOLD).pack(side="left",
+        tk.Label(bar, text=t('Модель'), bg=C["bg"], font=F_BOLD).pack(side="left",
                                                                    padx=(0, 8))
         self.model_var = tk.StringVar()
         self.model_combo = ttk.Combobox(bar, textvariable=self.model_var,
@@ -35,14 +35,14 @@ class ModelDashboardPage(tk.Frame):
         self.model_combo.pack(side="left")
         self.model_combo.bind("<<ComboboxSelected>>",
                               lambda _e: self.select_model())
-        ttk.Button(bar, text="Обновить", command=self.refresh).pack(side="left", padx=8)
-        ttk.Button(bar, text="Оценка наставника", style="Accent.TButton",
+        ttk.Button(bar, text=t('Обновить'), command=self.refresh).pack(side="left", padx=8)
+        ttk.Button(bar, text=t('Оценка наставника'), style="Accent.TButton",
                    command=self.request_assessment).pack(side="left", padx=8)
-        ttk.Button(bar, text="Подобрать параметры",
+        ttk.Button(bar, text=t('Подобрать параметры'),
                    command=self.suggest_fixes).pack(side="left", padx=8)
-        ttk.Button(bar, text="Экспорт отчёта",
+        ttk.Button(bar, text=t('Экспорт отчёта'),
                    command=self.export_report).pack(side="left", padx=8)
-        ttk.Button(bar, text="Открыть чат",
+        ttk.Button(bar, text=t('Открыть чат'),
                    command=lambda: self.app.show_page("chat")).pack(side="left")
 
         body = tk.Frame(self, bg=C["bg"])
@@ -54,16 +54,16 @@ class ModelDashboardPage(tk.Frame):
         body.rowconfigure(2, weight=1)
 
         # Model card
-        info = card(body, "Карточка модели")
+        info = card(body, t('Карточка модели'))
         info.grid(row=0, column=0, sticky="nsew", padx=(0, 8), pady=(0, 10))
         self.info_text = tk.Text(info, height=10, wrap="word", state="disabled",
                                  bd=0, bg=C["panel"], fg=C["text"], font=F_BASE)
         self.info_text.pack(fill="both", expand=True)
 
         # Progress card
-        progress = card(body, "Прогресс обучения")
+        progress = card(body, t('Прогресс обучения'))
         progress.grid(row=0, column=1, sticky="nsew", padx=(8, 0), pady=(0, 10))
-        self.progress_var = tk.StringVar(value="Нет данных")
+        self.progress_var = tk.StringVar(value=t('Нет данных'))
         tk.Label(progress, textvariable=self.progress_var, bg=C["panel"], fg=C["text"],
                  font=F_BASE, wraplength=520, justify="left").pack(anchor="w")
         self.progressbar = ttk.Progressbar(progress, maximum=1.0, value=0.0)
@@ -82,11 +82,11 @@ class ModelDashboardPage(tk.Frame):
         self._poll_running = False
 
         # Assessment card
-        assess = card(body, "Оценка наставника")
+        assess = card(body, t('Оценка наставника'))
         assess.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=(0, 10))
         top = tk.Frame(assess, bg=C["panel"])
         top.pack(fill="x")
-        self.score_var = tk.StringVar(value="оценки пока нет")
+        self.score_var = tk.StringVar(value=t('оценки пока нет'))
         tk.Label(top, textvariable=self.score_var, bg=C["panel"], fg=C["accent"],
                  font=("Segoe UI", 13, "bold")).pack(side="left")
         self.assess_stamp = tk.StringVar(value="")
@@ -96,10 +96,10 @@ class ModelDashboardPage(tk.Frame):
         columns.pack(fill="both", expand=True, pady=(6, 0))
         self.lists: dict[str, tk.Text] = {}
         for idx, (key, title, color) in enumerate([
-            ("strengths", "Что хорошо", C["success"]),
-            ("weaknesses", "Что плохо", C["danger"]),
-            ("risks", "Риски", C["warning"]),
-            ("recommendations", "Рекомендации", C["accent"]),
+            ("strengths", t('Что хорошо'), C["success"]),
+            ("weaknesses", t('Что плохо'), C["danger"]),
+            ("risks", t('Риски'), C["warning"]),
+            ("recommendations", t('Рекомендации'), C["accent"]),
         ]):
             frame = tk.Frame(columns, bg=C["panel"])
             frame.pack(side="left", fill="both", expand=True, padx=(0 if idx == 0 else 6, 0))
@@ -109,14 +109,14 @@ class ModelDashboardPage(tk.Frame):
                            relief="solid", font=F_SMALL)
             text.pack(fill="both", expand=True)
             self.lists[key] = text
-        tk.Label(assess, text="Рассуждение", bg=C["panel"], fg=C["text"],
+        tk.Label(assess, text=t('Рассуждение'), bg=C["panel"], fg=C["text"],
                  font=F_BOLD).pack(anchor="w", pady=(8, 2))
         self.reasoning_text = tk.Text(assess, height=4, wrap="word", state="disabled",
                                       bd=1, relief="solid", font=F_BASE)
         self.reasoning_text.pack(fill="both", expand=True)
 
         # Activity card
-        activity = card(body, "Действия — журнал активности")
+        activity = card(body, t('Действия — журнал активности'))
         activity.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=(0, 0))
         self.activity_text = tk.Text(activity, height=6, wrap="word", state="disabled",
                                      bd=0, bg=C["panel"], fg=C["text"], font=F_SMALL)
@@ -137,7 +137,7 @@ class ModelDashboardPage(tk.Frame):
         try:
             self._refresh_inner()
         except Exception as exc:  # noqa: BLE001 - dashboard must not die on odd data
-            self.app.set_status(f"Не удалось обновить дашборд: {exc}")
+            self.app.set_status(t('Не удалось обновить дашборд: {exc}').format(exc=exc))
 
     def _refresh_inner(self):
         entries = self._load_model_entries()
@@ -172,30 +172,22 @@ class ModelDashboardPage(tk.Frame):
         from .ui_common import set_text
 
         if entry is None:
-            set_text(self.info_text, "В каталоге пока нет моделей.\n\n"
-                                     "Добавьте модель на странице «Каталог моделей».")
+            set_text(self.info_text, t('В каталоге пока нет моделей.\n\nДобавьте модель на странице «Каталог моделей».'))
             return
         stamp = time.strftime("%d.%m.%Y %H:%M", time.localtime(entry.updated_at))
         metrics = "\n".join(f"  {k}: {v}" for k, v in entry.metrics.items()) or "  —"
         set_text(self.info_text, (
-            f"Название: {entry.name}\n"
-            f"Тип: {entry.kind}\n"
-            f"Путь / URI: {entry.location}\n"
-            f"API model id: {entry.model_id or '—'}\n"
-            f"URL инференса: {entry.base_url or '—'}\n"
-            f"Обновлено: {stamp}\n"
-            f"Метрики:\n{metrics}\n"
-            f"Заметки: {entry.notes or '—'}"
+            t('Название: {v1}\nТип: {v3}\nПуть / URI: {v5}\nAPI model id: {v7}\nURL инференса: {v9}\nОбновлено: {stamp}\nМетрики:\n{metrics}\nЗаметки: {v15}').format(v1=entry.name, v3=entry.kind, v5=entry.location, v7=entry.model_id or '—', v9=entry.base_url or '—', stamp=stamp, metrics=metrics, v15=entry.notes or '—')
         ))
 
     def _render_progress(self):
 
         status = self.app.training.status()
         summary = parse_log(self.app.training.tail())
-        state = "выполняется" if status.running else (
-            f"остановлено (код {status.returncode})" if status.returncode is not None
-            else "не запускалось")
-        line = f"Состояние: {state}\nКоманда: {status.command or '—'}\nМетрики: {metrics_brief(summary)}"
+        state = t('выполняется') if status.running else (
+            t('остановлено (код {v1})').format(v1=status.returncode) if status.returncode is not None
+            else t('не запускалось'))
+        line = t('Состояние: {state}\nКоманда: {v3}\nМетрики: {v5}').format(state=state, v3=status.command or '—', v5=metrics_brief(summary))
         self.progress_var.set(line)
         ratio = summary.progress_ratio or 0.0
         try:
@@ -249,13 +241,13 @@ class ModelDashboardPage(tk.Frame):
 
         report = self.app.reports.latest() or ModelReport()
         if report.is_empty():
-            self.score_var.set("Оценки пока нет — нажмите «Оценка наставника»")
+            self.score_var.set(t('Оценки пока нет — нажмите «Оценка наставника»'))
             self.assess_stamp.set("")
         else:
-            score = f"{report.score:g}/10" if report.score is not None else "без оценки"
-            self.score_var.set(f"Оценка: {score}")
+            score = f"{report.score:g}/10" if report.score is not None else t('без оценки')
+            self.score_var.set(t('Оценка: {score}').format(score=score))
             stamp = time.strftime("%d.%m %H:%M", time.localtime(report.created_at))
-            self.assess_stamp.set(f"обновлено {stamp}")
+            self.assess_stamp.set(t('обновлено {stamp}').format(stamp=stamp))
         for key, text in self.lists.items():
             items = getattr(report, key)
             set_text(text, "\n".join(f"• {item}" for item in items) or "—")
@@ -267,8 +259,7 @@ class ModelDashboardPage(tk.Frame):
         events = self.app.activity.recent(12)
         if not events:
             set_text(self.activity_text,
-                     "Журнал пуст. Здесь появятся действия наставника, запуски "
-                     "обучения и правки файлов.")
+                     t('Журнал пуст. Здесь появятся действия наставника, запуски обучения и правки файлов.'))
             return
         icons = {"training": "▶", "mentor_tool": "»", "file_edit": "✎",
                  "report": "★", "system": "·"}
@@ -286,7 +277,7 @@ class ModelDashboardPage(tk.Frame):
         from .report_export import save_report
 
         path = filedialog.asksaveasfilename(
-            title="Экспорт отчёта", defaultextension=".md",
+            title=t('Экспорт отчёта'), defaultextension=".md",
             filetypes=[("Markdown", "*.md"), ("HTML", "*.html")])
         if not path:
             return
@@ -295,10 +286,10 @@ class ModelDashboardPage(tk.Frame):
             exported = save_report(path, self.app.build_report_context(),
                                    fmt=fmt)
         except Exception as exc:
-            messagebox.showerror("Отчёт", str(exc), parent=self)
+            messagebox.showerror(t('Отчёт'), str(exc), parent=self)
             return
         note = ("\n" + exported.note) if exported.note else ""
-        messagebox.showinfo("Отчёт", f"Сохранено: {exported.path}{note}",
+        messagebox.showinfo(t('Отчёт'), t('Сохранено: {v1}{note}').format(v1=exported.path, note=note),
                             parent=self)
 
     def suggest_fixes(self):
@@ -310,27 +301,27 @@ class ModelDashboardPage(tk.Frame):
 
         root = self.app.workspace_root()
         if root is None:
-            messagebox.showinfo("Подбор параметров",
-                                "Сначала выберите рабочую папку.", parent=self)
+            messagebox.showinfo(t('Подбор параметров'),
+                                t('Сначала выберите рабочую папку.'), parent=self)
             return
         summary = parse_log(self.app.training.tail())
         control = read_control(root)
         suggestions = _suggest(summary, control)
         if not suggestions:
-            messagebox.showinfo("Подбор параметров",
-                                "Нет предложений — метрики в норме.", parent=self)
+            messagebox.showinfo(t('Подбор параметров'),
+                                t('Нет предложений — метрики в норме.'), parent=self)
             return
         text = "\n".join(suggestion.line() for suggestion in suggestions)
         if not messagebox.askyesno(
-            "Подбор параметров",
-            "Предлагаемые изменения:\n\n" + text
-            + "\n\nПрименить их к обучению (control.json)?", parent=self):
+            t('Подбор параметров'),
+            t('Предлагаемые изменения:\n\n') + text
+            + t('\n\nПрименить их к обучению (control.json)?'), parent=self):
             return
         patch = dict(control)
         for suggestion in suggestions:
             patch[suggestion.param] = suggestion.value
         write_control(root, patch)
-        self.app.activity.log("tuning", "Применены параметры:\n" + text)
+        self.app.activity.log("tuning", t('Применены параметры:\n') + text)
         self.refresh()
 
     def request_assessment(self):

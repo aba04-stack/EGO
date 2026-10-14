@@ -1996,3 +1996,17 @@ def test_stage47_embedder_choice(fake_ui):
     app.secrets = FakeSecrets()
     chosen = page._make_embedder()
     assert isinstance(chosen, ApiEmbedder) and chosen.id == "api:emb-1"
+
+
+def test_stage48_budget_daemon_hooks(fake_ui):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    assert app._budget_daemon_started
+    calls = []
+    app.executor = type("E", (), {"submit": lambda self, fn, *a: calls.append(a)})()
+    app.settings.cloud_total_budget_usd = 10.0
+    app._budget_tick()
+    assert calls == [(10.0,)]
+    app.settings.cloud_total_budget_usd = 0.0
+    app._budget_tick()
+    assert calls == [(10.0,)]  # cap off — no network work scheduled

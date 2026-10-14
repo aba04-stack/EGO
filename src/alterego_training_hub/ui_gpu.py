@@ -479,32 +479,13 @@ class GpuPage(tk.Frame):
 
     def _apply_budget_guard(self, items):
         """Общий потолок расходов: учёт подов и автостоп при превышении."""
-        from .budget_guard import BudgetLedger, check_budget
+        from .budget_guard import BudgetLedger, apply_guard
 
         try:
             client = self.app.runpod_client()
         except Exception:
             client = None
         ledger = BudgetLedger.load()
-        active_ids = set()
-        for pod in items or []:
-            pod_id = str(pod.get("id") or "")
-            if not pod_id:
-                continue
-            status = str(pod.get("status") or "").upper()
-            cost = pod.get("cost", pod.get("costPerHr", 0))
-            try:
-                hourly = float(cost)
-            except (TypeError, ValueError):
-                hourly = 0.0
-            if status in {"RUNNING", "STARTING", "CREATED"}:
-                ledger.observe(pod_id, hourly)
-                active_ids.add(pod_id)
-            else:
-                ledger.mark_stopped(pod_id)
-        for spend in ledger.running():
-            if spend.pod_id not in active_ids:
-                ledger.mark_stopped(spend.pod_id)
 
         def stopper(pod_id):
             if client is None:
@@ -512,9 +493,9 @@ class GpuPage(tk.Frame):
             client.pod_action(pod_id, "stop", confirmed=True)
 
         cap = float(self.app.settings.cloud_total_budget_usd or 0.0)
-        verdict = check_budget(ledger, cap,
-                               stopper=stopper if cap > 0 else None)
-        ledger.save()
+        verdict = apply_guard(ledger, items, cap,
+                              stopper=stopper if cap > 0 else None)
+        self._budget_verdict = verdict
         self.gpu_notes_var.set(
             self.gpu_notes_var.get() + " · " + verdict.render())
         if verdict.stopped:

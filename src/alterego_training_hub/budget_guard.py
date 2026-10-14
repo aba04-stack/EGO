@@ -127,3 +127,42 @@ def check_budget(ledger: BudgetLedger, cap_usd: float,
             ledger.mark_stopped(spend.pod_id, now)
             verdict.stopped.append(spend.pod_id)
     return verdict
+
+
+ACTIVE_POD_STATUSES = {"RUNNING", "STARTING", "CREATED"}
+
+
+def _pod_hourly(pod: dict) -> float:
+    try:
+        return float(pod.get("cost", pod.get("costPerHr", 0)) or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def sync_ledger(ledger: BudgetLedger, pods, now: float | None = None) -> None:
+    """Bring the ledger in line with the account's current pod list."""
+    now = time.time() if now is None else now
+    active_ids: set[str] = set()
+    for pod in pods or []:
+        pod_id = str((pod or {}).get("id") or "")
+        if not pod_id:
+            continue
+        status = str(pod.get("status") or "").upper()
+        if status in ACTIVE_POD_STATUSES:
+            ledger.observe(pod_id, _pod_hourly(pod), now=now)
+            active_ids.add(pod_id)
+        else:
+            ledger.mark_stopped(pod_id, now=now)
+    for spend in ledger.running():
+        if spend.pod_id not in active_ids:
+            ledger.mark_stopped(spend.pod_id, now=now)
+
+
+def apply_guard(ledger: BudgetLedger, pods, cap_usd: float,
+                stopper=None, now: float | None = None) -> BudgetVerdict:
+    """Sync ledger from pods, enforce cap, persist. Used by page+daemon."""
+    sync_ledger(ledger, pods, now=now)
+    verdict = check_budget(ledger, cap_usd,
+                           stopper=stopper if cap_usd > 0 else None, now=now)
+    ledger.save()
+    return verdict

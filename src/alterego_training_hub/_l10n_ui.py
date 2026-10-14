@@ -79,6 +79,7 @@ UI_MESSAGES: dict[str, str] = {
     "Библиотека моделей (можно облако)": "Model library (cloud-capable)",
     "Библиотека: {library_dir}": "Library: {library_dir}",
     "Быстрое открытие (Ctrl+P)": "Quick open (Ctrl+P)",
+    "Бюджетный страж остановил поды: {v1}": "Budget guard stopped pods: {v1}",
     "В каталоге пока нет моделей.\n\nДобавьте модель на странице «Каталог моделей».": "No models in the catalog yet.\n\nAdd a model on the \"Model catalog\" page.",
     "В очередь": "To queue",
     "Валидация формата": "Format validation",
@@ -846,6 +847,7 @@ UI_MESSAGES: dict[str, str] = {
     "● Режим агента — действует свободно": "● Agent mode — acts freely",
     "⚠ Watchdog: критическая проблема обучения": "⚠ Watchdog: critical training problem",
     "⚡ параллельно: {v1} чтений": "⚡ in parallel: {v1} reads",
+    "⛔ Бюджет: ": "⛔ Budget: ",
     "🎟 {tokens_today} ток.": "🎟 {tokens_today} tok.",
     "🤖 модель не выбрана": "🤖 no model selected",
     "🧠 По смыслу": "🧠 Semantic"

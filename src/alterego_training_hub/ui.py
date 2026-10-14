@@ -61,6 +61,7 @@ class TrainingHubApp(tk.Tk):
         self.watchdog = TrainingWatchdog()
         self._watchdog_tail: tuple[int, float] = (0, 0.0)
         self._watchdog_started = False
+        self._budget_daemon_started = False
         from .plugins import PluginManager
 
         self.plugins = PluginManager(app_data_dir() / "plugins")
@@ -289,6 +290,7 @@ class TrainingHubApp(tk.Tk):
         self._refresh_workspace_badge()
         self._bind_shortcuts()
         self._start_watchdog()
+        self._start_budget_daemon()
         self.set_status(t("status.ready"))
 
     def show_bottom(self, which: str):
@@ -768,6 +770,11 @@ class TrainingHubApp(tk.Tk):
             payload["box"]["ok"] = answer
             payload["event"].set()
             return
+        if kind == "budget":
+            verdict = payload.get("verdict")
+            if verdict is not None:
+                self._on_budget_event(verdict)
+            return
         if kind == "info":
             messagebox.showinfo(payload.get("title", "AlterEgo Training Hub"),
                                 payload.get("message", ""), parent=self)
@@ -915,6 +922,60 @@ class TrainingHubApp(tk.Tk):
             self.after(15_000, self._watchdog_tick)
         except Exception:
             pass
+
+    # ------------------------------------------------------- budget daemon
+    BUDGET_TICK_MS = 120_000
+
+    def _start_budget_daemon(self):
+        """Фоновый страж бюджета: автостоп подов без открытия страницы GPU."""
+        if self._budget_daemon_started:
+            return
+        self._budget_daemon_started = True
+        try:
+            self.after(60_000, self._budget_tick)
+        except Exception:
+            pass
+
+    def _budget_tick(self):
+        try:
+            cap = float(self.settings.cloud_total_budget_usd or 0.0)
+        except (TypeError, ValueError):
+            cap = 0.0
+        if cap > 0 and not self._closing:
+            try:
+                self.executor.submit(self._budget_work, cap)
+            except Exception:
+                pass
+        try:
+            self.after(self.BUDGET_TICK_MS, self._budget_tick)
+        except Exception:
+            pass
+
+    def _budget_work(self, cap: float):
+        """Runs in the executor: list pods, enforce the cap, report."""
+        from .budget_guard import BudgetLedger, apply_guard
+
+        try:
+            client = self.runpod_client()
+            pods = client.list_pods()
+        except Exception:
+            return  # no key / no network — stay silent, retry next tick
+        ledger = BudgetLedger.load()
+
+        def stopper(pod_id):
+            client.pod_action(pod_id, "stop", confirmed=True)
+
+        verdict = apply_guard(ledger, pods, cap, stopper=stopper)
+        if verdict.stopped:
+            self.post_event("budget", {"verdict": verdict})
+
+    def _on_budget_event(self, verdict) -> None:
+        self.activity.log(
+            "cloud",
+            t('Бюджетный страж остановил поды: {v1}').format(
+                v1=", ".join(verdict.stopped)),
+            ok=False)
+        self.set_status(t('⛔ Бюджет: ') + verdict.render())
 
     def _refresh_workspace_badge(self):
         path = (self.settings.workspace_path or "").strip()

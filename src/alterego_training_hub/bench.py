@@ -35,6 +35,9 @@ class BenchResult:
     created_at: float = field(default_factory=time.time)
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:10])
     error: str = ""
+    kind: str = "speed"  # speed | live
+    passed: int = 0      # live benches: scenarios passed
+    total: int = 0       # live benches: scenarios total
 
     def ok(self) -> bool:
         return not self.error

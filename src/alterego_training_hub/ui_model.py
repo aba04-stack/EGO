@@ -190,6 +190,8 @@ class ModelDashboardPage(tk.Frame):
                    command=self.run_agent_benchmark).pack(side="left")
         ttk.Button(trans_row, text=t('Бенчмарк модели'),
                    command=self.run_live_benchmark).pack(side="left", padx=6)
+        ttk.Button(trans_row, text=t('История бенчмарков'),
+                   command=self.show_bench_history).pack(side="left")
         self.samples_var = tk.StringVar(value="")
         tk.Label(trans_card, textvariable=self.samples_var, bg=C["panel"],
                  fg=C["muted"], font=F_SMALL, wraplength=860,
@@ -462,14 +464,39 @@ class ModelDashboardPage(tk.Frame):
         self.app.start_async(t('Smoke-прогон'), self.smoke_text, done)
 
     def live_benchmark_text(self) -> str:
-        from .live_bench import run_live_benchmark
+        from .live_bench import report_to_result, run_live_benchmark
         from .mentor import MentorError
 
         try:
             mentor = self.app.mentor_client()
         except MentorError as exc:
             return str(exc)
-        return run_live_benchmark(mentor).render()
+        report = run_live_benchmark(mentor)
+        try:
+            from .bench import BenchStore
+
+            BenchStore(self.app.model_registry().library_dir).add(
+                report_to_result(report))
+        except Exception:
+            pass  # история — не повод ронять бенчмарк
+        return report.render()
+
+    def bench_history_text(self) -> str:
+        from .bench import BenchStore
+        from .bench_history import compare_latest, history_table
+
+        results = BenchStore(
+            self.app.model_registry().library_dir).list(50)
+        lines = [history_table(results), ""]
+        lines.extend(compare_latest(results))
+        return "\n".join(lines)
+
+    def show_bench_history(self):
+        from tkinter import messagebox
+
+        text = self.bench_history_text()
+        self.samples_var.set(text.splitlines()[0] if text else "")
+        messagebox.showinfo(t('История бенчмарков'), text, parent=self)
 
     def run_live_benchmark(self):
         from tkinter import messagebox

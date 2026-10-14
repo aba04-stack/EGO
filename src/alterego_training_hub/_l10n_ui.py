@@ -205,6 +205,7 @@ UI_MESSAGES: dict[str, str] = {
     "Информация: {v1}": "Info: {v1}",
     "Использовать эту папку": "Use this folder",
     "История": "History",
+    "История бенчмарков": "Benchmark history",
     "История запусков": "Run history",
     "История пуста.": "History is empty.",
     "Итог утром": "Morning report",

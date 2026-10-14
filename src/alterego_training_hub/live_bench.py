@@ -17,9 +17,12 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .agent import MentorAgent
+
+if TYPE_CHECKING:
+    from .bench import BenchResult
 from .agent_bench import BenchReport, ScenarioResult
 from .context_view import estimate_cost
 from .tools import WorkspaceTools
@@ -166,3 +169,17 @@ def run_live_benchmark(mentor: Any, *, timeout: float = DEFAULT_TIMEOUT,
 def to_bench_report(report: LiveBenchReport) -> BenchReport:
     """Adapt to the shared offline-report shape when needed."""
     return BenchReport(results=list(report.results))
+
+
+def report_to_result(report: LiveBenchReport) -> BenchResult:
+    """Persistable BenchResult for the shared history store."""
+    from .bench import BenchResult
+
+    return BenchResult(
+        model=report.model or "?",
+        command="live-bench",
+        duration_ms=int(report.seconds * 1000),
+        kind="live",
+        passed=report.passed,
+        total=report.total,
+    )

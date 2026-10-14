@@ -1950,3 +1950,19 @@ def test_stage44_wizard_gpus_and_budget_field(fake_ui):
     assert hasattr(gpu_page, "_apply_budget_guard")
     gpu_page.gpu_total_budget_var.set("25")
     assert float(gpu_page.gpu_total_budget_var.get()) == 25.0
+
+
+def test_stage45_bench_history_ui(fake_ui, tmp_path, monkeypatch):
+    from alterego_training_hub.bench import BenchResult, BenchStore
+
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(app, "model_registry",
+                        lambda: SimpleNamespace(library_dir=tmp_path))
+    BenchStore(tmp_path).add(BenchResult(
+        model="demo", command="live-bench", kind="live", passed=3, total=4))
+    page = app.pages["model"]
+    text = page.bench_history_text()
+    assert "demo" in text and "3/4" in text

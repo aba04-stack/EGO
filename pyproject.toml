@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alterego-training-hub-desktop"
-version = "0.36.0"
+version = "1.0.0"
 description = "Desktop control panel for AlterEgo training repositories, API mentors, and cloud GPUs"
 requires-python = ">=3.10"
 dependencies = ["keyring>=25.0", "paramiko>=3.4"]
@@ -68,6 +68,9 @@ files = [
     "src/alterego_training_hub/model_recipes.py",
     "src/alterego_training_hub/tokenizer_train.py",
     "src/alterego_training_hub/ui_patterns.py",
+    "src/alterego_training_hub/semantic_search.py",
+    "src/alterego_training_hub/update_check.py",
+    "src/alterego_training_hub/night_watch.py",
 ]
 ignore_missing_imports = true
 warn_unused_ignores = false

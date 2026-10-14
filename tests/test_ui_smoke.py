@@ -1875,3 +1875,24 @@ def test_stage39_update_check_button(fake_ui, tmp_path, monkeypatch):
                      "html_url": "https://example/release"})
     text = settings_page.updates_text()
     assert "99.0.0" in text
+
+
+def test_stage40_semantic_search_button(fake_ui, tmp_path, monkeypatch):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    (tmp_path / "train.py").write_text(
+        "def train_loop(data):\n    loss = step(data)\n    return loss\n" * 4,
+        encoding="utf-8")
+
+    def sync_start(label, task, on_success=None, on_error=None):
+        value = task()
+        if on_success:
+            on_success(value)
+
+    monkeypatch.setattr(app, "start_async", sync_start)
+    monkeypatch.setattr(app, "workspace_root", lambda: tmp_path)
+    page = app.pages["search"]
+    page.query_var.set("train loop loss")
+    page.run_semantic()
+    assert page.tree.get_children()
+    assert page._results[0][1].name == "train.py"

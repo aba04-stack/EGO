@@ -434,6 +434,7 @@ UI_MESSAGES: dict[str, str] = {
     "План агента:\n": "Agent plan:\n",
     "План агента:\n- ": "Agent plan:\n- ",
     "План должен содержать шаги.": "The plan must contain steps.",
+    "По смыслу: {v1} результатов · индекс: {v2} файлов, {v3} новых чанков": "Semantic: {v1} results · index: {v2} files, {v3} new chunks",
     "Подагенты": "Subagents",
     "Подагенты отключены в настройках агента.": "Subagents are disabled in the agent settings.",
     "Подбор параметров": "Hyperparameter tuning",
@@ -583,6 +584,7 @@ UI_MESSAGES: dict[str, str] = {
     "Скрипт сохранён: ": "Script saved: ",
     "Слабые стороны": "Weaknesses",
     "Сменить папку…": "Change folder…",
+    "Смысловой поиск: {pattern}": "Semantic search: {pattern}",
     "Сначала выберите GPU в каталоге.": "First select a GPU in the catalog.",
     "Сначала выберите модель в таблице.": "First select a model in the table.",
     "Сначала выберите рабочую папку.": "First select a workspace folder.",
@@ -807,5 +809,6 @@ UI_MESSAGES: dict[str, str] = {
     "⚠ Watchdog: критическая проблема обучения": "⚠ Watchdog: critical training problem",
     "⚡ параллельно: {v1} чтений": "⚡ in parallel: {v1} reads",
     "🎟 {tokens_today} ток.": "🎟 {tokens_today} tok.",
-    "🤖 модель не выбрана": "🤖 no model selected"
+    "🤖 модель не выбрана": "🤖 no model selected",
+    "🧠 По смыслу": "🧠 Semantic"
 }

@@ -70,8 +70,8 @@ class WatchEntry:
 
 def _parse_hhmm(text: str) -> int | None:
     try:
-        hours, minutes = str(text or "").strip().split(":")
-        hours, minutes = int(hours), int(minutes)
+        raw_hours, raw_minutes = str(text or "").strip().split(":")
+        hours, minutes = int(raw_hours), int(raw_minutes)
     except (TypeError, ValueError):
         return None
     if 0 <= hours <= 23 and 0 <= minutes <= 59:

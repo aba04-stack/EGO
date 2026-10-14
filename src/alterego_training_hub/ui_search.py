@@ -1,11 +1,14 @@
 """Search page: regex search across the workspace with jump-to-line results."""
 from __future__ import annotations
 
+import hashlib
 import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, ttk
 
+from .config import app_data_dir
 from .i18n import t
+from .semantic_search import SemanticIndex
 from .tools import WorkspaceTools
 from .ui_common import F_BASE, F_MONO, F_SMALL, C, Collapsible, card, page_header
 
@@ -46,6 +49,8 @@ class SearchPage(tk.Frame):
                  font=F_MONO, width=18).pack(side="left", padx=(0, 8))
         ttk.Button(row, text=t('Найти'), style="Accent.TButton",
                    command=self.run_search).pack(side="left")
+        ttk.Button(row, text=t('🧠 По смыслу'),
+                   command=self.run_semantic).pack(side="left", padx=(8, 0))
         ttk.Button(row, text=t('Очистить'),
                    command=self.clear_results).pack(side="left", padx=8)
         self.status_var = tk.StringVar(value=t('Введите шаблон и нажмите «Найти».'))
@@ -104,6 +109,45 @@ class SearchPage(tk.Frame):
             lambda: WorkspaceTools(root).search_files(pattern, glob),
             done,
         )
+
+    def run_semantic(self):
+        """Semantic search: local hash embeddings, cosine over chunks."""
+        root = self.app.workspace_root()
+        if root is None:
+            messagebox.showinfo(t('Поиск'), t('Сначала выберите рабочую папку.'),
+                                parent=self)
+            return
+        query = self.query_var.get()
+        if not query.strip():
+            return
+        cache_name = hashlib.sha256(
+            str(root.resolve()).encode("utf-8")).hexdigest()[:16]
+        cache_path = app_data_dir() / "semantic-index" / f"{cache_name}.json"
+
+        def work():
+            index = SemanticIndex(root)
+            stats = index.build(SemanticIndex.load_cache(cache_path))
+            try:
+                index.save(cache_path)
+            except OSError:
+                pass
+            return {"hits": index.search(query), "stats": stats}
+
+        def done(result):
+            hits = result["hits"]
+            self.clear_results()
+            for hit in hits:
+                item_id = self.tree.insert("", "end", values=(
+                    hit.path, hit.line,
+                    f"{hit.score:.2f} · {hit.snippet}"))
+                self._results.append((item_id, root / hit.path, hit.line))
+            stats = result["stats"]
+            self.status_var.set(
+                t('По смыслу: {v1} результатов · индекс: {v2} файлов, {v3} новых чанков').format(
+                    v1=len(hits), v2=stats["files"], v3=stats["embedded"]))
+
+        self.app.start_async(t('Смысловой поиск: {pattern}').format(pattern=query),
+                             work, done)
 
     @staticmethod
     def _parse_match(text: str) -> tuple[str, int, str]:

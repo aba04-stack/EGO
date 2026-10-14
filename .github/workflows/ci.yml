@@ -63,3 +63,20 @@ jobs:
           path: dist/AlterEgoTrainingHub
           if-no-files-found: error
           retention-days: 7
+
+  tk-smoke:
+    # Настоящий Tk под виртуальным дисплеем: окно приложения целиком.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system Python + Tk + xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-tk python3-venv xvfb
+      - name: Create venv with system Tk
+        run: |
+          python3 -m venv --system-site-packages .venv-tk
+          .venv-tk/bin/pip install -e ".[package]"
+      - name: Real Tk smoke under xvfb
+        run: xvfb-run -a .venv-tk/bin/python scripts/tk_smoke.py

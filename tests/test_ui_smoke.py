@@ -1727,3 +1727,19 @@ def test_stage31_wizard_generates_train_script(fake_ui, tmp_path):
     _ast.parse(code)
     assert '{"sample":' in code and "eval: val_loss=" in code
     assert app.settings.training_command == "python train_llm.py"
+
+
+def test_stage32_smoke_run_button(fake_ui, tmp_path):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    model_page = app.pages["model"]
+    # no script yet -> honest failure report, no crash
+    missing = model_page.smoke_text()
+    assert "не найден" in missing
+    # generate into the library scripts dir (no workspace selected), then smoke
+    data = tmp_path / "data.txt"
+    data.write_text("данные для smoke проверки цепочки\n" * 5, encoding="utf-8")
+    model_page.wizard_dataset_var.set(str(data))
+    model_page.create_train_script()
+    report = model_page.smoke_text()
+    assert "7/7" in report, report

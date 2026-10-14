@@ -36,6 +36,8 @@ UI_MESSAGES: dict[str, str] = {
     "Pull — только fast-forward": "Pull — fast-forward only",
     "RunPod API-ключ": "RunPod API key",
     "SSH-пользователь": "SSH user",
+    "Smoke-прогон": "Smoke run",
+    "Smoke-прогон скрипта": "Script smoke run",
     "URL инференса": "Inference URL",
     "{cloud_name}: ${v2:.3f}/ч": "{cloud_name}: ${v2:.3f}/hr",
     "{desc}\n\nПодтвердить выполнение?": "{desc}\n\nConfirm execution?",

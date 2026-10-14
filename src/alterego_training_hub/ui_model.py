@@ -238,6 +238,8 @@ class ModelDashboardPage(tk.Frame):
                    command=self.show_before_after).pack(side="left", padx=6)
         ttk.Button(wiz_row3, text=t('Создать скрипт обучения'),
                    command=self.create_train_script).pack(side="left")
+        ttk.Button(wiz_row3, text=t('Smoke-прогон'),
+                   command=self.run_smoke_check).pack(side="left", padx=6)
         self.wizard_var = tk.StringVar(value="")
         tk.Label(wiz_card, textvariable=self.wizard_var, bg=C["panel"],
                  fg=C["muted"], font=F_SMALL, wraplength=860,
@@ -397,6 +399,27 @@ class ModelDashboardPage(tk.Frame):
 
         self.app.start_async(t('Бенчмарк агента'),
                              self.agent_benchmark_text, done)
+
+    def smoke_text(self) -> str:
+        from pathlib import Path
+
+        from .smoke_run import smoke_script
+
+        cfg = self.train_script_config()
+        root = self.app.workspace_root()
+        target_dir = Path(root) if root is not None else (
+            self.app.model_registry().library_dir / "scripts")
+        return smoke_script(target_dir / "train_llm.py",
+                            dataset_path=cfg.dataset_path).render()
+
+    def run_smoke_check(self):
+        from tkinter import messagebox
+
+        def done(text):
+            self.wizard_var.set(text.splitlines()[0] if text else "")
+            messagebox.showinfo(t('Smoke-прогон скрипта'), text, parent=self)
+
+        self.app.start_async(t('Smoke-прогон'), self.smoke_text, done)
 
     def save_transparency(self):
         self.app.settings.thought_protocol = bool(self.thought_var.get())

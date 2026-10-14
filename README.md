@@ -180,6 +180,9 @@ This is a desktop control-plane MVP, not yet an end-to-end training orchestratio
 The next milestone is a typed remote training worker with resumable checkpoint/data transfers, explicit elapsed-time and total-cost guards, live logs, and end-to-end tests on a short disposable job.
 
 ## Releases
+- 0.29.0: script smoke-run — one-click end-to-end verification of the
+  generated train_llm.py (compile, import, CONFIG sanity, real dataset
+  load via the script’s own loader, log-format round-trip) without a GPU.
 - 0.28.0: wizard now generates a ready-to-run `train_llm.py` (PyTorch loop
   for from-scratch, HF Trainer + PEFT LoRA for fine-tuning) that logs in the
   app’s own metric/sample formats — one click from plan to training.

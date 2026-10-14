@@ -154,6 +154,8 @@ def main() -> None:
     parser.add_argument("--output-dir", default=CONFIG["output_dir"])
     parser.add_argument("--epochs", type=int, default=CONFIG["epochs"])
     parser.add_argument("--lr", type=float, default=CONFIG["lr"])
+    parser.add_argument("--resume", default="",
+                        help="чекпоинт для продолжения обучения")
     args = parser.parse_args()
     random.seed(CONFIG["seed"])
     texts = [t for t in load_texts(args.dataset) if t.strip()]
@@ -224,6 +226,9 @@ def train_scratch(args, texts: list[str]) -> None:
             return self.head(self.blocks(self.embed(idx) + self.pos(pos)))
 
     model = TinyLM().to(device)
+    if args.resume and os.path.isfile(args.resume):
+        model.load_state_dict(torch.load(args.resume, map_location=device))
+        print(f"Resume: веса из {args.resume}", flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr)
     steps_per_epoch = max(1, (len(data) - seq) // (CONFIG["batch"] * seq))
     total_steps = steps_per_epoch * args.epochs
@@ -266,6 +271,9 @@ def train_scratch(args, texts: list[str]) -> None:
                     text = "".join(itos.get(i, "") for i in out)
                 model.train()
                 log_sample(step, prompt, text, checkpoint=f"epoch-{epoch}")
+        os.makedirs(args.output_dir, exist_ok=True)
+        torch.save(model.state_dict(), os.path.join(
+            args.output_dir, f"checkpoint-epoch{epoch}.pt"))
     os.makedirs(args.output_dir, exist_ok=True)
     torch.save(model.state_dict(),
                os.path.join(args.output_dir, "model.pt"))
@@ -334,7 +342,7 @@ def train_lora(args, texts: list[str]) -> None:
         train_dataset=train_ds.map(tokenize, batched=True),
         eval_dataset=eval_ds.map(tokenize, batched=True),
     )
-    trainer.train()
+    trainer.train(resume_from_checkpoint=args.resume or None)
     metrics = trainer.evaluate()
     val = metrics.get("eval_loss")
     if val is not None:

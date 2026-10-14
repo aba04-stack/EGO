@@ -121,6 +121,21 @@ class TrainingPage(tk.Frame):
         self.runs_list.pack(fill="both", expand=True, pady=(6, 0))
         ttk.Button(runs_box, text=t('Экспорт CSV / MLflow'),
                    command=self.export_runs).pack(fill="x", pady=(6, 0))
+        tk.Label(runs_box, text=t('Чекпоинты'), bg=C["panel"],
+                 font=F_BOLD).pack(anchor="w", pady=(8, 0))
+        self.checkpoints_list = tk.Listbox(
+            runs_box, bg=C["panel"], fg=C["text"], highlightthickness=0,
+            bd=1, relief="solid", font=F_SMALL, height=6)
+        self.checkpoints_list.pack(fill="both", expand=True, pady=(6, 0))
+        ck_row = tk.Frame(runs_box, bg=C["panel"])
+        ck_row.pack(fill="x", pady=(6, 0))
+        ttk.Button(ck_row, text=t('Обновить'),
+                   command=self.refresh_checkpoints).pack(side="left")
+        ttk.Button(ck_row, text=t('▶ Resume'),
+                   command=self.resume_checkpoint).pack(side="left", padx=6)
+        ttk.Button(ck_row, text=t('Оставить 3'),
+                   command=self.prune_checkpoints).pack(side="left")
+        self._checkpoints = []
         self.refresh_runs()
 
     # ------------------------------------------------------------- actions
@@ -300,3 +315,58 @@ class TrainingPage(tk.Frame):
             t('CSV: {v1}').format(v1=csv_path) + "\n"
             + t('MLflow: {v1}').format(v1=mlflow_path),
             parent=self)
+
+
+    # ------------------------------------------------------------- checkpoints
+    def refresh_checkpoints(self):
+        from .checkpoints import bind_runs, find_checkpoints
+
+        root = self.app.workspace_root()
+        self.checkpoints_list.delete(0, "end")
+        self._checkpoints = []
+        if root is None:
+            return
+        found = bind_runs(find_checkpoints(root), self.app.runs.list(50))
+        self._checkpoints = found
+        for checkpoint in found:
+            self.checkpoints_list.insert("end", checkpoint.line())
+
+    def _selected_checkpoint(self):
+        selection = self.checkpoints_list.curselection()
+        if not selection or selection[0] >= len(self._checkpoints):
+            return None
+        return self._checkpoints[selection[0]]
+
+    def resume_checkpoint(self):
+        from .checkpoints import resume_command
+
+        checkpoint = self._selected_checkpoint()
+        if checkpoint is None:
+            self.app.set_status(t('Сначала выберите чекпоинт.'))
+            return
+        self.cmd_var.set(resume_command(checkpoint))
+        self.app.set_status(
+            t('Команда resume готова — нажмите «Запустить».'))
+
+    def prune_checkpoints(self):
+        from tkinter import messagebox
+
+        from .checkpoints import delete_checkpoints, prune_plan
+
+        root = self.app.workspace_root()
+        if root is None or not self._checkpoints:
+            return
+        plan = prune_plan(self._checkpoints, keep=3)
+        if not plan:
+            self.app.set_status(t('Удалять нечего: чекпоинтов не больше трёх.'))
+            return
+        names = "\n".join(c.name for c in plan[:8])
+        if not messagebox.askyesno(
+                t('Чекпоинты'),
+                t('Удалить старые чекпоинты ({v1})?').format(v1=len(plan))
+                + "\n" + names, parent=self):
+            return
+        deleted = delete_checkpoints(plan, root)
+        self.app.set_status(
+            t('Удалено чекпоинтов: {v1}').format(v1=deleted))
+        self.refresh_checkpoints()

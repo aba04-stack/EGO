@@ -60,6 +60,10 @@ class ModelsPage(tk.Frame):
         ttk.Button(toolbar, text=t('Экспорт…'), command=self.export_manifest).pack(side="left",
                                                                                padx=8)
         ttk.Button(toolbar, text=t('Импорт…'), command=self.import_manifest).pack(side="left")
+        ttk.Button(toolbar, text=t('Скачать с HF…'),
+                   command=self.download_hf).pack(side="left", padx=8)
+        ttk.Button(toolbar, text=t('Push на HF…'),
+                   command=self.push_hf).pack(side="left")
 
         columns = ("name", "kind", "location", "model_id", "updated")
         self.tree = ttk.Treeview(table_card, columns=columns, show="headings", height=8)
@@ -376,3 +380,68 @@ class ModelsPage(tk.Frame):
             return
         self.refresh()
         messagebox.showinfo(t('Модели'), t('Записей в манифесте: {count}').format(count=count), parent=self)
+
+
+    # ------------------------------------------------------------- HF Hub
+    def _hf_token(self) -> str:
+        try:
+            return self.app.secrets.get("connector.hf_token") or ""
+        except Exception:
+            return ""
+
+    def download_hf(self):
+        """Скачать модель с Hugging Face Hub в библиотеку."""
+        from tkinter import simpledialog
+
+        from .hf_hub import download_model
+
+        repo = simpledialog.askstring(
+            t('Скачать с Hugging Face'), t('Repo id (owner/name):'),
+            parent=self)
+        if not repo:
+            return
+        library = self.app.model_registry().library_dir
+
+        def done(result):
+            self.refresh()
+            messagebox.showinfo(t('Hugging Face'), result.render(),
+                                parent=self)
+
+        def failed(error):
+            messagebox.showerror(t('Hugging Face'), str(error), parent=self)
+
+        self.app.start_async(
+            t('Скачивание {v1}').format(v1=repo),
+            lambda: download_model(repo, library, self._hf_token()),
+            done, failed)
+
+    def push_hf(self):
+        """Отправить выбранную локальную модель на Hugging Face Hub."""
+        from tkinter import simpledialog
+
+        from .hf_hub import push_folder
+
+        entry = self._selected_entry()
+        if entry is None or not Path(entry.location).is_dir():
+            messagebox.showinfo(
+                t('Hugging Face'),
+                t('Сначала выберите модель с локальной папкой.'),
+                parent=self)
+            return
+        repo = simpledialog.askstring(
+            t('Push на Hugging Face'), t('Repo id (owner/name):'),
+            initialvalue=entry.model_id or "", parent=self)
+        if not repo:
+            return
+        token = self._hf_token()
+        folder = Path(entry.location)
+
+        def done(url):
+            messagebox.showinfo(t('Hugging Face'), str(url), parent=self)
+
+        def failed(error):
+            messagebox.showerror(t('Hugging Face'), str(error), parent=self)
+
+        self.app.start_async(
+            t('Push {v1}').format(v1=repo),
+            lambda: push_folder(repo, folder, token), done, failed)

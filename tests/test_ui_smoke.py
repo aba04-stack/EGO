@@ -1906,3 +1906,18 @@ def test_stage41_wizard_lora_fields(fake_ui):
     page.wizard_qlora_var.set(True)
     cfg = page.train_script_config()
     assert cfg.lora_r == 8 and cfg.qlora
+
+
+def test_stage42_hf_and_checkpoints_ui(fake_ui, tmp_path, monkeypatch):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    training = app.pages["training"]
+    out = tmp_path / "runs" / "m" / "checkpoint-100"
+    out.mkdir(parents=True)
+    (out / "model.safetensors").write_bytes(b"w" * 5)
+    monkeypatch.setattr(app, "workspace_root", lambda: tmp_path)
+    training.refresh_checkpoints()
+    assert training._checkpoints
+    training.checkpoints_list.selection_set(0)
+    training.resume_checkpoint()
+    assert "--resume" in training.cmd_var.get()

@@ -1977,3 +1977,22 @@ def test_stage46_market_row_and_fonts(fake_ui, tmp_path, monkeypatch):
     from alterego_training_hub.theme import detect_fonts
 
     assert detect_fonts(["Inter", "Consolas"])[0] == "Inter"
+
+
+def test_stage47_embedder_choice(fake_ui):
+    from alterego_training_hub.semantic_search import ApiEmbedder, HashEmbedder
+
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    page = app.pages["search"]
+    assert isinstance(page._make_embedder(), HashEmbedder)
+    app.settings.mentor_base_url = "https://api.example/v1"
+    app.settings.embeddings_model = "emb-1"
+
+    class FakeSecrets:
+        def get(self, name):
+            return "sk-test"
+
+    app.secrets = FakeSecrets()
+    chosen = page._make_embedder()
+    assert isinstance(chosen, ApiEmbedder) and chosen.id == "api:emb-1"

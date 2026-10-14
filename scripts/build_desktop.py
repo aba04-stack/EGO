@@ -31,6 +31,10 @@ def main() -> int:
         "--paths", str(ROOT / "src"),
         # keyring discovers backends via entry points; collect them explicitly.
         "--collect-submodules", "keyring.backends",
+        "--add-data",
+        f"{ROOT / 'src' / 'alterego_training_hub' / 'assets' / 'fonts'}"
+        f"{';' if sys.platform.startswith('win') else ':'}"
+        "alterego_training_hub/assets/fonts",
         str(ROOT / "run_app.py"),
     ]
     print("Running:", " ".join(command))

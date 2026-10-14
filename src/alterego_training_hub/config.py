@@ -30,6 +30,7 @@ class AppSettings:
     mentor_provider: str = "OpenAI-compatible"
     mentor_base_url: str = ""
     mentor_model: str = ""
+    embeddings_model: str = ""  # пусто = локальные hash-эмбеддинги в поиске
     mentor_temperature: float = 0.2
     mentor_max_tokens: int = 1200
     model_library_path: str = ""

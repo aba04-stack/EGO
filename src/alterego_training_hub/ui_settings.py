@@ -64,6 +64,15 @@ class SettingsPage(tk.Frame):
                                         font=F_BASE)
         self.model_combo.grid(row=2, column=1, sticky="ew", pady=5)
 
+        tk.Label(mentor_card, text=t('Модель эмбеддингов (поиск)'),
+                 bg=C["panel"], font=F_BASE).grid(
+            row=4, column=0, sticky="w", padx=(0, 10), pady=5)
+        self.embeddings_var = tk.StringVar(
+            value=self.app.settings.embeddings_model)
+        tk.Entry(mentor_card, textvariable=self.embeddings_var,
+                 bd=1, relief="solid", font=F_BASE).grid(
+            row=4, column=1, sticky="ew", pady=5)
+
         gen_row = tk.Frame(mentor_card, bg=C["panel"])
         gen_row.grid(row=3, column=0, columnspan=2, sticky="w", pady=5)
         tk.Label(gen_row, text=t('Температура'), bg=C["panel"], font=F_BASE).pack(
@@ -495,6 +504,7 @@ class SettingsPage(tk.Frame):
         self.app.settings.mentor_base_url = (
             self.mentor_vars["mentor_base_url"].get().strip() or info.base_url)
         self.app.settings.mentor_model = self.model_var.get().strip()
+        self.app.settings.embeddings_model = self.embeddings_var.get().strip()
         try:
             temperature = float(self.temp_var.get())
             max_tokens = int(self.tokens_var.get())

@@ -87,6 +87,8 @@ def color_map(old: dict[str, str], new: dict[str, str]) -> dict[str, str]:
     return mapping
 
 
+from pathlib import Path
+
 # Font stacks “like the modern editors”: Inter/Segoe UI Variable first,
 # JetBrains Mono/Cascadia for code.  ``detect_fonts`` picks the first
 # family actually installed; tuples are rebuilt by ``set_fonts``.
@@ -96,6 +98,66 @@ MONO_FONT_CANDIDATES = ("JetBrains Mono", "Cascadia Code", "Consolas",
                         "SF Mono", "Menlo", "DejaVu Sans Mono")
 DEFAULT_UI_FONT = "Segoe UI"
 DEFAULT_MONO_FONT = "Consolas"
+
+
+def bundled_fonts_dir() -> Path:
+    return Path(__file__).parent / "assets" / "fonts"
+
+
+def register_bundled_fonts(fonts_dir=None) -> list[Path]:
+    """Make the bundled Inter/JetBrains Mono usable by Tk, per platform.
+
+    Windows: AddFontResourceEx (private, per-process).  macOS/Linux:
+    copy into the per-user fonts folder (+ fc-cache on Linux).
+    Never raises; returns font files that are in place.
+    """
+    import shutil
+    import sys
+
+    source_dir = Path(fonts_dir) if fonts_dir else bundled_fonts_dir()
+    if not source_dir.is_dir():
+        return []
+    files = sorted(source_dir.glob("*.ttf"))
+    done: list[Path] = []
+    try:
+        if sys.platform.startswith("win"):
+            import ctypes
+
+            for file in files:
+                added = ctypes.windll.gdi32.AddFontResourceExW(
+                    str(file), 0x10, None)  # FR_PRIVATE
+                if added:
+                    done.append(file)
+        elif sys.platform == "darwin":
+            target_dir = Path.home() / "Library" / "Fonts"
+            target_dir.mkdir(parents=True, exist_ok=True)
+            for file in files:
+                target = target_dir / file.name
+                if not target.exists():
+                    shutil.copyfile(file, target)
+                done.append(target)
+        else:
+            target_dir = (Path.home() / ".local" / "share" / "fonts"
+                          / "alterego")
+            target_dir.mkdir(parents=True, exist_ok=True)
+            copied = False
+            for file in files:
+                target = target_dir / file.name
+                if not target.exists():
+                    shutil.copyfile(file, target)
+                    copied = True
+                done.append(target)
+            if copied:
+                import subprocess
+
+                try:
+                    subprocess.run(["fc-cache", "-f", str(target_dir)],
+                                   capture_output=True, timeout=30)
+                except (OSError, subprocess.SubprocessError):
+                    pass
+    except Exception:
+        return done
+    return done
 
 
 def detect_fonts(families) -> tuple[str, str]:

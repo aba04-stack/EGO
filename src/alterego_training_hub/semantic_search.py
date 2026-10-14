@@ -48,8 +48,10 @@ def _tokens(text: str) -> list[str]:
 class HashEmbedder:
     """Deterministic offline embedder: hashed token counts, L2-normalized."""
 
+
     def __init__(self, dim: int = 384):
         self.dim = dim
+        self.id = f"hash-v1-{dim}"
 
     def __call__(self, texts: list[str]) -> list[list[float]]:
         return [self._embed_one(text) for text in texts]
@@ -73,6 +75,7 @@ class ApiEmbedder:
 
     def __init__(self, base_url: str, model: str, api_key: str = "",
                  transport: Callable[[str, dict, dict], dict] | None = None):
+        self.id = f"api:{model}"
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.api_key = api_key
@@ -181,6 +184,8 @@ class SemanticIndex:
         """(Re)build; ``cached`` is a previous :meth:`to_cache` payload."""
         old: dict[str, list[Chunk]] = {}
         old_fp: dict[str, str] = {}
+        if cached and cached.get("embedder") not in (None, self.embedder_id):
+            cached = None  # vectors from another embedder are incomparable
         if cached:
             old_fp = dict(cached.get("fingerprints", {}))
             for raw in cached.get("chunks", []):
@@ -217,9 +222,14 @@ class SemanticIndex:
         return stats
 
     # ------------------------------------------------------------- cache
+    @property
+    def embedder_id(self) -> str:
+        return str(getattr(self.embedder, "id", "custom"))
+
     def to_cache(self) -> dict[str, Any]:
         return {
             "version": 1,
+            "embedder": self.embedder_id,
             "fingerprints": self._fingerprints,
             "chunks": [{"path": c.path, "line": c.line, "text": c.text,
                         "vector": c.vector} for c in self.chunks],

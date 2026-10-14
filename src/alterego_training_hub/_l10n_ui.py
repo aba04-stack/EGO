@@ -277,6 +277,7 @@ UI_MESSAGES: dict[str, str] = {
     "Модель и прогресс": "Model & progress",
     "Модель не выбрана в каталоге.": "No model selected in the catalog.",
     "Модель не использовала структурный протокол в последнем ответе. Включите «Протокол мыслей» на странице «Модель» — тогда каждый ответ будет раскрываться в цепочку «Мысль → Действие → Ответ».": "The model did not use the structured protocol in its last reply. Enable “Thought protocol” on the Model page — then every reply expands into a “Thought → Action → Answer” chain.",
+    "Модель эмбеддингов (поиск)": "Embeddings model (search)",
     "Модель: {v1}\n\n{v3}": "Model: {v1}\n\n{v3}",
     "Модель: {v1} ({v3})": "Model: {v1} ({v3})",
     "Модель: мастер «Своя ЛЛМ» — план": "Model: “Your own LLM” wizard — plan",

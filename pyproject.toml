@@ -19,6 +19,9 @@ package = ["pyinstaller>=6.0"]
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+alterego_training_hub = ["assets/fonts/*.ttf", "assets/fonts/*.txt"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]

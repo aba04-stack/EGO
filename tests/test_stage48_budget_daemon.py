@@ -12,7 +12,9 @@ def _pods(*specs):
 def test_apply_guard_syncs_and_stops(tmp_path):
     ledger = BudgetLedger.load(tmp_path / "b.json")
     now = time.time()
-    ledger.observe("old", 1.0, now=now - 7200)  # already 2h accrued
+    ledger.observe("old", 1.0, now=now - 7200, managed=True)  # already 2h accrued
+    # "new" не создан приложением: учитывается, но не автостопится
+    ledger.observe("new", 0.5, now=now - 7200, managed=True)
     stopped = []
     verdict = apply_guard(
         ledger,
@@ -27,8 +29,10 @@ def test_apply_guard_marks_gone_pods_stopped(tmp_path):
     ledger = BudgetLedger.load(tmp_path / "b.json")
     now = time.time()
     apply_guard(ledger, _pods(("p1", "RUNNING", 1.0)), 0.0, now=now)
-    apply_guard(ledger, [], 0.0, now=now + 60)
-    assert ledger.pods["p1"].stopped_at == now + 60
+    apply_guard(ledger, [], 0.0, now=now + 60)   # пропуск 1: ещё жив
+    assert ledger.pods["p1"].stopped_at == 0.0
+    apply_guard(ledger, [], 0.0, now=now + 120)  # пропуск 2: остановлен
+    assert ledger.pods["p1"].stopped_at == now + 120
 
 
 def test_apply_guard_no_cap_observes_only(tmp_path):

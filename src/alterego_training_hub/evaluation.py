@@ -120,25 +120,38 @@ def build_eval_report(text: str) -> EvalReport:
     best = min(points, key=lambda point: point.val_loss)
     report.best_epoch = best.epoch
 
-    # Overfitting: val worsens after the best epoch while train improves.
+    # Overfitting (эвристика): val растёт минимум две точки подряд
+    # после лучшей эпохи при снижающемся train_loss. Одного скачка
+    # мало — шум валидации не должен помечаться переобучением.
     if len(points) >= 3:
         after = [point for point in points if point.epoch > best.epoch]
-        later = after[-1] if after else None
-        best_train = best.train_loss if best.train_loss == best.train_loss \
-            else float("inf")
-        if (later is not None and later.val_loss == later.val_loss
-                and later.train_loss == later.train_loss
-                and later.val_loss > best.val_loss * 1.05
-                and later.train_loss < best_train):
-            report.overfitting = True
+        if after:
+            # Одна точка после лучшей: нужен крупный скачок (+20%);
+            # две и больше: монотонный рост и суммарно >+5%.
+            rising = all(
+                after[i].val_loss < after[i + 1].val_loss
+                for i in range(len(after) - 1)) and (
+                len(after) >= 2 or after[-1].val_loss > best.val_loss * 1.2)
+            later = after[-1]
+            best_train = (best.train_loss
+                          if best.train_loss == best.train_loss
+                          else float("inf"))
+            if (rising and later.train_loss == later.train_loss
+                    and later.val_loss > best.val_loss * 1.05
+                    and later.train_loss < best_train):
+                report.overfitting = True
 
     final = points[-1]
+    caution = (" Это эвристика по логу, а не подтверждение качества: "
+               "финально проверяйте модель на отложенных примерах.")
     if report.overfitting:
         report.verdict = (f"Рекомендация: остановиться на эпохе {best.epoch} "
-                          f"или включить раннюю остановку (early_stop_patience).")
+                          f"или включить раннюю остановку (early_stop_patience)."
+                          + caution)
     elif final.val_loss == best.val_loss:
-        report.verdict = "Валидация улучшается — обучение идёт здоровым темпом."
+        report.verdict = ("Валидация улучшается — обучение идёт здоровым "
+                          "темпом." + caution)
     else:
         report.verdict = (f"Лучший результат был на эпохе {best.epoch}; "
-                          "следите за разрывом train/val.")
+                          "следите за разрывом train/val." + caution)
     return report

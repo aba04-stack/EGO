@@ -463,7 +463,8 @@ class WorkspaceTools:
         except subprocess.TimeoutExpired:
             raise ToolError(f"Команда не завершилась за {timeout:.0f} сек.") from None
         output = _clip(result.stdout or "")
-        return {"ok": True, "command": command, "returncode": result.returncode, "output": output}
+        return {"ok": result.returncode == 0, "command": command,
+                "returncode": result.returncode, "output": output}
 
     def snapshot_json(self) -> str:
         """Short JSON summary of the workspace for prompt context."""

@@ -73,6 +73,8 @@ def test_submit_and_sync(tmp_path):
     synced = queue.sync(job.id, FakePodClient(
         pods=[{"id": "pod-123", "desiredStatus": "RUNNING"}]))
     assert synced.status == "running"
+    first_miss = queue.sync(job.id, FakePodClient(pods=[]))
+    assert first_miss.status == "running"  # один пропуск — ещё не failed
     lost = queue.sync(job.id, FakePodClient(pods=[]))
     assert lost.status == "failed" and "не найден" in lost.error
 

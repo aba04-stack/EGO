@@ -23,11 +23,14 @@ class PodSpend:
     hourly_usd: float
     started_at: float
     stopped_at: float = 0.0  # 0 = still running (as far as we know)
+    closed_usd: float = 0.0  # расходы прошлых сегментов (стоп→снова виден)
+    managed: bool = False    # создан приложением: только такие автостопятся
+    missing_syncs: int = 0   # подряд синхронизаций без этого пода
 
     def accrued(self, now: float) -> float:
         end = self.stopped_at or now
         hours = max(0.0, (end - self.started_at) / 3600.0)
-        return hours * max(0.0, self.hourly_usd)
+        return self.closed_usd + hours * max(0.0, self.hourly_usd)
 
 
 @dataclass
@@ -47,7 +50,8 @@ class BudgetLedger:
             try:
                 spend = PodSpend(**{k: item[k] for k in
                                     ("pod_id", "hourly_usd", "started_at",
-                                     "stopped_at") if k in item})
+                                     "stopped_at", "closed_usd", "managed",
+                                     "missing_syncs") if k in item})
             except (TypeError, KeyError):
                 continue
             ledger.pods[spend.pod_id] = spend
@@ -64,17 +68,31 @@ class BudgetLedger:
 
     # ------------------------------------------------------------ tracking
     def observe(self, pod_id: str, hourly_usd: float,
-                now: float | None = None) -> PodSpend:
-        """Register/refresh a running pod; reopens a stopped entry once."""
+                now: float | None = None, *, managed: bool = False) -> PodSpend:
+        """Register/refresh a running pod.
+
+        A pod that reappears after being marked stopped keeps its
+        previously accrued spend: the closed segment is folded into
+        ``closed_usd`` instead of being silently dropped.
+        """
         now = time.time() if now is None else now
         spend = self.pods.get(pod_id)
-        if spend is None or spend.stopped_at:
+        if spend is None:
             spend = PodSpend(pod_id=pod_id,
                              hourly_usd=float(hourly_usd or 0.0),
                              started_at=now)
             self.pods[pod_id] = spend
+        elif spend.stopped_at:
+            spend.closed_usd = spend.accrued(now)
+            spend.started_at = now
+            spend.stopped_at = 0.0
+            if hourly_usd:
+                spend.hourly_usd = float(hourly_usd)
         elif hourly_usd:
             spend.hourly_usd = float(hourly_usd)
+        spend.missing_syncs = 0
+        if managed:
+            spend.managed = True
         return spend
 
     def mark_stopped(self, pod_id: str, now: float | None = None) -> None:
@@ -102,7 +120,8 @@ class BudgetVerdict:
             return f"Потолок не задан · потрачено ${self.spent_usd:.2f}"
         left = self.cap_usd - self.spent_usd
         base = (f"Бюджет: ${self.spent_usd:.2f} из ${self.cap_usd:.2f} "
-                f"(осталось ${left:.2f})")
+                f"(осталось ${left:.2f}; локальная оценка с первого "
+                "наблюдения пода, не финальный счёт провайдера)")
         if self.stopped:
             base += f" · АВТОСТОП: {', '.join(self.stopped)}"
         elif self.over:
@@ -119,7 +138,11 @@ def check_budget(ledger: BudgetLedger, cap_usd: float,
                             spent_usd=spent,
                             over=bool(cap_usd and spent > cap_usd))
     if verdict.over and stopper is not None:
+        # Автостоп — только поды, созданные приложением (managed):
+        # чужие ресурсы аккаунта учитываем в расходах, но не трогаем.
         for spend in ledger.running():
+            if not spend.managed:
+                continue
             try:
                 stopper(spend.pod_id)
             except Exception:
@@ -147,7 +170,8 @@ def sync_ledger(ledger: BudgetLedger, pods, now: float | None = None) -> None:
         pod_id = str((pod or {}).get("id") or "")
         if not pod_id:
             continue
-        status = str(pod.get("status") or "").upper()
+        status = str(
+            pod.get("desiredStatus") or pod.get("status") or "").upper()
         if status in ACTIVE_POD_STATUSES:
             ledger.observe(pod_id, _pod_hourly(pod), now=now)
             active_ids.add(pod_id)
@@ -155,7 +179,10 @@ def sync_ledger(ledger: BudgetLedger, pods, now: float | None = None) -> None:
             ledger.mark_stopped(pod_id, now=now)
     for spend in ledger.running():
         if spend.pod_id not in active_ids:
-            ledger.mark_stopped(spend.pod_id, now=now)
+            # Один пропуск в ответе API — не доказательство остановки.
+            spend.missing_syncs += 1
+            if spend.missing_syncs >= 2:
+                ledger.mark_stopped(spend.pod_id, now=now)
 
 
 def apply_guard(ledger: BudgetLedger, pods, cap_usd: float,

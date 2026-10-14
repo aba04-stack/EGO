@@ -40,20 +40,29 @@ def _fmt(value: float) -> str:
     return f"{value:.4f}" if not math.isnan(value) else "—"
 
 
+def _metric_name(summary: MetricsSummary) -> str:
+    """The one comparable metric of a run: val_loss beats train loss."""
+    for key in ("val_loss", "loss", "train_loss"):
+        if summary.series(key):
+            return key
+    return ""
+
+
 def _final_loss(summary: MetricsSummary) -> float:
-    for key in ("loss", "train_loss", "val_loss"):
-        values = summary.series(key)
-        if values:
-            return values[-1]
-    return float("nan")
+    name = _metric_name(summary)
+    values = summary.series(name) if name else []
+    return values[-1] if values else float("nan")
 
 
 def _best_loss(summary: MetricsSummary) -> float:
-    values = [value for key in ("loss", "train_loss", "val_loss")
-              for value in summary.series(key)]
-    values += list(summary.best.values())
-    finite = [value for value in values if not math.isnan(value)]
-    return min(finite) if finite else float("nan")
+    """Best of the run's single comparable metric (never mixed kinds)."""
+    name = _metric_name(summary)
+    values = [v for v in (summary.series(name) if name else [])
+              if not math.isnan(v)]
+    best = summary.best.get(name) if name else None
+    if best is not None and not math.isnan(best):
+        values.append(best)
+    return min(values) if values else float("nan")
 
 
 def _converge_epoch(summary: MetricsSummary, target: float) -> int | None:
@@ -76,6 +85,13 @@ def compare_runs(a: MetricsSummary, b: MetricsSummary, *,
     report = ComparisonReport(label_a=label_a, label_b=label_b)
     report.final_loss_a, report.final_loss_b = _final_loss(a), _final_loss(b)
     report.best_loss_a, report.best_loss_b = _best_loss(a), _best_loss(b)
+    if _metric_name(a) != _metric_name(b) and (_metric_name(a)
+                                                or _metric_name(b)):
+        report.verdict = (
+            "Несопоставимо: у прогонов разные метрики "
+            f"({_metric_name(a) or 'нет'} vs {_metric_name(b) or 'нет'}); "
+            "сравнивайте val_loss с val_loss.")
+        return report
     target = min(report.best_loss_a, report.best_loss_b) * 1.25
     report.converge_a, report.converge_b = _converge_epoch(a, target), \
         _converge_epoch(b, target)

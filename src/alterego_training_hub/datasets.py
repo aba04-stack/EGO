@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import csv
-import io
 import json
 import time
 import uuid
@@ -83,15 +82,18 @@ def preview_rows(path: Path, fmt: str, limit: int = MAX_PREVIEW_ROWS) -> list[di
         elif fmt in {"csv", "tsv"}:
             delimiter = "\t" if fmt == "tsv" else ","
             with path.open("r", encoding="utf-8", errors="replace", newline="") as handle:
-                reader = csv.DictReader(io.StringIO(handle.read(200_000)),
-                                        delimiter=delimiter)
+                reader = csv.DictReader(handle, delimiter=delimiter)
                 for row in reader:
                     rows.append(dict(row))
                     if len(rows) >= limit:
                         break
         elif fmt == "txt":
-            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-            rows = [{"text": line[:300]} for line in lines[:limit] if line.strip()]
+            with path.open("r", encoding="utf-8", errors="replace") as handle:
+                for line in handle:
+                    if line.strip():
+                        rows.append({"text": line.strip()[:300]})
+                    if len(rows) >= limit:
+                        break
     except (OSError, json.JSONDecodeError):
         return rows
     return rows

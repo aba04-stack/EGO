@@ -33,6 +33,7 @@ class CloudJob:
     provider: str = "runpod"  # "runpod" | "colab" | "manual"
     status: str = "pending"
     pod_id: str = ""
+    missing_polls: int = 0  # подряд ответов API без этого пода
     log: str = ""
     error: str = ""
     created_at: float = field(default_factory=time.time)
@@ -89,9 +90,12 @@ class CloudJobQueue:
 
     def _save(self, jobs: list[CloudJob]) -> Path:
         self.library_dir.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(
+        tmp = self.path.with_suffix(".json.tmp")
+        tmp.write_text(
             json.dumps([asdict(job) for job in jobs],
-                       ensure_ascii=False, indent=2), encoding="utf-8")
+                       ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8")
+        tmp.replace(self.path)  # атомарно: прерванная запись не портит очередь
         return self.path
 
     def add(self, job: CloudJob) -> CloudJob:
@@ -123,11 +127,21 @@ class CloudJobQueue:
                 return job
         raise CloudQueueError(f"Задание не найдено: {job_id}")
 
-    def cancel(self, job_id: str) -> CloudJob:
+    def cancel(self, job_id: str, client=None) -> CloudJob:
+        """Cancel locally and, when a client is given, stop the cloud pod."""
         job = self.get(job_id)
         if job.status in {"done", "failed", "cancelled"}:
             raise CloudQueueError(f"Задание уже завершено: {job.status}.")
-        return self.update(job_id, status="cancelled")
+        note = ""
+        if client is not None and job.pod_id:
+            try:
+                client.terminate_pod(job.pod_id, confirmed=True)
+                note = f"pod {job.pod_id} завершён в облаке"
+            except Exception as exc:
+                note = (f"⚠ не удалось завершить pod в облаке: "
+                        f"{type(exc).__name__}: {exc}")
+        return self.update(job_id, status="cancelled",
+                           log=(job.log + "\n" + note).strip())
 
     def next_pending(self) -> CloudJob | None:
         pending = [job for job in self._load() if job.status == "pending"]
@@ -160,8 +174,11 @@ class CloudJobQueue:
             return self.update(job_id, status="failed",
                                error=f"{type(exc).__name__}: {exc}")
         pod_id = str(pod.get("id") or pod.get("podId") or "")
-        return self.update(job_id, status="submitted", pod_id=pod_id,
-                           log=f"pod создан: {pod_id}")
+        return self.update(
+            job_id, status="submitted", pod_id=pod_id,
+            log=(f"pod создан: {pod_id}; команда передана как dockerArgs — "
+                 "убедитесь, что образ контейнера её исполняет "
+                 "(иначе запустите обучение вручную по SSH)"))
 
     def sync(self, job_id: str, client) -> CloudJob:
         """Refresh job status from the provider (RunPod pod list)."""
@@ -178,6 +195,12 @@ class CloudJobQueue:
                 mapped = {"RUNNING": "running", "EXITED": "done",
                           "TERMINATED": "done", "FAILED": "failed"}.get(
                     desired.upper(), job.status)
-                return self.update(job_id, status=mapped)
-        return self.update(job_id, status="failed",
-                           error="pod не найден в облаке")
+                return self.update(job_id, status=mapped, missing_polls=0)
+        # Один пропуск ответа API — ещё не смерть пода (пагинация/лаг):
+        # failed только после двух подряд пустых опросов.
+        missing = int(job.missing_polls or 0) + 1
+        if missing >= 2:
+            return self.update(job_id, status="failed", missing_polls=missing,
+                               error="pod не найден в облаке (2 опроса подряд)")
+        return self.update(job_id, missing_polls=missing,
+                           error="pod временно не виден в API (пропуск 1)")

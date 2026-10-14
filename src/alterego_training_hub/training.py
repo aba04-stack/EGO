@@ -7,6 +7,7 @@ read the log and propose fixes through the chat panel.
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import subprocess
 import threading
@@ -80,6 +81,25 @@ class TrainingStatus:
     command: str
 
 
+def _signal_process_tree(process, *, kill: bool) -> None:
+    """SIGTERM/SIGKILL the process group on POSIX; plain call elsewhere."""
+    import signal as _signal
+
+    try:
+        if os.name == "posix":
+            os.killpg(os.getpgid(process.pid),
+                      _signal.SIGKILL if kill else _signal.SIGTERM)
+        elif kill:
+            process.kill()
+        else:
+            process.terminate()
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            process.kill() if kill else process.terminate()
+        except Exception:
+            pass
+
+
 class TrainingRun:
     """Manages one training process at a time."""
 
@@ -110,12 +130,16 @@ class TrainingRun:
         with self._lock:
             if self._process is not None and self._process.poll() is None:
                 raise TrainingError("Обучение уже запущено. Сначала остановите его.")
-            stamp = time.strftime("%Y%m%d-%H%M%S")
+            stamp = (time.strftime("%Y%m%d-%H%M%S")
+                     + f"-{int((time.time() % 1) * 1e6):06d}-{os.getpid()}")
             self._log_path = self.log_dir / f"training-{stamp}.log"
             handle = self._log_path.open("w", encoding="utf-8")
             handle.write(f"# command: {command}\n# workspace: {root}\n# started: {stamp}\n\n")
             handle.flush()
             try:
+                popen_kwargs: dict = {}
+                if os.name == "posix":
+                    popen_kwargs["start_new_session"] = True  # своя группа: stop добивает детей
                 self._process = subprocess.Popen(
                     argv,
                     cwd=str(root),
@@ -125,6 +149,7 @@ class TrainingRun:
                     text=True,
                     encoding="utf-8",
                     errors="replace",
+                    **popen_kwargs,
                 )
             except FileNotFoundError:
                 handle.close()
@@ -157,11 +182,11 @@ class TrainingRun:
             process = self._process
         if process is None or process.poll() is not None:
             raise TrainingError("Сейчас ничего не запущено.")
-        process.terminate()
+        _signal_process_tree(process, kill=False)
         try:
             process.wait(timeout=15)
         except subprocess.TimeoutExpired:
-            process.kill()
+            _signal_process_tree(process, kill=True)
 
     def status(self) -> TrainingStatus:
         with self._lock:
@@ -180,9 +205,11 @@ class TrainingRun:
             path = self._log_path
         if path is None or not path.exists():
             return ""
-        raw = path.read_bytes()
-        if len(raw) > max_bytes:
-            raw = raw[-max_bytes:]
+        with path.open("rb") as handle:
+            handle.seek(0, os.SEEK_END)
+            size = handle.tell()
+            handle.seek(max(0, size - max_bytes))
+            raw = handle.read(max_bytes)
         return raw.decode("utf-8", errors="replace")
 
     def list_logs(self) -> list[Path]:

@@ -18,7 +18,6 @@ def wait_done(run: TrainingRun, seconds: float = 10.0) -> None:
 def test_run_command_and_capture_log(tmp_path):
     run = TrainingRun(tmp_path / "logs")
     log = run.start(f'{sys.executable} -c "print(\'epoch 1 loss 0.5\')"', tmp_path)
-    assert run.status().running or True
     wait_done(run)
     status = run.status()
     assert status.running is False
@@ -54,3 +53,14 @@ def test_validation_and_double_start(tmp_path):
     assert run.status().running is False
     with pytest.raises(TrainingError):
         run.stop()
+
+
+def test_status_running_while_process_alive(tmp_path):
+    run = TrainingRun(tmp_path / "logs")
+    run.start(f'{sys.executable} -c "import time; time.sleep(3)"', tmp_path)
+    try:
+        assert run.status().running is True
+    finally:
+        run.stop()
+    wait_done(run)
+    assert run.status().running is False

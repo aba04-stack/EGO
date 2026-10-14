@@ -12,7 +12,7 @@ from alterego_training_hub.train_script import (
 def test_ledger_accrues_and_autostops(tmp_path):
     ledger = BudgetLedger.load(tmp_path / "budget.json")
     now = time.time()
-    ledger.observe("pod-1", 2.0, now=now - 3600)  # 1 hour at $2/h
+    ledger.observe("pod-1", 2.0, now=now - 3600, managed=True)  # 1 hour at $2/h
     verdict = check_budget(ledger, cap_usd=1.0, now=now)
     assert verdict.spent_usd >= 1.99 and verdict.over
     stopped = []
@@ -26,7 +26,7 @@ def test_ledger_accrues_and_autostops(tmp_path):
 
 def test_no_cap_no_stop(tmp_path):
     ledger = BudgetLedger.load(tmp_path / "b.json")
-    ledger.observe("p", 5.0, now=time.time() - 7200)
+    ledger.observe("p", 5.0, now=time.time() - 7200, managed=True)
     verdict = check_budget(ledger, cap_usd=0.0,
                            stopper=lambda pid: (_ for _ in ()).throw(
                                AssertionError("no stop without cap")))

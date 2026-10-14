@@ -38,7 +38,7 @@ class Checkpoint:
         val = (f" · val_loss={self.val_loss:.3f}"
                if self.val_loss is not None else "")
         run = f" · прогон {self.run_id}" if self.run_id else ""
-        return f"{self.name} · шаг {self.step or '—'}{val} · {size}{run}"
+        return f"{self.name} [{self.kind}] · шаг {self.step or '—'}{val} · {size}{run}"
 
 
 def _dir_size(path: Path) -> int:

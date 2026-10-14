@@ -230,7 +230,8 @@ def main() -> int:
         now = time.time()
         stopped: list[str] = []
         ledger.pods["pod-real"] = PodSpend(
-            pod_id="pod-real", hourly_usd=2.0, started_at=now - 3600)
+            pod_id="pod-real", hourly_usd=2.0, started_at=now - 3600,
+            managed=True)  # под создан приложением — только такие стопятся
         verdict = apply_guard(
             ledger, [{"id": "pod-real", "status": "RUNNING",
                       "costPerHr": 2.0}],
@@ -312,7 +313,7 @@ def main() -> int:
         work.mkdir()
         line = ("Маленькая модель учится предсказывать следующий "
                 "символ текста. " * 3) + "\n"
-        (work / "data.txt").write_text(line * 120, encoding="utf-8")
+        (work / "data.txt").write_text(line * 300, encoding="utf-8")
         cfg = ScriptConfig(path="scratch",
                            preset=get_preset("llama-tiny"),
                            dataset_path=str(work / "data.txt"),

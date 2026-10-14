@@ -253,7 +253,14 @@ class GpuPage(tk.Frame):
                                 parent=self)
             return
         try:
-            CloudJobQueue(self.app.model_registry().library_dir).cancel(job.id)
+            client = None
+            try:
+                client = self.app.runpod_client()
+            except Exception:
+                client = None
+            CloudJobQueue(
+                self.app.model_registry().library_dir).cancel(
+                    job.id, client=client)
         except Exception as exc:
             messagebox.showerror(t('Облачные задания'), str(exc), parent=self)
             return
@@ -417,6 +424,16 @@ class GpuPage(tk.Frame):
                              self._after_gpu_created)
 
     def _after_gpu_created(self, pod):
+        try:
+            from .budget_guard import BudgetLedger
+
+            ledger = BudgetLedger.load()
+            ledger.observe(str(pod.get("id") or ""),
+                           float(pod.get("confirmed_gpu_hourly_usd") or 0),
+                           managed=True)
+            ledger.save()
+        except Exception:
+            pass
         self.gpu_notes_var.set(
             t('Создан ресурс {v1}. Проверьте статус и расходы.').format(v1=pod.get('id', '')))
         self.refresh_pods()

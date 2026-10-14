@@ -136,20 +136,50 @@ def log_sample(step: int, prompt: str, text: str, checkpoint: str = "") -> None:
                      ensure_ascii=False), flush=True)
 
 
+def _row_text(row) -> str:
+    """Текст строки датасета: text/prompt, instruction+output, messages."""
+    if isinstance(row, str):
+        return row
+    if not isinstance(row, dict):
+        return str(row or "")
+    messages = row.get("messages")
+    if isinstance(messages, list):
+        return "\\n".join(
+            f"{m.get('role', 'user')}: {m.get('content', '')}"
+            for m in messages if isinstance(m, dict) and m.get("content"))
+    text = str(row.get("text") or row.get("prompt")
+               or row.get("instruction") or "")
+    answer = str(row.get("output") or row.get("completion")
+                 or row.get("response") or "")
+    return f"{text}\\n{answer}" if answer else text
+
+
 def load_texts(path: str) -> list[str]:
-    """Датасет: .txt построчно, .jsonl (поле text/prompt), .json список."""
+    """Датасет построчно (стриминг): .txt, .jsonl, .json список.
+
+    Битые JSON-строки пропускаются с предупреждением, а не роняют
+    загрузку на середине файла.
+    """
     if path.endswith(".jsonl"):
-        rows = [json.loads(line) for line in open(path, encoding="utf-8")
-                if line.strip()]
-        return [str(r.get("text") or r.get("prompt") or "") for r in rows]
+        texts, bad = [], 0
+        with open(path, encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                try:
+                    texts.append(_row_text(json.loads(line)))
+                except json.JSONDecodeError:
+                    bad += 1
+        if bad:
+            print(f"⚠ Пропущено битых JSON-строк: {bad}", flush=True)
+        return texts
     if path.endswith(".json"):
         raw = json.load(open(path, encoding="utf-8"))
         if isinstance(raw, list):
-            return [str(r.get("text", r) if isinstance(r, dict) else r)
-                    for r in raw]
-        return [str(raw)]
-    return [line for line in open(path, encoding="utf-8").read().splitlines()
-            if line.strip()]
+            return [_row_text(row) for row in raw]
+        return [_row_text(raw)]
+    with open(path, encoding="utf-8") as handle:
+        return [line.rstrip("\\n") for line in handle if line.strip()]
 
 
 def main() -> None:
@@ -198,7 +228,7 @@ def train_scratch(args, texts: list[str]) -> None:
     stoi = {ch: i + 1 for i, ch in enumerate(vocab)}
     itos = {i: ch for ch, i in stoi.items()}
     data = torch.tensor([stoi.get(ch, 0) for ch in corpus], dtype=torch.long)
-    seq = min(CONFIG["seq_len"], 512)
+    seq = min(CONFIG["seq_len"], 1024)  # char-модель: предел по памяти позиций
     print(f"Токенизатор: char-level, vocab={len(stoi)} (пресет "
           f"{arch['id']}: ~{arch['params_est'] / 1e6:.0f}M параметров)", flush=True)
 
@@ -233,38 +263,78 @@ def train_scratch(args, texts: list[str]) -> None:
             pos = torch.arange(idx.size(1), device=idx.device)
             return self.head(self.blocks(self.embed(idx) + self.pos(pos)))
 
+    # Честный val: последние 10% токенов не участвуют в обучении.
+    n_val = max(seq + 2, len(data) // 10)
+    train_data, val_data = (data[:-n_val], data[-n_val:]) \
+        if len(data) > 2 * seq else (data, data)
     model = TinyLM().to(device)
+    if CONFIG["gpus"] > 1 and "LOCAL_RANK" in os.environ:
+        import torch.distributed as dist
+        dist.init_process_group(
+            "nccl" if torch.cuda.is_available() else "gloo")
+        model = nn.parallel.DistributedDataParallel(model)
     if args.resume and os.path.isfile(args.resume):
-        model.load_state_dict(torch.load(args.resume, map_location=device))
-        print(f"Resume: веса из {args.resume}", flush=True)
+        bundle = torch.load(args.resume, map_location=device)
+        state = bundle.get("state_dict", bundle) \
+            if isinstance(bundle, dict) else bundle
+        model.load_state_dict(state)
+        print(f"Resume: веса из {args.resume} "
+              "(оптимизатор и шаг начнутся заново)", flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr)
-    steps_per_epoch = max(1, (len(data) - seq) // (CONFIG["batch"] * seq))
+
+    def _bundle():
+        """Чекпоинт для самостоятельного восстановления: веса+словарь+конфиг."""
+        raw_model = model.module if hasattr(model, "module") else model
+        return {"state_dict": raw_model.state_dict(), "stoi": stoi,
+                "itos": {str(k): v for k, v in itos.items()},
+                "arch": arch, "seq": seq,
+                "config": {"seq_len": CONFIG["seq_len"],
+                           "lr": args.lr, "epochs": args.epochs}}
+    steps_per_epoch = max(1, (len(train_data) - seq) // (CONFIG["batch"] * seq))
+    accum = max(1, CONFIG["grad_accum"])
+
+    def batch_from(source):
+        starts = torch.randint(0, len(source) - seq - 1,
+                               (CONFIG["batch"],))
+        x = torch.stack([source[i:i + seq] for i in starts]).to(device)
+        y = torch.stack([source[i + 1:i + seq + 1] for i in starts]).to(device)
+        return x, y
     total_steps = steps_per_epoch * args.epochs
     print(f"Устройство: {device}, шагов: ~{total_steps}", flush=True)
     step = 0
     for epoch in range(1, args.epochs + 1):
         print(f"epoch {epoch}/{args.epochs}", flush=True)
         for _ in range(steps_per_epoch):
-            starts = torch.randint(0, len(data) - seq - 1,
-                                   (CONFIG["batch"],))
-            batch = torch.stack([data[s:s + seq] for s in starts]).to(device)
-            target = torch.stack([data[s + 1:s + seq + 1]
-                                  for s in starts]).to(device)
-            logits = model(batch)
-            loss = nn.functional.cross_entropy(
-                logits.reshape(-1, logits.size(-1)), target.reshape(-1))
             opt.zero_grad()
-            loss.backward()
+            value = 0.0
+            for _micro in range(accum):
+                batch, target = batch_from(train_data)
+                logits = model(batch)
+                loss = nn.functional.cross_entropy(
+                    logits.reshape(-1, logits.size(-1)),
+                    target.reshape(-1)) / accum
+                loss.backward()
+                value = float(loss.detach()) * accum
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
             step += 1
             if step % 20 == 0:
-                value = float(loss.detach())
                 mem = (f" mem={torch.cuda.max_memory_allocated() / 1e9:.2f}GB"
                        if torch.cuda.is_available() else "")
                 print(f"loss={value:.4f} step={step} "
                       f"ppl={math.exp(min(value, 20)):.2f}{mem}", flush=True)
-                print(f"eval: val_loss={value:.4f}", flush=True)
+                model.eval()
+                with torch.no_grad():
+                    val_losses = []
+                    for _v in range(4):
+                        vx, vy = batch_from(val_data)
+                        vlogits = model(vx)
+                        val_losses.append(float(nn.functional.cross_entropy(
+                            vlogits.reshape(-1, vlogits.size(-1)),
+                            vy.reshape(-1))))
+                model.train()
+                print(f"eval: val_loss={sum(val_losses) / len(val_losses):.4f}",
+                      flush=True)
             if step % max(1, CONFIG["sample_every"]) == 0:
                 model.eval()
                 with torch.no_grad():
@@ -282,11 +352,9 @@ def train_scratch(args, texts: list[str]) -> None:
                 model.train()
                 log_sample(step, prompt, text, checkpoint=f"epoch-{epoch}")
         os.makedirs(args.output_dir, exist_ok=True)
-        torch.save(model.state_dict(), os.path.join(
+        torch.save(_bundle(), os.path.join(
             args.output_dir, f"checkpoint-epoch{epoch}.pt"))
-    os.makedirs(args.output_dir, exist_ok=True)
-    torch.save(model.state_dict(),
-               os.path.join(args.output_dir, "model.pt"))
+    torch.save(_bundle(), os.path.join(args.output_dir, "model.pt"))
     print(f"Готово. Чекпоинт: {args.output_dir}/model.pt", flush=True)
 
 '''
@@ -311,7 +379,7 @@ def train_lora(args, texts: list[str]) -> None:
     lora_cfg = CONFIG["lora"]
     print(f"Базовая модель: {base} · LoRA r={lora_cfg['r']}, "
           f"alpha={lora_cfg['alpha']}, QLoRA={lora_cfg['qlora']}", flush=True)
-    tokenizer = AutoTokenizer.from_pretrained(base)
+    tokenizer = AutoTokenizer.from_pretrained(CONFIG["tokenizer"] or base)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     load_kwargs = {"torch_dtype": torch.bfloat16 if torch.cuda.is_available()
@@ -322,8 +390,18 @@ def train_lora(args, texts: list[str]) -> None:
             load_in_4bit=True, bnb_4bit_quant_type="nf4",
             bnb_4bit_compute_dtype=torch.bfloat16)
     model = AutoModelForCausalLM.from_pretrained(base, **load_kwargs)
-    targets = lora_cfg["target_modules"]
-    model = get_peft_model(model, LoraConfig(
+    if args.resume and os.path.isdir(args.resume) and os.path.exists(
+            os.path.join(args.resume, "adapter_config.json")):
+        from peft import PeftModel
+        print(f"Resume: адаптер из {args.resume} "
+              "(веса адаптера; оптимизатор начнётся заново)", flush=True)
+        model = PeftModel.from_pretrained(model, args.resume,
+                                          is_trainable=True)
+        targets = None
+    else:
+        targets = lora_cfg["target_modules"]
+    if targets is not None or not args.resume:
+        model = get_peft_model(model, LoraConfig(
         r=lora_cfg["r"], lora_alpha=lora_cfg["alpha"],
         lora_dropout=lora_cfg["dropout"],
         target_modules=None if targets == "auto" else
@@ -331,12 +409,21 @@ def train_lora(args, texts: list[str]) -> None:
          if targets != "all-linear" else "all-linear"),
         task_type="CAUSAL_LM"))
     rows = [{"text": t} for t in texts]
-    split = max(1, int(len(rows) * 0.9))
-    train_ds, eval_ds = Dataset.from_list(rows[:split]), Dataset.from_list(rows[split:])
+    random.Random(CONFIG["seed"]).shuffle(rows)
+    if len(rows) >= 2:
+        split = max(1, len(rows) - max(1, len(rows) // 10))
+        eval_rows = rows[split:]
+    else:
+        split, eval_rows = len(rows), []
+    train_ds = Dataset.from_list(rows[:split])
+    eval_ds = Dataset.from_list(eval_rows) if eval_rows else None
 
     def tokenize(batch):
-        return tokenizer(batch["text"], truncation=True,
-                         max_length=CONFIG["seq_len"])
+        enc = tokenizer(batch["text"], truncation=True,
+                        max_length=CONFIG["seq_len"])
+        # Без labels Trainer не получит loss от CausalLM.
+        enc["labels"] = [list(ids) for ids in enc["input_ids"]]
+        return enc
 
     trainer = Trainer(
         model=model,
@@ -348,12 +435,19 @@ def train_lora(args, texts: list[str]) -> None:
             num_train_epochs=args.epochs,
             learning_rate=args.lr,
             warmup_ratio=CONFIG["warmup_pct"] / 100.0,
-            logging_steps=20, eval_strategy="epoch", save_strategy="epoch",
+            logging_steps=20,
+            eval_strategy="epoch" if eval_ds is not None else "no",
+            save_strategy="epoch",
             report_to=[], seed=CONFIG["seed"]),
         train_dataset=train_ds.map(tokenize, batched=True),
-        eval_dataset=eval_ds.map(tokenize, batched=True),
+        eval_dataset=(eval_ds.map(tokenize, batched=True)
+                      if eval_ds is not None else None),
     )
-    trainer.train(resume_from_checkpoint=args.resume or None)
+    resume_ckpt = None
+    if args.resume and os.path.isdir(args.resume):
+        if os.path.exists(os.path.join(args.resume, "trainer_state.json")):
+            resume_ckpt = args.resume  # полный resume: оптимизатор/шаг/планировщик
+    trainer.train(resume_from_checkpoint=resume_ckpt)
     metrics = trainer.evaluate()
     val = metrics.get("eval_loss")
     if val is not None:

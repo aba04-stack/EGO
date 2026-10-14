@@ -180,6 +180,9 @@ This is a desktop control-plane MVP, not yet an end-to-end training orchestratio
 The next milestone is a typed remote training worker with resumable checkpoint/data transfers, explicit elapsed-time and total-cost guards, live logs, and end-to-end tests on a short disposable job.
 
 ## Releases
+- 0.30.0: parallel read-only agent tool calls (Cursor-style) — independent
+  reads/searches in one model block run concurrently with strict result
+  ordering, while mutations and confirmations stay strictly sequential.
 - 0.29.0: script smoke-run — one-click end-to-end verification of the
   generated train_llm.py (compile, import, CONFIG sanity, real dataset
   load via the script’s own loader, log-format round-trip) without a GPU.

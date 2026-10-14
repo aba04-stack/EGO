@@ -514,6 +514,18 @@ class MentorAgent:
                   if name not in self.extra_mutations}
         return frozenset(names)
 
+    def _parallel_safe(self, call: ToolCall, *, readonly: bool = False) -> bool:
+        """Read-only calls may run concurrently; mutations never do."""
+        if self.needs_confirmation(call.name):
+            return False
+        if readonly:
+            return True  # mutations are rejected fast inside _execute_call
+        if call.name in TOOL_NAMES:
+            return WorkspaceTools.is_readonly(call.name)
+        if call.name in self.extra_tools:
+            return call.name not in self.extra_mutations
+        return True  # unknown tool: immediate error dict, no side effects
+
     def needs_confirmation(self, name: str) -> bool:
         """In agent autonomy mode actions run freely (still backed up/logged)."""
         if self.autonomy == "agent":
@@ -601,9 +613,10 @@ class MentorAgent:
             messages.append(assistant_payload)
             if transcript is not None:
                 transcript.append(assistant_payload)
+            results = self._execute_calls(calls, ask_confirm, emit,
+                                          readonly=readonly)
             for index, call in enumerate(calls):
-                result = self._execute_call(call, index, ask_confirm, emit,
-                                            readonly=readonly)
+                result = results[index]
                 stats.tool_calls += 1
                 ok = bool(result.get("ok"))
                 if not ok:
@@ -713,6 +726,56 @@ class MentorAgent:
             usage=reply.usage,
             request_id=reply.request_id,
         )
+
+    def _execute_calls(
+        self,
+        calls: list[ToolCall],
+        confirm: ConfirmFn,
+        emit: EventFn,
+        *,
+        readonly: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Execute one model block: parallel readonly runs, ordered results.
+
+        Consecutive parallel-safe calls (reads/searches/diffs and read-only
+        context tools) run on a small thread pool; mutations and anything
+        needing confirmation flush the batch and run one-by-one, so side
+        effects stay strictly sequential and dialogues never race.
+        """
+        results: list[dict[str, Any] | None] = [None] * len(calls)
+        index = 0
+        while index < len(calls):
+            if not self._parallel_safe(calls[index], readonly=readonly):
+                results[index] = self._execute_call(
+                    calls[index], index, confirm, emit, readonly=readonly)
+                index += 1
+                continue
+            end = index
+            while end < len(calls) and self._parallel_safe(
+                    calls[end], readonly=readonly):
+                end += 1
+            batch = list(range(index, end))
+            if len(batch) == 1:
+                only = batch[0]
+                results[only] = self._execute_call(
+                    calls[only], only, confirm, emit, readonly=readonly)
+            else:
+                emit("parallel_batch", {"count": len(batch),
+                                        "names": [calls[i].name
+                                                  for i in batch]})
+                from concurrent.futures import ThreadPoolExecutor
+
+                def run_one(i: int) -> dict[str, Any]:
+                    return self._execute_call(
+                        calls[i], i, confirm, emit, readonly=readonly)
+
+                with ThreadPoolExecutor(max_workers=min(4, len(batch)),
+                                        thread_name_prefix="agent-ro") as pool:
+                    for i, result in zip(batch, pool.map(run_one, batch)):
+                        results[i] = result
+            index = end
+        return [result if result is not None else
+                {"ok": False, "error": "no result"} for result in results]
 
     def _execute_call(
         self,

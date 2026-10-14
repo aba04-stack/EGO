@@ -794,6 +794,7 @@ UI_MESSAGES: dict[str, str] = {
     "○ Ассистент — подтверждает действия": "○ Assistant — confirms actions",
     "● Режим агента — действует свободно": "● Agent mode — acts freely",
     "⚠ Watchdog: критическая проблема обучения": "⚠ Watchdog: critical training problem",
+    "⚡ параллельно: {v1} чтений": "⚡ in parallel: {v1} reads",
     "🎟 {tokens_today} ток.": "🎟 {tokens_today} tok.",
     "🤖 модель не выбрана": "🤖 no model selected"
 }

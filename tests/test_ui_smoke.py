@@ -1743,3 +1743,10 @@ def test_stage32_smoke_run_button(fake_ui, tmp_path):
     model_page.create_train_script()
     report = model_page.smoke_text()
     assert "7/7" in report, report
+
+
+def test_stage33_parallel_event_renders(fake_ui, tmp_path):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    app.chat_panel.on_agent_event("parallel_batch",
+                                  {"count": 3, "names": ["read_file"]})

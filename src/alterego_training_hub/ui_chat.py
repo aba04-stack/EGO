@@ -440,6 +440,11 @@ class ChatPage(tk.Frame):
                 t('↻ повтор запроса к модели (попытка {v1})').format(
                     v1=payload.get("attempt", "?")), "err")
             return
+        if kind == "parallel_batch":
+            self.log_activity(
+                t('⚡ параллельно: {v1} чтений').format(
+                    v1=payload.get("count", "?")), "act")
+            return
         if kind == "loop_detected":
             self.log_activity(
                 "⚠ " + t('Защита от зацикливания: агент остановлен'), "err")

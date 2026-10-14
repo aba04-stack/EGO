@@ -180,6 +180,9 @@ This is a desktop control-plane MVP, not yet an end-to-end training orchestratio
 The next milestone is a typed remote training worker with resumable checkpoint/data transfers, explicit elapsed-time and total-cost guards, live logs, and end-to-end tests on a short disposable job.
 
 ## Releases
+- 0.28.0: wizard now generates a ready-to-run `train_llm.py` (PyTorch loop
+  for from-scratch, HF Trainer + PEFT LoRA for fine-tuning) that logs in the
+  app’s own metric/sample formats — one click from plan to training.
 - 0.27.0: best-in-class agent hardening — loop guard against repeated
   failing calls, transient-error retry with backoff, error classification,
   recovery hints, per-turn stats, and an offline internal agent benchmark

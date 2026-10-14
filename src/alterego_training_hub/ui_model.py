@@ -236,6 +236,8 @@ class ModelDashboardPage(tk.Frame):
                    command=self.save_wizard_baseline).pack(side="left")
         ttk.Button(wiz_row3, text=t('Сравнить до/после'),
                    command=self.show_before_after).pack(side="left", padx=6)
+        ttk.Button(wiz_row3, text=t('Создать скрипт обучения'),
+                   command=self.create_train_script).pack(side="left")
         self.wizard_var = tk.StringVar(value="")
         tk.Label(wiz_card, textvariable=self.wizard_var, bg=C["panel"],
                  fg=C["muted"], font=F_SMALL, wraplength=860,
@@ -273,7 +275,7 @@ class ModelDashboardPage(tk.Frame):
                     rows = []
         return audit_rows(rows)
 
-    def wizard_plan_text(self) -> str:
+    def _wizard_plan_obj(self):
         from .wizard_plan import build_plan
 
         recipe = self._wizard_choice(self.recipe_combo, self._wizard_recipes)
@@ -282,7 +284,44 @@ class ModelDashboardPage(tk.Frame):
                           preset=preset, audit=self.wizard_audit(),
                           max_hourly=float(getattr(
                               self.app.settings, "runpod_max_gpu_hourly_usd", 0.5) or 0.5))
-        return plan.render()
+        return recipe, preset, plan
+
+    def wizard_plan_text(self) -> str:
+        return self._wizard_plan_obj()[2].render()
+
+    def train_script_config(self):
+        from .train_script import ScriptConfig
+
+        recipe, preset, plan = self._wizard_plan_obj()
+        advice = plan.advice
+        return ScriptConfig(
+            path=recipe.path, recipe_name=recipe.name, preset=preset,
+            dataset_path=self.wizard_dataset_var.get().strip(),
+            base_model=str(getattr(self.app.settings, "mentor_model", "") or ""),
+            lr=advice.lr, batch=advice.batch, epochs=advice.epochs,
+            seq_len=advice.seq_len, warmup_pct=advice.warmup_pct)
+
+    def create_train_script(self):
+        """Генерация train_llm.py из плана мастера в рабочую папку."""
+        from pathlib import Path
+        from tkinter import messagebox
+
+        from .train_script import generate_script, render_plan_note
+
+        cfg = self.train_script_config()
+        root = self.app.workspace_root()
+        target_dir = Path(root) if root is not None else (
+            self.app.model_registry().library_dir / "scripts")
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target = target_dir / "train_llm.py"
+        target.write_text(generate_script(cfg), encoding="utf-8")
+        self.app.settings.training_command = "python train_llm.py"
+        self.app.save_settings()
+        note = render_plan_note(cfg)
+        self.wizard_var.set(t('Скрипт сохранён: ') + str(target))
+        messagebox.showinfo(t('Скрипт обучения'), note + "\n\n" + str(target),
+                            parent=self)
+        return target
 
     def show_wizard_plan(self):
         from tkinter import messagebox

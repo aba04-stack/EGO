@@ -1710,3 +1710,20 @@ def test_stage30_agent_benchmark_button_and_events(fake_ui, tmp_path):
     chat = app.chat_panel
     chat.on_agent_event("retry", {"attempt": 1, "category": "transient"})
     chat.on_agent_event("loop_detected", {"name": "read_file", "detail": "x"})
+
+
+def test_stage31_wizard_generates_train_script(fake_ui, tmp_path):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    model_page = app.pages["model"]
+    data = tmp_path / "data.txt"
+    data.write_text("привет мир обучающие данные для модели\n" * 30,
+                    encoding="utf-8")
+    model_page.wizard_dataset_var.set(str(data))
+    target = model_page.create_train_script()
+    assert target.is_file()
+    code = target.read_text(encoding="utf-8")
+    import ast as _ast
+    _ast.parse(code)
+    assert '{"sample":' in code and "eval: val_loss=" in code
+    assert app.settings.training_command == "python train_llm.py"

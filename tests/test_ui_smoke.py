@@ -1636,3 +1636,32 @@ def test_stage26_transparency_thoughts_actions_context_critic(fake_ui, tmp_path)
     app.start_async = lambda label, task, done=None, failed=None: done(task())
     chat.run_critique_last()
     assert any("Критик" in m.content for m in chat.session.messages)
+
+
+def test_stage27_wizard_plan_tokenizer_baseline(fake_ui, tmp_path):
+    app_module = fake_ui["alterego_training_hub.ui"]
+    app = app_module.TrainingHubApp()
+    model_page = app.pages["model"]
+
+    # --- empty dataset: plan still renders with audit warnings
+    text = model_page.wizard_plan_text()
+    assert "🎯 Путь" in text and "💰 Ресурсы" in text and "▶ Шаги" in text
+
+    # --- dataset file: audit + plan with real rows, tokenizer trains & saves
+    data = tmp_path / "data.txt"
+    data.write_text(("привет мир это обучающие данные для модели\n" * 60)
+                    + "уникальная строка про обучение нейросетей\n",
+                    encoding="utf-8")
+    model_page.wizard_dataset_var.set(str(data))
+    plan = model_page.wizard_plan_text()
+    assert "Строк: 61" in plan or "61" in plan
+    model_page.train_tokenizer_now()
+    saved = list((app.model_registry().library_dir / "tokenizers").glob("*.json"))
+    assert saved
+    assert "Токенизатор сохранён" in model_page.wizard_var.get()
+
+    # --- baseline snapshot + before/after on empty logs does not crash
+    model_page.save_wizard_baseline()
+    assert model_page._wizard_baseline_path().is_file()
+    result = model_page.before_after_text()
+    assert "val_loss" in result

@@ -6,6 +6,6 @@ try:
 
     __version__ = _pkg_version("alterego_training_hub_desktop")
 except PackageNotFoundError:  # running from an unpacked source tree
-    __version__ = "0.24.0"
+    __version__ = "0.25.0"
 
 __all__ = ["__version__"]

@@ -182,6 +182,157 @@ class ModelDashboardPage(tk.Frame):
                  fg=C["muted"], font=F_SMALL, wraplength=860,
                  justify="left").pack(anchor="w")
 
+        # ---- Мастер «Своя ЛЛМ» (этап 27) --------------------------------
+        wiz = Collapsible(self, t('Мастер «Своя ЛЛМ»'))
+        wiz.pack(fill="x", padx=24, pady=(0, 12))
+        wiz_card = wiz.body
+        tk.Label(wiz_card,
+                 text=t('Путь от своих данных до обученной модели: выберите путь и пресет, укажите датасет — мастер проверит данные, посчитает GPU/часы/цену до старта и даст рекомендации.'),
+                 bg=C["panel"], fg=C["muted"], font=F_SMALL, wraplength=860,
+                 justify="left").pack(anchor="w")
+        wiz_row = tk.Frame(wiz_card, bg=C["panel"])
+        wiz_row.pack(fill="x", pady=(6, 2))
+        from .model_recipes import PRESETS, RECIPES
+
+        self._wizard_recipes = list(RECIPES)
+        self._wizard_presets = list(PRESETS)
+        tk.Label(wiz_row, text=t('Путь'), bg=C["panel"], font=F_BASE).pack(side="left")
+        self.recipe_combo = ttk.Combobox(
+            wiz_row, state="readonly", width=30,
+            values=[r.name for r in RECIPES])
+        self.recipe_combo.pack(side="left", padx=(4, 10))
+        self.recipe_combo.current(0)
+        tk.Label(wiz_row, text=t('Пресет'), bg=C["panel"], font=F_BASE).pack(side="left")
+        self.preset_combo = ttk.Combobox(
+            wiz_row, state="readonly", width=22,
+            values=[p.name for p in PRESETS])
+        self.preset_combo.pack(side="left", padx=(4, 0))
+        self.preset_combo.current(0)
+        wiz_row2 = tk.Frame(wiz_card, bg=C["panel"])
+        wiz_row2.pack(fill="x", pady=(4, 2))
+        tk.Label(wiz_row2, text=t('Датасет (файл)'), bg=C["panel"],
+                 font=F_BASE).pack(side="left")
+        self.wizard_dataset_var = tk.StringVar(value="")
+        tk.Entry(wiz_row2, textvariable=self.wizard_dataset_var, width=52,
+                 bd=1, relief="solid", font=F_BASE).pack(side="left", padx=(4, 8))
+        wiz_row3 = tk.Frame(wiz_card, bg=C["panel"])
+        wiz_row3.pack(fill="x", pady=(4, 2))
+        ttk.Button(wiz_row3, text=t('Рассчитать план'), style="Accent.TButton",
+                   command=self.show_wizard_plan).pack(side="left")
+        ttk.Button(wiz_row3, text=t('Обучить токенизатор'),
+                   command=self.train_tokenizer_now).pack(side="left", padx=6)
+        ttk.Button(wiz_row3, text=t('Снять baseline'),
+                   command=self.save_wizard_baseline).pack(side="left")
+        ttk.Button(wiz_row3, text=t('Сравнить до/после'),
+                   command=self.show_before_after).pack(side="left", padx=6)
+        self.wizard_var = tk.StringVar(value="")
+        tk.Label(wiz_card, textvariable=self.wizard_var, bg=C["panel"],
+                 fg=C["muted"], font=F_SMALL, wraplength=860,
+                 justify="left").pack(anchor="w")
+
+    def _wizard_choice(self, combo, items, fallback=0):
+        try:
+            index = combo.current()
+        except Exception:
+            index = fallback
+        if not isinstance(index, int) or index < 0 or index >= len(items):
+            index = fallback
+        return items[index]
+
+    def wizard_audit(self):
+        from .data_audit import audit_rows
+        from .datasets import read_rows
+
+        path = self.wizard_dataset_var.get().strip()
+        rows = []
+        if path:
+            from pathlib import Path
+
+            file = Path(path)
+            if file.is_file():
+                fmt = file.suffix.lstrip(".").lower() or "txt"
+                if fmt not in ("jsonl", "json", "csv", "tsv", "txt"):
+                    fmt = "txt"
+                try:
+                    rows = read_rows(file, fmt, limit=5000)
+                    if fmt == "txt":
+                        rows = [line for line in
+                                file.read_text(encoding="utf-8", errors="replace").splitlines()]
+                except Exception:  # noqa: BLE001 - wizard must not die on odd files
+                    rows = []
+        return audit_rows(rows)
+
+    def wizard_plan_text(self) -> str:
+        from .wizard_plan import build_plan
+
+        recipe = self._wizard_choice(self.recipe_combo, self._wizard_recipes)
+        preset = self._wizard_choice(self.preset_combo, self._wizard_presets)
+        plan = build_plan(path=recipe.path, recipe_name=recipe.name,
+                          preset=preset, audit=self.wizard_audit(),
+                          max_hourly=float(getattr(
+                              self.app.settings, "runpod_max_gpu_hourly_usd", 0.5) or 0.5))
+        return plan.render()
+
+    def show_wizard_plan(self):
+        from tkinter import messagebox
+
+        text = self.wizard_plan_text()
+        self.wizard_var.set(text.splitlines()[0] if text else "")
+        messagebox.showinfo(t('План «Своя ЛЛМ»'), text, parent=self)
+
+    def train_tokenizer_now(self):
+        from pathlib import Path
+
+        from .tokenizer_train import compression_stats, train_on_text
+
+        path = self.wizard_dataset_var.get().strip()
+        text = ""
+        if path and Path(path).is_file():
+            text = Path(path).read_text(encoding="utf-8", errors="replace")[:500_000]
+        if not text.strip():
+            self.wizard_var.set(t('Укажите текстовый датасет для токенизатора.'))
+            return
+        tok = train_on_text(text, vocab_size=800)
+        target = (self.app.model_registry().library_dir / "tokenizers"
+                  / "wizard-bpe.json")
+        tok.save(target)
+        stats = compression_stats(tok, text[:10000])
+        self.wizard_var.set(
+            t('Токенизатор сохранён: {v1} · словарь {v3}, {v5} симв/токен').format(
+                v1=target.name, v3=stats["vocab_size"],
+                v5=stats["chars_per_token"]))
+
+    def _wizard_baseline_path(self):
+        return self.app.model_registry().library_dir / "wizard-baseline.log"
+
+    def save_wizard_baseline(self):
+        target = self._wizard_baseline_path()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            tail = self.app.training.tail(20000)
+        except Exception:  # noqa: BLE001
+            tail = ""
+        target.write_text(tail or "", encoding="utf-8")
+        self.wizard_var.set(t('Baseline снят: ') + target.name)
+
+    def before_after_text(self) -> str:
+        from .wizard_plan import compare_before_after
+
+        target = self._wizard_baseline_path()
+        before = target.read_text(encoding="utf-8") if target.is_file() else ""
+        try:
+            after = self.app.training.tail(20000)
+        except Exception:  # noqa: BLE001
+            after = ""
+        return compare_before_after(before, after or "").render()
+
+    def show_before_after(self):
+        from tkinter import messagebox
+
+        text = self.before_after_text()
+        self.wizard_var.set(text.splitlines()[0] if text else "")
+        messagebox.showinfo(t('До / после'), text, parent=self)
+
     def save_transparency(self):
         self.app.settings.thought_protocol = bool(self.thought_var.get())
         self.app.settings.critic_enabled = bool(self.critic_var.get())

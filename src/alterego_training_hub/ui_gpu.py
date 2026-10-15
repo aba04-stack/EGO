@@ -471,7 +471,20 @@ class GpuPage(tk.Frame):
         self.app.start_async(t(t('Действие RunPod: {action}')).format(action=action),
                              lambda: client.pod_action(str(pod["id"]), action,
                                                        confirmed=True),
-                             lambda _: self.refresh_pods())
+                             lambda result: (
+                                 self.refresh_pods(),
+                                 self._report_pod_verification(result)))
+
+    def _report_pod_verification(self, result):
+        """Конечное состояние пода (этап F: stop != terminate)."""
+        check = (result or {}).get("verification") or {}
+        if not check:
+            return
+        messagebox.showinfo(
+            t(t('Управление GPU')),
+            check.get("note", "") + chr(10)
+            + t(t('Статус: {v1}')).format(v1=check.get("final_status", "")),
+            parent=self)
 
     def terminate_pod(self):
         pod = self._selected_pod()
@@ -491,7 +504,9 @@ class GpuPage(tk.Frame):
         self.app.start_async(t(t('Удаление GPU-ресурса')),
                              lambda: client.terminate_pod(str(pod["id"]),
                                                           confirmed=True),
-                             lambda _: self.refresh_pods())
+                             lambda result: (
+                                 self.refresh_pods(),
+                                 self._report_pod_verification(result)))
 
 
     def _apply_budget_guard(self, items):

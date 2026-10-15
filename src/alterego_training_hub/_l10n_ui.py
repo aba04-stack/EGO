@@ -669,6 +669,7 @@ UI_MESSAGES: dict[str, str] = {
     "Сравнить два последних запуска": "Compare the last two runs",
     "Сравнить до/после": "Compare before/after",
     "Статус": "Status",
+    "Статус: {v1}": "Status: {v1}",
     "Стр {line}, кол {v3}": "Ln {line}, col {v3}",
     "Страница: обновить (F5)": "Page: refresh (F5)",
     "Строк": "Lines",

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import math
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -217,19 +218,114 @@ class RunPodClient:
                     "официальном runpod-python); API не подтверждает запуск "
                     "команды внутри контейнера — проверьте логи/SSH пода")}
 
-    def pod_action(self, pod_id: str, action: str, *, confirmed: bool = False) -> dict[str, Any]:
+    # Конечные состояния RunPod (desiredStatus), подтверждающие действие.
+    _FINAL_STATES = {"stop": {"EXITED", "STOPPED"},
+                     "start": {"RUNNING"},
+                     "terminate": {"TERMINATED"}}
+
+    @staticmethod
+    def pod_disk_summary(pod: dict[str, Any]) -> dict[str, Any]:
+        """Диски пода из полей, которые реально вернул API (учёт при удалении)."""
+        def num(*keys: str) -> float | None:
+            for key in keys:
+                value = pod.get(key)
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    return float(value)
+            return None
+
+        return {
+            "container_disk_gb": num("containerDiskInGb", "container_disk_gb",
+                                     "diskInGb", "disk"),
+            "volume_gb": num("volumeInGb", "persistentVolumeGb", "volume_gb"),
+        }
+
+    def verify_pod_state(self, pod_id: str, action: str, *,
+                         attempts: int = 6, delay: float = 5.0,
+                         sleep=time.sleep) -> dict[str, Any]:
+        """STOP != TERMINATE: подтверждаем действие повторными опросами.
+
+        stop: под остаётся, но desiredStatus EXITED; terminate: под ИСЧЕЗАЕТ
+        из списка (или TERMINATED). Если опросить не удалось — честно
+        confirmed=False, а не «наверное удалилось».
+        """
+        want = self._FINAL_STATES[action]
+        last_status = ""
+        last_error = ""
+        for attempt in range(max(1, attempts)):
+            if attempt:
+                sleep(delay)
+            try:
+                pods = self.list_pods()
+            except Exception as exc:
+                last_error = str(exc)[:200]
+                continue
+            match = next((pod for pod in pods
+                          if str(pod.get("id")) == str(pod_id)), None)
+            if match is None:
+                if action == "terminate":
+                    return {"pod_id": pod_id, "action": action,
+                            "confirmed": True, "final_status": "ABSENT",
+                            "disk": {},
+                            "note": ("Под исчез из списка: container disk "
+                                     "удалён вместе с подом; сетевые тома "
+                                     "(network volumes), если были, API не "
+                                     "удаляет — проверьте тарификацию в "
+                                     "консоли RunPod.")}
+                last_status = "ABSENT"
+                continue
+            last_status = str(match.get("desiredStatus")
+                              or match.get("status") or "")
+            if last_status.upper() in want or (
+                    action == "terminate"
+                    and last_status.upper() == "TERMINATED"):
+                return {"pod_id": pod_id, "action": action,
+                        "confirmed": True, "final_status": last_status,
+                        "disk": self.pod_disk_summary(match),
+                        "note": ("Подтверждено опросом API: "
+                                 f"{action} -> {last_status}")}
+        return {"pod_id": pod_id, "action": action, "confirmed": False,
+                "final_status": last_status or "UNKNOWN",
+                "disk": {},
+                "note": ("Конечное состояние НЕ подтверждено за отведённые "
+                         f"опросы (последний статус: {last_status or '—'}"
+                         + (f"; ошибка опроса: {last_error}" if last_error
+                            else "")
+                         + "). Проверьте под вручную в консоли RunPod.")}
+
+    def pod_action(self, pod_id: str, action: str, *, confirmed: bool = False,
+                   verify: bool = True, sleep=time.sleep) -> dict[str, Any]:
         if action not in {"start", "stop"}:
             raise CloudGpuError("Only start and stop actions are supported here.")
         if not confirmed:
             raise CloudGpuError(f"Pod {action} requires explicit confirmation.")
         pid = self._path_id(pod_id)
-        return self._request("POST", f"/pods/{pid}/action", payload={"action": action})
+        result = self._request("POST", f"/pods/{pid}/action",
+                               payload={"action": action})
+        if verify:
+            result = {**result,
+                      "verification": self.verify_pod_state(
+                          pod_id, action, sleep=sleep)}
+        return result
 
-    def terminate_pod(self, pod_id: str, *, confirmed: bool = False) -> dict[str, Any]:
+    def terminate_pod(self, pod_id: str, *, confirmed: bool = False,
+                      verify: bool = True, sleep=time.sleep) -> dict[str, Any]:
         if not confirmed:
             raise CloudGpuError("Pod termination is destructive and requires explicit confirmation.")
         pid = self._path_id(pod_id)
-        return self._request("DELETE", f"/pods/{pid}")
+        disk_before: dict[str, Any] = {}
+        try:
+            for pod in self.list_pods():
+                if str(pod.get("id")) == str(pod_id):
+                    disk_before = self.pod_disk_summary(pod)
+                    break
+        except Exception:
+            disk_before = {}
+        result = self._request("DELETE", f"/pods/{pid}")
+        if verify:
+            result = {**result, "disk_before": disk_before,
+                      "verification": self.verify_pod_state(
+                          pod_id, "terminate", sleep=sleep)}
+        return result
 
     @staticmethod
     def _path_id(pod_id: str) -> str:

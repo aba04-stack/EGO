@@ -8,6 +8,9 @@ newer than the last synced timestamp (last write wins).
 from __future__ import annotations
 
 import json
+import math
+import os
+import tempfile
 import time
 from dataclasses import fields as dataclass_fields
 from pathlib import Path
@@ -35,12 +38,50 @@ def bundle(settings) -> dict:
     }
 
 
+def _previous_saved_at(file: Path) -> float:
+    """Return a valid timestamp from the existing bundle, or zero."""
+    try:
+        raw = json.loads(file.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict) or raw.get("app") != "alterego-training-hub":
+            return 0.0
+        stamp = float(raw.get("saved_at") or 0.0)
+    except (OSError, json.JSONDecodeError, TypeError, ValueError, OverflowError):
+        return 0.0
+    return stamp if math.isfinite(stamp) and stamp > 0 else 0.0
+
+
+def _atomic_write_json(file: Path, raw: dict) -> None:
+    """Replace a bundle atomically so a sync client never reads partial JSON."""
+    temporary_path = None
+    try:
+        fd, name = tempfile.mkstemp(
+            prefix=f".{file.name}.", suffix=".tmp", dir=str(file.parent))
+        temporary_path = Path(name)
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\\n") as stream:
+            json.dump(raw, stream, ensure_ascii=False, indent=2)
+            stream.write("\\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary_path, file)
+    except BaseException:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink()
+            except OSError:
+                pass
+        raise
+
+
 def export_settings(path: str | Path, settings) -> Path:
-    """Write a bundle to ``path``; parent folders are created."""
+    """Write a bundle with a strictly increasing timestamp and atomic replace."""
     file = Path(path)
     file.parent.mkdir(parents=True, exist_ok=True)
-    file.write_text(json.dumps(bundle(settings), ensure_ascii=False, indent=2),
-                    encoding="utf-8")
+    data = bundle(settings)
+    previous = _previous_saved_at(file) if file.is_file() else 0.0
+    # Two writes can happen within one clock tick on some systems. Ensure the
+    # later local write still wins even when time.time() repeats or moves back.
+    data["saved_at"] = max(float(data["saved_at"]), previous + 0.001)
+    _atomic_write_json(file, data)
     return file
 
 

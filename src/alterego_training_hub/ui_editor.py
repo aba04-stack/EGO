@@ -243,16 +243,15 @@ class EditorPage(tk.Frame):
         actions = tk.Frame(bar, bg=C["panel"])
         actions.pack(fill="x")
         action_items = (
-            (t(t("Обсудить")), self.send_to_mentor, None,
+            (t(t("Наставник")), self.send_to_mentor, None,
              t(t("Обсудить с наставником"))),
-            (t(t("Проверить")), self.run_lint, None, t(t("Проверить код"))),
+            (t(t("Проверить")), self.run_lint, None, t(t("Проверить"))),
             (t(t("Разделить")), self.toggle_split, None,
-             t(t("Разделить редактор"))),
-            (t(t("Формат")), self.format_file, None, t(t("Форматировать код"))),
-            (t(t("Перечитать")), self.reload_file, None,
-             t(t("Перечитать файл с диска"))),
+             t(t("Разделить"))),
+            (t(t("Формат")), self.format_file, None, t(t("Формат"))),
+            (t(t("Перечитать")), self.reload_file, None, t(t("Перечитать"))),
             (t(t("Сохранить")), self.save_file, "Accent.TButton",
-             t(t("Сохранить файл"))),
+             t(t("Сохранить"))),
         )
         from .ui_common import attach_tooltip
 
@@ -263,11 +262,11 @@ class EditorPage(tk.Frame):
                 options["style"] = style
             button = ttk.Button(actions, **options)
             button.grid(
-                row=index // 3, column=index % 3, sticky="ew",
-                padx=(0, 4) if index % 3 < 2 else (0, 0),
-                pady=(0, 4) if index < 3 else (0, 0),
+                row=index // 2, column=index % 2, sticky="ew",
+                padx=(0, 4) if index % 2 == 0 else (0, 0),
+                pady=(0, 4) if index < 4 else (0, 0),
             )
-            actions.columnconfigure(index % 3, weight=1, uniform="editor-actions")
+            actions.columnconfigure(index % 2, weight=1, uniform="editor-actions")
             attach_tooltip(button, help_text)
             self.action_buttons.append(button)
 

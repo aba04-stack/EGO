@@ -5,6 +5,7 @@ import json
 
 import pytest
 
+import alterego_training_hub.settings_sync as settings_sync
 from alterego_training_hub.config import AppSettings
 from alterego_training_hub.settings_sync import (
     SettingsSyncError,
@@ -86,3 +87,45 @@ def test_bundle_never_contains_secrets(tmp_path):
     names = set(bundle(settings)["fields"])
     assert "api_key" not in " ".join(names)
     assert all(not name.endswith("_key") for name in names)
+
+
+
+def test_push_pull_same_clock_tick_is_monotonic(tmp_path, monkeypatch):
+    folder = tmp_path / "sync"
+    source = AppSettings.load()
+    source.ui_language = "en"
+    target = AppSettings.load()
+
+    # Simulate a low-resolution/frozen system clock: ordering must not depend
+    # on time.time() returning a different value for every quick write.
+    monkeypatch.setattr(settings_sync.time, "time", lambda: 12345.0)
+    first_file = push(source, folder)
+    first = json.loads(first_file.read_text(encoding="utf-8"))["saved_at"]
+    applied, changed = pull(target, folder)
+    assert applied and "ui_language" in changed
+
+    source.ui_theme = "dark"
+    second_file = push(source, folder)
+    second = json.loads(second_file.read_text(encoding="utf-8"))["saved_at"]
+    assert second > first
+
+    applied, changed = pull(target, folder)
+    assert applied and "ui_theme" in changed
+    assert target.ui_theme == "dark"
+
+
+def test_export_settings_replace_failure_keeps_previous_bundle(tmp_path, monkeypatch):
+    folder = tmp_path / "sync"
+    settings = AppSettings.load()
+    path = push(settings, folder)
+    original = path.read_bytes()
+
+    def fail_replace(source, target):
+        raise OSError("simulated replace failure")
+
+    monkeypatch.setattr(settings_sync.os, "replace", fail_replace)
+    with pytest.raises(OSError, match="simulated replace failure"):
+        push(settings, folder)
+
+    assert path.read_bytes() == original
+    assert list(folder.glob(".alterego-settings.json.*.tmp")) == []

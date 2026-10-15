@@ -1,7 +1,10 @@
 """Tests for the night watch: windows, scheduling, checks, morning sum."""
 from __future__ import annotations
 
+import json
 import time
+
+import alterego_training_hub.night_watch as night_watch
 
 import pytest
 
@@ -64,6 +67,13 @@ def test_watch_config_validation():
         WatchConfig(enabled=True, interval_minutes=45)))
     assert restored.enabled is True and restored.interval_minutes == 45
 
+    with pytest.raises(NightWatchError, match="Интервал"):
+        config_from_dict({"interval_minutes": "вечер"})
+    with pytest.raises(NightWatchError, match="Интервал"):
+        config_from_dict({"interval_minutes": 5.5})
+    assert config_from_dict(None).interval_minutes == 30
+    assert config_from_dict({"enabled": "false"}).enabled is False
+
 
 def test_due_interval():
     now = time.time()
@@ -71,6 +81,9 @@ def test_due_interval():
     assert due(now - 10 * 60, now=now, interval_minutes=30) is False
     assert due(0.0, now=now, interval_minutes=30) is True
     assert due(now - 100, now=now, interval_minutes="x") is False
+    assert due("damaged", now=now, interval_minutes=30) is True
+    assert due(0.0, now="damaged", interval_minutes=30) is False
+    assert due(float("nan"), now=now, interval_minutes=30) is True
 
 
 def test_run_check_uses_mentor_contract():
@@ -107,6 +120,7 @@ def test_night_watch_log_round_trip(tmp_path):
     assert log.entries() == []
     (tmp_path / "watch.json").write_text("{bad", encoding="utf-8")
     assert NightWatchLog(tmp_path / "watch.json").entries() == []
+    assert list((tmp_path).glob("watch.json.corrupt-*"))
 
 
 def test_morning_report_summary():
@@ -123,3 +137,46 @@ def test_morning_report_summary():
     assert "спайк loss" in report
     assert "Последнее наблюдение" in report
     assert "спайк на шаге 4" in report
+
+
+
+def test_night_watch_log_skips_bad_rows_and_preserves_original(tmp_path):
+    path = tmp_path / "watch.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps([
+        {"at": "not-a-time", "summary": "bad timestamp"},
+        None,
+        {"at": 123.0, "summary": "kept", "issues": 17, "ok": "false"},
+        {"at": float("nan"), "summary": "not finite"},
+    ], ensure_ascii=False), encoding="utf-8")
+    original = path.read_bytes()
+
+    log = NightWatchLog(path)
+    entries = log.entries()
+
+    assert len(entries) == 1
+    assert entries[0].summary == "kept"
+    assert entries[0].issues == ["17"]
+    # A malformed non-boolean flag must not turn a failed record into success.
+    assert entries[0].ok is True
+    assert "некорректные записи" in log.load_error
+    backups = list(tmp_path.glob("watch.json.corrupt-*"))
+    assert len(backups) == 1
+    assert backups[0].read_bytes() == original
+
+
+def test_night_watch_log_failed_atomic_replace_keeps_previous_file(tmp_path, monkeypatch):
+    path = tmp_path / "watch.json"
+    log = NightWatchLog(path)
+    log.add(WatchEntry(at=123.0, summary="preserve me"))
+    original = path.read_bytes()
+
+    def fail_replace(source, target):
+        raise OSError("simulated replace failure")
+
+    monkeypatch.setattr(night_watch.os, "replace", fail_replace)
+    with pytest.raises(OSError, match="simulated replace failure"):
+        log.add(WatchEntry(at=456.0, summary="must not replace previous log"))
+
+    assert path.read_bytes() == original
+    assert list(tmp_path.glob(".watch.json.*.tmp")) == []

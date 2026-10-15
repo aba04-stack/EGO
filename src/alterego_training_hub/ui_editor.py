@@ -282,9 +282,9 @@ class EditorPage(tk.Frame):
                          lambda _e: (self.zoom_out(), "break")[1])
         self.editor.bind("<Control-KP_Subtract>",
                          lambda _e: (self.zoom_out(), "break")[1])
-        self.editor.bind("<Control-BackSlash>",
+        self.editor.bind("<Control-backslash>",
                          lambda _e: (self.toggle_split(), "break")[1])
-        self.editor2.bind("<Control-BackSlash>",
+        self.editor2.bind("<Control-backslash>",
                           lambda _e: (self.toggle_split(), "break")[1])
         for char in ("(", "[", "{", '"', "'", ")", "]", "}"):
             self.editor.bind(

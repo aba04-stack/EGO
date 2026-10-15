@@ -261,12 +261,15 @@ class EditorPage(tk.Frame):
             if style:
                 options["style"] = style
             button = ttk.Button(actions, **options)
+            # Compact labels fit three columns; two rows leave usable
+            # vertical space for the editor even at the minimum window size.
+            button.configure(width=10, padding=(4, 2))
             button.grid(
-                row=index // 2, column=index % 2, sticky="ew",
-                padx=(0, 4) if index % 2 == 0 else (0, 0),
-                pady=(0, 4) if index < 4 else (0, 0),
+                row=index // 3, column=index % 3, sticky="ew",
+                padx=(0, 4) if index % 3 < 2 else (0, 0),
+                pady=(0, 4) if index < 3 else (0, 0),
             )
-            actions.columnconfigure(index % 2, weight=1, uniform="editor-actions")
+            actions.columnconfigure(index % 3, weight=1, uniform="editor-actions")
             attach_tooltip(button, help_text)
             self.action_buttons.append(button)
 

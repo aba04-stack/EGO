@@ -57,9 +57,9 @@ def _atomic_write_json(file: Path, raw: dict) -> None:
         fd, name = tempfile.mkstemp(
             prefix=f".{file.name}.", suffix=".tmp", dir=str(file.parent))
         temporary_path = Path(name)
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\\n") as stream:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as stream:
             json.dump(raw, stream, ensure_ascii=False, indent=2)
-            stream.write("\\n")
+            stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary_path, file)

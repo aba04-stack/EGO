@@ -52,8 +52,6 @@ class ChatPage(tk.Frame):
                    command=self.export_session).pack(side="left")
         ttk.Button(extras, text=t(t('Импорт')),
                    command=self.import_session).pack(side="left", padx=(4, 0))
-        ttk.Button(extras, text=t(t('Метрики')),
-                   command=self.post_dashboard).pack(side="left", padx=(4, 0))
 
         search_row = tk.Frame(top, bg=C["panel"])
         search_row.pack(fill="x", pady=(6, 0))

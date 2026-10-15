@@ -193,12 +193,18 @@ def attach_tooltip(widget, text: str) -> None:
 
 
 def card(parent, title: str | None = None) -> tk.Frame:
-    """White card container with optional caption."""
+    """Panel card. Callers pack/grid the returned inner frame; that geometry
+    is forwarded to the outer 1px border so the card actually appears."""
     outer = tk.Frame(parent, bg=C["border"], bd=0)
     inner = tk.Frame(outer, bg=C["panel"], padx=16, pady=14)
-    inner.pack(fill="both", expand=True, padx=1, pady=1)
+    tk.Frame.pack(inner, fill="both", expand=True, padx=1, pady=1)
     if title:
         tk.Label(inner, text=title, bg=C["panel"], fg=C["text"], font=F_BOLD).pack(anchor="w")
+    inner.pack = outer.pack  # type: ignore[method-assign]
+    inner.pack_forget = outer.pack_forget  # type: ignore[method-assign]
+    inner.grid = outer.grid  # type: ignore[method-assign]
+    inner.grid_forget = outer.grid_forget  # type: ignore[method-assign]
+    inner.place = outer.place  # type: ignore[method-assign]
     return inner
 
 

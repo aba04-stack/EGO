@@ -14,7 +14,7 @@ ego = "alterego_training_hub.ui:main"
 alterego-llm-studio = "alterego_training_hub.ui:main"  # старое имя команды, алиас
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "coverage>=7.0", "mypy>=1.10", "cryptography>=42.0"]
+dev = ["pytest>=8.0", "coverage>=7.0", "mypy>=1.10", "ruff>=0.6", "cryptography>=42.0"]
 # Релизная сборка: cryptography ОБЯЗАТЕЛЬНА (подписанные обновления этапа G)
 package = ["pyinstaller>=6.0", "cryptography>=42.0"]
 

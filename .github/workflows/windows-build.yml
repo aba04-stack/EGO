@@ -32,14 +32,14 @@ jobs:
       - name: Package Windows executable
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --onefile --windowed --name AlterEgoTrainingHub --paths src --collect-submodules keyring.backends --add-data "src/alterego_training_hub/assets/fonts;alterego_training_hub/assets/fonts" run_app.py
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name EGO --paths src --collect-submodules keyring.backends --add-data "src/alterego_training_hub/assets/fonts;alterego_training_hub/assets/fonts" run_app.py
           if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed." }
-          Compress-Archive -Path dist\AlterEgoTrainingHub.exe -DestinationPath dist\AlterEgoTrainingHub-Windows-x64.zip -Force
+          Compress-Archive -Path dist\EGO.exe -DestinationPath dist\EGO-Windows-x64.zip -Force
       - name: Upload Windows build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AlterEgoTrainingHub-Windows-x64
-          path: dist/AlterEgoTrainingHub-Windows-x64.zip
+          name: EGO-Windows-x64
+          path: dist/EGO-Windows-x64.zip
           if-no-files-found: error
           retention-days: 30
 
@@ -62,7 +62,7 @@ jobs:
       - name: Download Windows executable
         uses: actions/download-artifact@v4
         with:
-          name: AlterEgoTrainingHub-Windows-x64
+          name: EGO-Windows-x64
           path: release-assets
       - name: Publish GitHub release
         env:
@@ -70,5 +70,5 @@ jobs:
         run: |
           cp dist/*.whl dist/*.tar.gz release-assets/
           gh release create "${GITHUB_REF_NAME}" release-assets/* \
-            --title "AlterEgo LLM Studio ${GITHUB_REF_NAME}" \
+            --title "EGO ${GITHUB_REF_NAME}" \
             --generate-notes

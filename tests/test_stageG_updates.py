@@ -271,7 +271,10 @@ def test_make_keys_refuses_symlink_target(tmp_path):
     keys_dir.mkdir()
     victim = tmp_path / "victim.txt"
     victim.write_text("не трогать", encoding="utf-8")
-    (keys_dir / "private.pem").symlink_to(victim)
+    try:
+        (keys_dir / "private.pem").symlink_to(victim)
+    except OSError as exc:  # Windows без привилегий не создаёт symlink
+        pytest.skip(f"symlink недоступен здесь: {exc}")
     done = _run_cli("make-keys", "--out-dir", str(keys_dir))
     assert done.returncode == 1
     assert victim.read_text(encoding="utf-8") == "не трогать"

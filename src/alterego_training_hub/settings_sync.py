@@ -8,6 +8,9 @@ newer than the last synced timestamp (last write wins).
 from __future__ import annotations
 
 import json
+import math
+import os
+import tempfile
 import time
 from dataclasses import fields as dataclass_fields
 from pathlib import Path
@@ -35,12 +38,51 @@ def bundle(settings) -> dict:
     }
 
 
+def _previous_saved_at(file: Path) -> float:
+    """Return a valid timestamp from the existing bundle, or zero."""
+    try:
+        raw = json.loads(file.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict) or raw.get("app") != "alterego-training-hub":
+            return 0.0
+        stamp = float(raw.get("saved_at") or 0.0)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError,
+            TypeError, ValueError, OverflowError):
+        return 0.0
+    return stamp if math.isfinite(stamp) and stamp > 0 else 0.0
+
+
+def _atomic_write_json(file: Path, raw: dict) -> None:
+    """Replace a bundle atomically so a sync client never reads partial JSON."""
+    temporary_path = None
+    try:
+        fd, name = tempfile.mkstemp(
+            prefix=f".{file.name}.", suffix=".tmp", dir=str(file.parent))
+        temporary_path = Path(name)
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as stream:
+            json.dump(raw, stream, ensure_ascii=False, indent=2)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary_path, file)
+    except BaseException:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink()
+            except OSError:
+                pass
+        raise
+
+
 def export_settings(path: str | Path, settings) -> Path:
-    """Write a bundle to ``path``; parent folders are created."""
+    """Write a bundle with a strictly increasing timestamp and atomic replace."""
     file = Path(path)
     file.parent.mkdir(parents=True, exist_ok=True)
-    file.write_text(json.dumps(bundle(settings), ensure_ascii=False, indent=2),
-                    encoding="utf-8")
+    data = bundle(settings)
+    previous = _previous_saved_at(file) if file.is_file() else 0.0
+    # Two writes can happen within one clock tick on some systems. Ensure the
+    # later local write still wins even when time.time() repeats or moves back.
+    data["saved_at"] = max(float(data["saved_at"]), previous + 0.001)
+    _atomic_write_json(file, data)
     return file
 
 
@@ -51,8 +93,9 @@ def import_bundle(path: str | Path) -> dict:
         raise SettingsSyncError(f"Файл настроек не найден: {file}")
     try:
         raw = json.loads(file.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise SettingsSyncError(f"Некорректный JSON настроек: {exc}") from None
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise SettingsSyncError(
+            f"Некорректный JSON или кодировка файла настроек: {exc}") from None
     if not isinstance(raw, dict) or not isinstance(raw.get("fields"), dict):
         raise SettingsSyncError("Файл настроек должен содержать объект fields.")
     if raw.get("app") != "alterego-training-hub":
@@ -119,8 +162,24 @@ def pull(settings, folder: str | Path) -> tuple[bool, list[str]]:
     if not file.is_file():
         return False, []
     raw = import_bundle(file)
-    saved_at = float(raw.get("saved_at") or 0.0)
-    if saved_at <= float(getattr(settings, "synced_at", 0.0) or 0.0):
+    saved_raw = raw.get("saved_at", 0.0)
+    if isinstance(saved_raw, bool):
+        raise SettingsSyncError("В файле настроек некорректное время сохранения.")
+    try:
+        saved_at = float(saved_raw or 0.0)
+    except (TypeError, ValueError, OverflowError):
+        raise SettingsSyncError(
+            "В файле настроек некорректное время сохранения.") from None
+    if not math.isfinite(saved_at):
+        raise SettingsSyncError("В файле настроек некорректное время сохранения.")
+    local_raw = getattr(settings, "synced_at", 0.0)
+    try:
+        local_saved_at = float(local_raw or 0.0)
+    except (TypeError, ValueError, OverflowError):
+        local_saved_at = 0.0
+    if not math.isfinite(local_saved_at):
+        local_saved_at = 0.0
+    if saved_at <= local_saved_at:
         return False, []
     changed = apply_bundle(settings, raw)
     settings.synced_at = saved_at

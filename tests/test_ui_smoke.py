@@ -240,6 +240,10 @@ def _fake_tkinter():
 
 @pytest.fixture()
 def fake_ui(monkeypatch, tmp_path):
+    # app_data_dir() uses APPDATA on Windows and XDG_CONFIG_HOME on Linux.
+    # Isolate both paths so settings, model catalogs, and cloud queues from
+    # earlier tests cannot leak into later fake-UI tests.
+    monkeypatch.setenv("APPDATA", str(tmp_path / "appdata"))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     saved = {}
     fakes = _fake_tkinter()

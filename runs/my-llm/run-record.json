@@ -1,0 +1,50 @@
+{
+  "schema": 2,
+  "status": "failed",
+  "error": "SystemExit: TRL-путь: resume не поддержан — выберите движок Trainer для продолжения обучения.",
+  "started_at": 1792074043.4446998,
+  "ended_at": 1792074044.745859,
+  "duration_sec": 1.301,
+  "engine": "trl",
+  "path": "lora",
+  "recipe": "",
+  "config": {
+    "path": "lora",
+    "recipe_name": "",
+    "engine": "trl",
+    "packing": false,
+    "group_by_length": false,
+    "dataset": "d.txt",
+    "tokenizer": "",
+    "base_model": "m",
+    "output_dir": "runs/my-llm",
+    "lr": 0.0001,
+    "batch": 16,
+    "epochs": 3,
+    "seq_len": 1024,
+    "warmup_pct": 3,
+    "seed": 42,
+    "grad_accum": 1,
+    "gradient_checkpointing": false,
+    "gpus": 1,
+    "sample_every": 200
+  },
+  "python": "3.11.2",
+  "platform": "Linux-6.1.158+-x86_64-with-glibc2.36",
+  "versions": {
+    "torch": "2.5.1",
+    "transformers": "4.46.3",
+    "peft": "0.13.2",
+    "trl": "0.12.2",
+    "datasets": "3.1.0",
+    "accelerate": "1.1.1"
+  },
+  "gpu": "",
+  "dataset": {
+    "path": "d.txt",
+    "sha256": "",
+    "bytes": 0
+  },
+  "metrics": {},
+  "artifacts": []
+}

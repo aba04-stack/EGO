@@ -121,6 +121,9 @@ class TrainingPage(tk.Frame):
         self.runs_list.pack(fill="both", expand=True, pady=(6, 0))
         ttk.Button(runs_box, text=t('Экспорт CSV / MLflow'),
                    command=self.export_runs).pack(fill="x", pady=(6, 0))
+        ttk.Button(runs_box, text=t('Импорт run-record v2'),
+                   command=self.import_run_record).pack(fill="x",
+                                                        pady=(4, 0))
         tk.Label(runs_box, text=t('Чекпоинты'), bg=C["panel"],
                  font=F_BOLD).pack(anchor="w", pady=(8, 0))
         self.checkpoints_list = tk.Listbox(
@@ -299,6 +302,35 @@ class TrainingPage(tk.Frame):
                 t('Обучение завершилось с кодом {returncode}. Проанализируй лог, найди ошибку и предложи исправление.\n\n```\n{v3}\n```').format(returncode=returncode, v3=tail[-12000:])
             )
 
+
+    def import_run_record(self):
+        """run-record.json обучения -> запись истории (этап D)."""
+        from tkinter import filedialog, messagebox
+
+        from .run_record import load_run_record, record_artifacts_ok, to_run_record
+
+        chosen = filedialog.askopenfilename(
+            title=t('run-record v2'), filetypes=[("JSON", "*.json")])
+        if not chosen:
+            return
+        try:
+            from pathlib import Path
+
+            data = load_run_record(Path(chosen))
+            record = to_run_record(data, Path(chosen))
+        except (OSError, ValueError) as exc:
+            messagebox.showerror(t('Импорт run-record v2'), str(exc),
+                                 parent=self)
+            return
+        self.app.runs.add(record)
+        if hasattr(self, "refresh_runs"):
+            self.refresh_runs()
+        broken = record_artifacts_ok(data, Path(chosen).parent)
+        note = (t('Контрольные суммы артефактов совпали.')
+                if not broken else "\n".join(broken))
+        messagebox.showinfo(t('Импорт run-record v2'),
+                            t('Прогон добавлен в историю.') + "\n" + note,
+                            parent=self)
 
     def export_runs(self):
         """История прогонов -> CSV + MLflow file store в рабочей папке."""

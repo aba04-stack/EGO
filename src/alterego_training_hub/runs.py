@@ -122,5 +122,11 @@ class RunStore:
                 return record
         return None
 
+    def add(self, record: RunRecord) -> RunRecord:
+        """Вставить готовую запись (например, импорт run-record v2)."""
+        records = [record, *self._load()]
+        self._save(records[: self.MAX_RUNS])
+        return record
+
     def list(self, limit: int = 20) -> list[RunRecord]:
         return self._load()[: max(1, int(limit))]

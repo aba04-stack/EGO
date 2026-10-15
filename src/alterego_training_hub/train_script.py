@@ -328,6 +328,107 @@ def _tokenize_sft_batch(batch, tokenizer):
             "length": [len(ids) for ids in input_ids]}
 
 
+_RUN_METRICS: dict = {}
+
+
+def _sha256_file(path: str) -> str:
+    import hashlib
+
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _dataset_fingerprint(path: str) -> dict:
+    """SHA-256 датасета: файл целиком или дерево каталога (пути+размеры)."""
+    import hashlib
+    import os
+
+    if not path or not os.path.exists(path):
+        return {"path": path or "", "sha256": "", "bytes": 0}
+    if os.path.isfile(path):
+        return {"path": path, "sha256": _sha256_file(path),
+                "bytes": os.path.getsize(path)}
+    entries = []
+    total = 0
+    for root, _dirs, files in os.walk(path):
+        for name in sorted(files):
+            full = os.path.join(root, name)
+            entries.append(f"{os.path.relpath(full, path)}:"
+                           f"{os.path.getsize(full)}")
+            total += os.path.getsize(full)
+    digest = hashlib.sha256(chr(10).join(entries).encode()).hexdigest()
+    return {"path": path, "sha256": digest, "bytes": total}
+
+
+def _write_run_record(args, status: str, started: float,
+                      error: str = "") -> None:
+    """run-record v2 рядом с артефактами: воспроизводимость прогона."""
+    import importlib.metadata as meta
+    import json
+    import os
+    import platform
+    import sys
+    import time
+
+    versions = {}
+    for package in ("torch", "transformers", "peft", "trl", "datasets",
+                    "accelerate"):
+        try:
+            versions[package] = meta.version(package)
+        except Exception:  # noqa: BLE001 - пакета может не быть
+            versions[package] = ""
+    gpu = ""
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            gpu = torch.cuda.get_device_name(0)
+    except Exception:  # noqa: BLE001
+        pass
+    artifacts = []
+    for root, _dirs, files in os.walk(args.output_dir):
+        for name in sorted(files):
+            if name == "run-record.json":
+                continue
+            full = os.path.join(root, name)
+            artifacts.append({
+                "path": os.path.relpath(full, args.output_dir),
+                "bytes": os.path.getsize(full),
+                "sha256": _sha256_file(full)})
+    record = {
+        "schema": 2,
+        "status": status,
+        "error": error[:500],
+        "started_at": started,
+        "ended_at": time.time(),
+        "duration_sec": round(time.time() - started, 3),
+        "engine": CONFIG.get("effective_engine", CONFIG.get("engine")),
+        "path": CONFIG["path"],
+        "recipe": CONFIG.get("recipe_name", ""),
+        "config": {k: v for k, v in CONFIG.items()
+                   if isinstance(v, (str, int, float, bool))},
+        "python": sys.version.split()[0],
+        "platform": platform.platform(),
+        "versions": versions,
+        "gpu": gpu,
+        "dataset": _dataset_fingerprint(args.dataset),
+        "metrics": dict(_RUN_METRICS),
+        "artifacts": artifacts,
+    }
+    try:
+        os.makedirs(args.output_dir, exist_ok=True)
+        with open(os.path.join(args.output_dir, "run-record.json"), "w",
+                  encoding="utf-8") as fh:
+            json.dump(record, fh, ensure_ascii=False, indent=2)
+        print(f"run-record v2: {args.output_dir}/run-record.json",
+              flush=True)
+    except OSError as exc:
+        print(f"⚠ run-record не записан: {exc}", flush=True)
+
+
 def load_texts(path: str) -> list[str]:
     """Датасет построчно (стриминг): .txt, .jsonl, .json список.
 
@@ -365,6 +466,19 @@ def main() -> None:
     parser.add_argument("--resume", default="",
                         help="чекпоинт для продолжения обучения")
     args = parser.parse_args()
+    import time as _time
+
+    _started = _time.time()
+    try:
+        _dispatch(args)
+    except BaseException as exc:  # рекорд пишется и при отказе/ошибке
+        _write_run_record(args, "failed", _started,
+                          f"{type(exc).__name__}: {exc}")
+        raise
+    _write_run_record(args, "success", _started)
+
+
+def _dispatch(args) -> None:
     random.seed(CONFIG["seed"])
     if CONFIG["gpus"] > 1 and "LOCAL_RANK" not in os.environ:
         print(f"Подсказка: для {CONFIG['gpus']} GPU запустите через "
@@ -911,6 +1025,7 @@ def train_lora_trl(args) -> None:
         metrics = trainer.evaluate()
         val = metrics.get("eval_loss")
         if val is not None:
+            _RUN_METRICS["eval_loss"] = val
             print(f"eval: val_loss={val:.4f}", flush=True)
     for prompt in CONFIG["eval_prompts"]:
         inputs = tokenizer(prompt, return_tensors="pt").to(model.device)

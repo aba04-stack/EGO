@@ -100,6 +100,11 @@ class EditorPage(tk.Frame):
         # File tree
         left = card(body, t(t('Файлы')))
         left.pack(side="left", fill="y", padx=(0, 10))
+        try:
+            left.master.configure(width=250)
+            left.master.pack_propagate(False)
+        except Exception:
+            pass
         self.tree = ttk.Treeview(left, columns=("path",), show="tree",
                                  height=22, selectmode="browse")
         self.tree.pack(fill="both", expand=True)

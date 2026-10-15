@@ -1312,9 +1312,14 @@ def test_stage18_model_tools_export_quantize_bench_suite(fake_ui, tmp_path):
     playground_page.run_prompt_suite()  # no models → error dialog, no crash
 
 
-def test_stage19_reports_cloud_queue_roles(fake_ui, tmp_path):
+def test_stage19_reports_cloud_queue_roles(fake_ui, tmp_path, monkeypatch):
     app_module = fake_ui["alterego_training_hub.ui"]
     app = app_module.TrainingHubApp()
+    # Do not depend on a credential that may exist in the host OS keyring.
+    real_secret_get = app.secrets.get
+    monkeypatch.setattr(
+        app.secrets, "get",
+        lambda name: "" if name == "runpod_api_key" else real_secret_get(name))
     workspace = tmp_path / "ws"
     workspace.mkdir()
     app.settings.workspace_path = str(workspace)

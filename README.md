@@ -4,6 +4,8 @@
 >
 > **Экспериментальный проект для интереса и обучения.** Я не профессиональный разработчик. EGO не является готовым профессиональным продуктом; он может быть неполным, нестабильным, содержать ошибки или вообще не запуститься на вашем устройстве. Я не могу гарантировать его работу, надёжность, безопасность, совместимость или дальнейшую поддержку. Используйте проект на свой риск и не полагайтесь на него в производственных задачах или при работе с важными данными.
 
+EGO is a desktop environment for experimenting with language-model research: code editor and terminal, an optional mentor-agent chat, model and dataset tools, training metrics, model playground, service connectors, and cloud-GPU management.
+
 ## Interface
 
 Real screenshots of the running application are not available yet. The previous images were generated mockups, not captures of the actual program, so they have been removed. Real screenshots will be added only after they are captured from a running build.

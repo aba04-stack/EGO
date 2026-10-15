@@ -74,6 +74,12 @@ def main() -> int:
         ):
             assert widget.winfo_ismapped(), f"{name} is hidden at {geometry}"
             assert_inside(widget, editor.tree.master, name)
+            if widget is not editor.new_name_entry:
+                assert widget.winfo_reqwidth() <= widget.winfo_width() + 1, (
+                    f"{name} text/control is clipped at {geometry}: "
+                    f"requested={widget.winfo_reqwidth()}px, "
+                    f"actual={widget.winfo_width()}px"
+                )
         assert editor.editor.winfo_width() > 80, (
             f"Main code editor has no usable width at {geometry}: "
             f"{editor.editor.winfo_width()}px"

@@ -281,8 +281,8 @@ class EditorPage(tk.Frame):
                               selectbackground=C["panel_alt"], cursor="hand2")
         self.gutter.pack(side="left", fill="y")
         self.gutter.bind("<Button-1>", self._on_gutter_click)
-        self.editor = tk.Text(self.pane1, wrap="none", font=F_MONO, bd=0,
-                              undo=True, padx=8, pady=6,
+        self.editor = tk.Text(self.pane1, wrap="none", width=1, height=1,
+                              font=F_MONO, bd=0, undo=True, padx=8, pady=6,
                               bg=C["code_bg"], fg=C["code_fg"],
                               insertbackground=C["code_fg"],
                               selectbackground=C["accent"],
@@ -301,8 +301,8 @@ class EditorPage(tk.Frame):
                                bg=C["panel_alt"], fg=C["muted"],
                                selectbackground=C["panel_alt"], cursor="hand2")
         self.gutter2.pack(side="left", fill="y")
-        self.editor2 = tk.Text(self.pane2, wrap="none", font=F_MONO, bd=0,
-                               undo=True, padx=8, pady=6,
+        self.editor2 = tk.Text(self.pane2, wrap="none", width=1, height=1,
+                               font=F_MONO, bd=0, undo=True, padx=8, pady=6,
                                bg=C["code_bg"], fg=C["code_fg"],
                                insertbackground=C["code_fg"],
                                selectbackground=C["accent"],

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the AlterEgo Training Hub desktop application from a source checkout."""
+"""Run the EGO desktop application from a source checkout."""
 from __future__ import annotations
 
 import sys

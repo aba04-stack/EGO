@@ -66,7 +66,7 @@ _MAX_RESPONSE = 2 * 1024 * 1024
 
 
 def _http_json(url: str, *, token: str = "", accept: str = "application/json") -> Any:
-    headers = {"Accept": accept, "User-Agent": "AlterEgo-Training-Hub"}
+    headers = {"Accept": accept, "User-Agent": "EGO-Training-Hub"}
     if token:
         headers["Authorization"] = "Bearer " + token
     request = urllib.request.Request(url, headers=headers, method="GET")

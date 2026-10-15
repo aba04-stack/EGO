@@ -123,7 +123,7 @@ def draw_shell(c: Canvas, active: str, status: str, badge: str):
     c.rect(0, 0, VW, VH, C["bg"])
     # Sidebar
     c.rect(0, 0, SIDE, VH, C["sidebar"])
-    c.text(18, 26, "AlterEgo", 16, bold=True, fill="#ffffff")
+    c.text(18, 26, "EGO", 16, bold=True, fill="#ffffff")
     c.text(18, 52, "LLM Studio", 11, fill=C["sidebar_fg"])
     y = 88
     for group_title, items in NAV_GROUPS:

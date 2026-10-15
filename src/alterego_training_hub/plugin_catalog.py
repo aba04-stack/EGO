@@ -48,14 +48,14 @@ BUILTIN_CATALOG: list[CatalogEntry] = [
     CatalogEntry(
         id="hello", name="Hello", version="1.0",
         description="Приветственный инструмент — пример плагина.",
-        author="AlterEgo", source="file:examples/hello_plugin.py"),
+        author="EGO", source="file:examples/hello_plugin.py"),
 ]
 
 # Self-contained copy of the example plugin for installed apps where the
 # repo ``examples/`` folder is absent.
 BUILTIN_SOURCES: dict[str, str] = {
     "hello": '''\
-"""Hello — example AlterEgo plugin."""
+"""Hello — example EGO plugin."""
 
 PLUGIN = {
     "id": "hello",

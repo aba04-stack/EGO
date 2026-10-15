@@ -1,6 +1,6 @@
 """Build a standalone desktop bundle with PyInstaller.
 
-Run this on the target OS — on Windows it produces ``dist/AlterEgoTrainingHub.exe``
+Run this on the target OS — on Windows it produces ``dist/EGOTrainingHub.exe``
 (windowed, one file); on Linux/macOS a same-named executable. Requires a
 desktop Python with Tk available (the app itself is a Tk program).
 
@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-APP_NAME = "AlterEgoTrainingHub"
+APP_NAME = "EGO"
 
 
 def main() -> int:

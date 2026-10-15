@@ -74,7 +74,7 @@ class ScriptConfig:
 
 
 _HEADER = '''#!/usr/bin/env python3
-"""Сгенерировано мастером «Своя ЛЛМ» (AlterEgo LLM Studio).
+"""Сгенерировано мастером «Своя ЛЛМ» (EGO LLM Studio).
 
 Путь: {recipe_name}
 Запуск: python train_llm.py

@@ -56,7 +56,7 @@ def validate_repo_id(repo_id: str) -> str:
 
 def _fetch_json(url: str, token: str = "") -> Any:
     headers = {"Accept": "application/json",
-               "User-Agent": "AlterEgo-LLM-Studio"}
+               "User-Agent": "EGO-LLM-Studio"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
     request = urllib.request.Request(url, headers=headers)
@@ -88,7 +88,7 @@ def list_files(repo_id: str, token: str = "",
 
 
 def _download_file(url: str, dest: Path, token: str = "") -> int:
-    headers = {"User-Agent": "AlterEgo-LLM-Studio"}
+    headers = {"User-Agent": "EGO-LLM-Studio"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
     request = urllib.request.Request(url, headers=headers)

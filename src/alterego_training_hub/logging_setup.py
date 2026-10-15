@@ -85,7 +85,7 @@ def install_excepthook() -> None:
             root = getattr(tk, "_default_root", None)
             if root is not None and root.winfo_exists():
                 root.after(0, lambda: messagebox.showerror(
-                    "AlterEgo Training Hub",
+                    "EGO",
                     "Произошла непредвиденная ошибка. Подробности записаны в лог:\n"
                     + str(log_file())))
                 return

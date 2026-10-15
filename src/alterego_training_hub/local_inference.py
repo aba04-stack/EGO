@@ -36,7 +36,7 @@ class ServerStatus:
 
 def _get_json(url: str, timeout: float = 3.0) -> Any:
     request = urllib.request.Request(
-        url, headers={"User-Agent": "AlterEgo-LLM-Studio"})
+        url, headers={"User-Agent": "EGO-LLM-Studio"})
     with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
 

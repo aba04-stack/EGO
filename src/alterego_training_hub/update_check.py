@@ -94,7 +94,7 @@ def release_api_url(repo: str = DEFAULT_REPO) -> str:
 
 def _fetch_json(url: str, token: str = "") -> dict[str, Any]:
     headers = {"Accept": "application/vnd.github+json",
-               "User-Agent": "AlterEgo-LLM-Studio"}
+               "User-Agent": "EGO-LLM-Studio"}
     if token.strip():
         headers["Authorization"] = f"Bearer {token.strip()}"
     request = urllib.request.Request(url, headers=headers)

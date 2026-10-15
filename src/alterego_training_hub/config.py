@@ -8,7 +8,7 @@ from dataclasses import MISSING as _MISSING
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-APP_NAME = "AlterEgoTrainingHub"
+APP_NAME = "EGOTrainingHub"
 
 
 def app_data_dir() -> Path:

@@ -56,7 +56,7 @@ def import_bundle(path: str | Path) -> dict:
     if not isinstance(raw, dict) or not isinstance(raw.get("fields"), dict):
         raise SettingsSyncError("Файл настроек должен содержать объект fields.")
     if raw.get("app") != "alterego-training-hub":
-        raise SettingsSyncError("Файл не является экспортом AlterEgo Training Hub.")
+        raise SettingsSyncError("Файл не является экспортом EGO.")
     return raw
 
 

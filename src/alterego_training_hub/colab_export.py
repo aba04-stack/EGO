@@ -41,7 +41,7 @@ def notebook_for_job(job: CloudJob, *, intro: str = "") -> dict[str, Any]:
     gpu = job.gpu_id or "по умолчанию"
     markdown = intro or (
         f"# {title}\n\n"
-        f"Задание AlterEgo Training Hub ({job.id}).\n\n"
+        f"Задание EGO ({job.id}).\n\n"
         f"* GPU: `{gpu}` · образ: `{job.image}` · диск: "
         f"{job.container_disk_gb} GB\n"
         f"* Статус при экспорте: **{job.status}**\n\n"

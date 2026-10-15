@@ -1,6 +1,6 @@
 @echo off
 chcp 6501 >nul
-REM AlterEgo LLM Studio 1.15.0 — установка на Windows
+REM EGO 1.16.0 — установка на Windows
 cd /d "%~dp0"
 where py >nul 2>nul
 if %errorlevel% neq 0 (
@@ -9,9 +9,9 @@ if %errorlevel% neq 0 (
   pause
   exit /b 1
 )
-echo Устанавливаю AlterEgo LLM Studio 1.15.0 ...
+echo Устанавливаю EGO 1.16.0 ...
 py -m pip install --upgrade pip
-py -m pip install "alterego_training_hub_desktop-1.15.0-py3-none-any.whl" cryptography
+py -m pip install "ego-1.16.0-py3-none-any.whl" cryptography
 if %errorlevel% neq 0 (
   echo.
   echo Установка не удалась — пришлите текст ошибки выше разработчику.
@@ -19,6 +19,6 @@ if %errorlevel% neq 0 (
   exit /b 1
 )
 echo.
-echo Готово! Запуск: alterego-llm-studio
+echo Готово! Запуск: ego
 echo (или запустите файл run-alterego.bat рядом)
 pause

@@ -144,7 +144,7 @@ def run_diagnostics(settings: AppSettings | None = None,
 def diagnostics_text(results: list[dict[str, Any]]) -> str:
     """Plain-text report for copying into an issue."""
     marks = {True: "ok", False: "!!"}
-    lines = ["Диагностика AlterEgo Training Hub",
+    lines = ["Диагностика EGO",
              f"Платформа: {os.name} / {sys.platform}",
              ""]
     for item in results:

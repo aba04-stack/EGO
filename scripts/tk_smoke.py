@@ -92,6 +92,7 @@ def main() -> int:
                     print(
                         f"  {name}: mapped={widget.winfo_ismapped()} "
                         f"size={widget.winfo_width()}x{widget.winfo_height()} "
+                        f"request={widget.winfo_reqwidth()}x{widget.winfo_reqheight()} "
                         f"manager={widget.winfo_manager()} "
                         f"parent={widget.winfo_parent()}",
                         file=sys.stderr,

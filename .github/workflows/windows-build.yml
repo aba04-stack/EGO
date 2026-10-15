@@ -34,6 +34,17 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev,package]"
+      - name: Key-generation CLI preflight
+        shell: pwsh
+        run: |
+          $keyDir = Join-Path $env:RUNNER_TEMP "ego-keygen-preflight"
+          python scripts/sign_update.py make-keys --out-dir $keyDir
+          if ($LASTEXITCODE -ne 0) { throw "Key-generation CLI preflight failed." }
+          if (!(Test-Path (Join-Path $keyDir "private.pem")) -or
+              !(Test-Path (Join-Path $keyDir "public.pem"))) {
+            throw "Key-generation CLI did not create both key files."
+          }
+          Remove-Item -Recurse -Force $keyDir
       - name: Compile and test
         shell: pwsh
         run: |

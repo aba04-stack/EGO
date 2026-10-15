@@ -1,6 +1,8 @@
 # EGO
 
-A desktop development environment for LLM research with an IDE layout: code editor and terminal in the center, a docked mentor-agent chat on the right, model/dataset library, training with live metrics, model playground, service connectors (GitHub / Hugging Face / Gmail), and RunPod GPU management — all in one Windows-first app.
+> **Experimental hobby project — no warranty.** This is a personal project made out of curiosity and for learning. I am not a professional software developer. EGO is not presented as a finished or professionally supported product; it may be incomplete, unstable, contain bugs, or fail to run on your device. I cannot guarantee its functionality, reliability, security, compatibility, or ongoing maintenance. Use it at your own risk and do not rely on it for production work or important data.
+>
+> **Экспериментальный проект для интереса и обучения.** Я не профессиональный разработчик. EGO не является готовым профессиональным продуктом; он может быть неполным, нестабильным, содержать ошибки или вообще не запуститься на вашем устройстве. Я не могу гарантировать его работу, надёжность, безопасность, совместимость или дальнейшую поддержку. Используйте проект на свой риск и не полагайтесь на него в производственных задачах или при работе с важными данными.
 
 ## Interface
 

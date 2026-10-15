@@ -4,9 +4,9 @@ from __future__ import annotations
 import json
 import time
 
-import alterego_training_hub.night_watch as night_watch
-
 import pytest
+
+import alterego_training_hub.night_watch as night_watch
 
 from alterego_training_hub.night_watch import (
     NightWatchError,

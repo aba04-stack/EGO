@@ -73,8 +73,11 @@ class GpuPage(tk.Frame):
 
         create = card(self, t(t('Запуск GPU — оплата начнётся после создания')))
         create.pack(fill="x", padx=24, pady=(0, 12))
-        create.columnconfigure(1, weight=1)
-        create.columnconfigure(3, weight=1)
+        # card() uses pack for its caption; grid the form in a child frame.
+        create_content = tk.Frame(create, bg=C["panel"])
+        create_content.pack(fill="both", expand=True)
+        create_content.columnconfigure(1, weight=1)
+        create_content.columnconfigure(3, weight=1)
         self.gpu_budget_var = tk.StringVar(
             value=str(self.app.settings.runpod_max_gpu_hourly_usd))
         self.gpu_disk_var = tk.StringVar(value=str(self.app.settings.runpod_container_disk_gb))
@@ -82,9 +85,9 @@ class GpuPage(tk.Frame):
         self.gpu_name_var = tk.StringVar(value="alterego-training")
 
         def entry(row, col, label, var, width=None):
-            tk.Label(create, text=label, bg=C["panel"], font=F_BASE).grid(
+            tk.Label(create_content, text=label, bg=C["panel"], font=F_BASE).grid(
                 row=row, column=col, sticky="w", padx=4, pady=3)
-            tk.Entry(create, textvariable=var, bd=1, relief="solid", font=F_BASE,
+            tk.Entry(create_content, textvariable=var, bd=1, relief="solid", font=F_BASE,
                      width=width).grid(row=row, column=col + 1, sticky="ew", padx=4, pady=3)
 
         self.gpu_total_budget_var = tk.StringVar(
@@ -94,11 +97,11 @@ class GpuPage(tk.Frame):
         entry(0, 2, t(t('Контейнерный диск (GB)')), self.gpu_disk_var, 10)
         entry(1, 0, t(t('Имя ресурса')), self.gpu_name_var)
         entry(1, 2, t(t('Образ контейнера')), self.gpu_image_var, 38)
-        ttk.Button(create, text=t(t('Проверить цену и создать…')),
+        ttk.Button(create_content, text=t(t('Проверить цену и создать…')),
                    command=self.create_gpu_pod).grid(
             row=2, column=0, columnspan=4, sticky="ew", padx=4, pady=(8, 2))
         tk.Label(
-            create,
+            create_content,
             text=t(t('Лимит действует только на цену GPU и не является общим потолком расходов. Контейнерный диск временный: сохраняйте чекпойнты отдельно.')),
             bg=C["panel"], fg=C["muted"], font=F_SMALL, wraplength=900, justify="left",
         ).grid(row=3, column=0, columnspan=4, sticky="w", padx=4, pady=(5, 0))

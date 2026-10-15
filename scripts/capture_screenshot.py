@@ -22,6 +22,7 @@ def main() -> int:
     os.environ["PYTHON_KEYRING_BACKEND"] = "keyring.backends.null.Keyring"
 
     from PIL import ImageGrab
+
     from alterego_training_hub.ui import TrainingHubApp
 
     app = TrainingHubApp()

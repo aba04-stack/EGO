@@ -11,8 +11,6 @@ dependencies = ["keyring>=25.0", "paramiko>=3.4"]
 
 [project.scripts]
 ego = "alterego_training_hub.ui:main"
-# Compatibility alias for existing installations and scripts.
-alterego-llm-studio = "alterego_training_hub.ui:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "coverage>=7.0", "mypy>=1.10", "cryptography>=42.0", "ruff>=0.8", "pillow>=10.0"]

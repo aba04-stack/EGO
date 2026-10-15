@@ -64,6 +64,16 @@ def main() -> int:
 
         assert editor.tree.winfo_ismapped(), "Editor file tree is hidden"
         assert editor.editor.winfo_ismapped(), "Main code editor is hidden"
+        for widget, name in (
+            (editor.refresh_tree_button, "refresh-files button"),
+            (editor.open_selected_button, "open-file button"),
+            (editor.new_name_entry, "new-file name field"),
+            (editor.create_file_button, "create-file button"),
+            (editor.rename_file_button, "rename-file button"),
+            (editor.delete_file_button, "delete-file button"),
+        ):
+            assert widget.winfo_ismapped(), f"{name} is hidden at {geometry}"
+            assert_inside(widget, editor.tree.master, name)
         assert editor.editor.winfo_width() > 80, (
             f"Main code editor has no usable width at {geometry}: "
             f"{editor.editor.winfo_width()}px"

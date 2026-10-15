@@ -73,6 +73,15 @@ def apply_theme(root: tk.Tk) -> ttk.Style:
     style.map("TButton",
               background=[("active", C["hover"])],
               foreground=[("disabled", "#9aa7b8")])
+    style.configure(
+        "TreeAction.TButton", font=F_SMALL, padding=(3, 2),
+        background=C["panel"], foreground=C["text"], relief="flat",
+    )
+    style.map(
+        "TreeAction.TButton",
+        background=[("active", C["hover"])],
+        foreground=[("disabled", C["muted"])],
+    )
     style.configure("Accent.TButton", background=C["accent"], foreground="#ffffff", font=F_BOLD,
                      padding=(16, 8), relief="flat")
     style.map("Accent.TButton",

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -434,7 +435,18 @@ class WorkspaceTools:
         if not isinstance(command, str) or not command.strip():
             raise ToolError("Команда не должна быть пустой.")
         try:
-            argv = shlex.split(command)
+            if os.name == "nt":
+                # POSIX shlex consumes backslashes in Windows executable paths.
+                argv = shlex.split(command, posix=False)
+                argv = [
+                    token[1:-1]
+                    if len(token) >= 2 and token[0] == token[-1]
+                    and token[0] in {"'", '"'}
+                    else token
+                    for token in argv
+                ]
+            else:
+                argv = shlex.split(command)
         except ValueError as exc:
             raise ToolError(f"Не удалось разобрать команду: {exc}") from None
         if not argv:

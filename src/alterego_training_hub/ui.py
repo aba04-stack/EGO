@@ -36,7 +36,7 @@ class TrainingHubApp(tk.Tk):
         super().__init__()
         setup_logging()
         install_excepthook()
-        self.title("AlterEgo Training Hub — LLM Studio")
+        self.title("EGO — LLM Studio")
         self.geometry("1480x860")
         self.minsize(1180, 720)
 
@@ -66,7 +66,7 @@ class TrainingHubApp(tk.Tk):
 
         self.plugins = PluginManager(app_data_dir() / "plugins")
         self._plugin_list = self.plugins.load_all()
-        self.executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="alterego-hub")
+        self.executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="ego-hub")
         import threading as _threading
 
         self.closing_event = _threading.Event()  # кооперативная отмена фоновых задач
@@ -133,7 +133,7 @@ class TrainingHubApp(tk.Tk):
         self._sidebar_frame = sidebar
         brand = tk.Frame(sidebar, bg=C["sidebar"])
         brand.pack(fill="x", pady=(18, 12), padx=16)
-        tk.Label(brand, text="AlterEgo", bg=C["sidebar"], fg="#ffffff",
+        tk.Label(brand, text="EGO", bg=C["sidebar"], fg="#ffffff",
                  font=("Segoe UI", 15, "bold")).pack(anchor="w")
         tk.Label(brand, text="LLM Studio", bg=C["sidebar"], fg=C["sidebar_fg"],
                  font=("Segoe UI", 10)).pack(anchor="w")
@@ -787,7 +787,7 @@ class TrainingHubApp(tk.Tk):
                 self._on_budget_event(verdict)
             return
         if kind == "info":
-            messagebox.showinfo(payload.get("title", "AlterEgo Training Hub"),
+            messagebox.showinfo(payload.get("title", "EGO"),
                                 payload.get("message", ""), parent=self)
             return
         if kind == "chat_event":
@@ -805,11 +805,11 @@ class TrainingHubApp(tk.Tk):
                     except Exception as exc:
                         log_worker_error("callback", exc)
                         self.set_status(t('Ошибка обработки результата'))
-                        messagebox.showerror("AlterEgo Training Hub",
+                        messagebox.showerror("EGO",
                                              t('Операция завершилась, но интерфейс не смог обновить результат: {exc}').format(exc=exc), parent=self)
             else:
                 self.set_status(t('Ошибка: ') + str(payload.get("label", "")))
-                messagebox.showerror("AlterEgo Training Hub",
+                messagebox.showerror("EGO",
                                      str(payload.get("error", t('Неизвестная ошибка'))),
                                      parent=self)
                 on_error = payload.get("on_error")
@@ -846,7 +846,7 @@ class TrainingHubApp(tk.Tk):
         from .watchdog import detect_issues
 
         summary = parse_log(self.training.tail())
-        context = ReportContext(title=t('Отчёт по обучению — AlterEgo Training Hub'))
+        context = ReportContext(title=t('Отчёт по обучению — EGO'))
         entry = None
         for candidate in self.model_registry().load():
             if candidate.id == self.settings.active_model_id:

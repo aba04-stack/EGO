@@ -1,4 +1,4 @@
-# AlterEgo Training Hub — LLM Studio
+# EGO — LLM Studio
 
 A desktop development environment for LLM research with an IDE layout: code editor and terminal in the center, a docked mentor-agent chat on the right, model/dataset library, training with live metrics, model playground, service connectors (GitHub / Hugging Face / Gmail), and RunPod GPU management — all in one Windows-first app.
 
@@ -137,7 +137,7 @@ In PowerShell:
 .\scripts\build_windows.ps1
 ```
 
-The build script creates `dist\AlterEgoTrainingHub.exe`. Build and test it on Windows before distributing it. A Windows executable should be built on Windows; the source checkout itself is cross-platform only where Tkinter and an appropriate credential-store backend are available. On Linux/macOS the same PyInstaller pipeline is available as `python scripts/build_desktop.py`. The `Windows Desktop Build` GitHub Actions workflow produces the `.exe` artifact automatically on pushes and pull requests.
+The build script creates `dist\EGO.exe`. Build and test it on Windows before distributing it. A Windows executable should be built on Windows; the source checkout itself is cross-platform only where Tkinter and an appropriate credential-store backend are available. On Linux/macOS the same PyInstaller pipeline is available as `python scripts/build_desktop.py`. The `Windows Desktop Build` GitHub Actions workflow produces the `.exe` artifact automatically on pushes and pull requests.
 
 ## Connect a mentor
 

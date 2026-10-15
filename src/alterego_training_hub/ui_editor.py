@@ -272,8 +272,13 @@ class EditorPage(tk.Frame):
 
         # Code area: primary pane (+ optional synchronized split pane)
         code_wrap = tk.Frame(right, bg=C["code_bg"])
+        # The page is a resizable dock inside a multi-panel window. Do not let
+        # the default Text width (or editor tools) force the center pane wider
+        # than the space left after the sidebar and mentor docks.
+        code_wrap.pack_propagate(False)
         code_wrap.pack(fill="both", expand=True)
         self.pane1 = tk.Frame(code_wrap, bg=C["code_bg"])
+        self.pane1.pack_propagate(False)
         self.pane1.pack(side="left", fill="both", expand=True)
         self.gutter = tk.Text(self.pane1, width=7, wrap="none", font=F_MONO,
                               bd=0, padx=2, pady=6, state="disabled",
@@ -296,6 +301,7 @@ class EditorPage(tk.Frame):
         scroll = ttk.Scrollbar(self.pane1, command=self.editor.yview)
         scroll.pack(side="right", fill="y")
         self.pane2 = tk.Frame(code_wrap, bg=C["code_bg"])
+        self.pane2.pack_propagate(False)
         self.gutter2 = tk.Text(self.pane2, width=7, wrap="none", font=F_MONO,
                                bd=0, padx=2, pady=6, state="disabled",
                                bg=C["panel_alt"], fg=C["muted"],

@@ -44,28 +44,32 @@ class WorkspacePage(tk.Frame):
         # Git card
         git_card = card(self, t(t('Git-репозиторий')))
         git_card.pack(fill="both", expand=True, padx=24, pady=(0, 20))
-        git_card.columnconfigure(1, weight=1)
+        # card() packs its caption inside the returned frame. Keep the grid
+        # controls in a dedicated child so pack and grid never share a parent.
+        git_content = tk.Frame(git_card, bg=C["panel"])
+        git_content.pack(fill="both", expand=True)
+        git_content.columnconfigure(1, weight=1)
 
-        tk.Label(git_card, text="Git URL", bg=C["panel"], font=F_BASE).grid(
+        tk.Label(git_content, text="Git URL", bg=C["panel"], font=F_BASE).grid(
             row=0, column=0, sticky="w", padx=(0, 8), pady=6)
         self.repo_url_var = tk.StringVar()
-        tk.Entry(git_card, textvariable=self.repo_url_var, bd=1, relief="solid",
+        tk.Entry(git_content, textvariable=self.repo_url_var, bd=1, relief="solid",
                  font=F_BASE).grid(row=0, column=1, sticky="ew", pady=6)
-        ttk.Button(git_card, text=t(t('Клонировать…')), command=self.clone_repo).grid(
+        ttk.Button(git_content, text=t(t('Клонировать…')), command=self.clone_repo).grid(
             row=0, column=2, padx=(8, 0), pady=6)
 
-        tk.Label(git_card, text=t(t('Локальная папка')), bg=C["panel"], font=F_BASE).grid(
+        tk.Label(git_content, text=t(t('Локальная папка')), bg=C["panel"], font=F_BASE).grid(
             row=1, column=0, sticky="w", padx=(0, 8), pady=6)
         self.repo_path_var = tk.StringVar(value=self.app.settings.repo_path)
-        tk.Entry(git_card, textvariable=self.repo_path_var, bd=1, relief="solid",
+        tk.Entry(git_content, textvariable=self.repo_path_var, bd=1, relief="solid",
                  font=F_BASE).grid(row=1, column=1, sticky="ew", pady=6)
-        repo_btns = tk.Frame(git_card, bg=C["panel"])
+        repo_btns = tk.Frame(git_content, bg=C["panel"])
         repo_btns.grid(row=1, column=2, padx=(8, 0), pady=6)
         ttk.Button(repo_btns, text=t(t('Выбрать…')), command=self.browse_repo).pack(
             side="left", padx=(0, 4))
         ttk.Button(repo_btns, text=t(t('Подключить')), command=self.connect_repo).pack(side="left")
 
-        actions = tk.Frame(git_card, bg=C["panel"])
+        actions = tk.Frame(git_content, bg=C["panel"])
         actions.grid(row=2, column=0, columnspan=3, sticky="w", pady=(10, 4))
         ttk.Button(actions, text=t(t('Обновить статус')), style="Accent.TButton",
                    command=self.refresh_repo_status).pack(side="left")
@@ -82,21 +86,21 @@ class WorkspacePage(tk.Frame):
             side="left", padx=8)
 
         tk.Label(
-            git_card,
+            git_content,
             text=t(t('Для приватных репозиториев используйте Git Credential Manager или GitHub CLI. Пароль/токен не нужно добавлять в URL.')),
             bg=C["panel"], fg=C["muted"], font=F_SMALL, wraplength=860, justify="left",
         ).grid(row=3, column=0, columnspan=3, sticky="w", pady=(6, 4))
 
         self.repo_summary_var = tk.StringVar(value=t(t('Репозиторий не подключён')))
-        tk.Label(git_card, textvariable=self.repo_summary_var, bg=C["panel"],
+        tk.Label(git_content, textvariable=self.repo_summary_var, bg=C["panel"],
                  font=("Segoe UI", 10, "bold")).grid(
             row=4, column=0, columnspan=3, sticky="w", pady=(6, 4))
 
-        self.repo_output = tk.Text(git_card, height=11, wrap="word", state="disabled",
+        self.repo_output = tk.Text(git_content, height=11, wrap="word", state="disabled",
                                    bd=1, relief="solid", font=("Consolas", 9))
         self.repo_output.grid(row=5, column=0, columnspan=3, sticky="nsew")
-        git_card.rowconfigure(5, weight=1)
-        scroll = ttk.Scrollbar(git_card, orient="vertical", command=self.repo_output.yview)
+        git_content.rowconfigure(5, weight=1)
+        scroll = ttk.Scrollbar(git_content, orient="vertical", command=self.repo_output.yview)
         scroll.grid(row=5, column=3, sticky="ns")
         self.repo_output.configure(yscrollcommand=scroll.set)
 

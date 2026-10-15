@@ -194,13 +194,27 @@ def attach_tooltip(widget, text: str) -> None:
 
 
 def card(parent, title: str | None = None) -> tk.Frame:
-    """White card container with optional caption."""
-    outer = tk.Frame(parent, bg=C["border"], bd=0)
-    inner = tk.Frame(outer, bg=C["panel"], padx=14, pady=12)
-    inner.pack(fill="both", expand=True, padx=1, pady=1)
+    """Return a directly-managed card frame with a subtle one-pixel border.
+
+    The returned frame is also the content parent, so callers can place it
+    with pack/grid and add controls to it. Keeping one frame here avoids an
+    un-managed wrapper that would make the entire card invisible in Tk.
+    """
+    frame = tk.Frame(
+        parent,
+        bg=C["panel"],
+        bd=0,
+        padx=14,
+        pady=12,
+        highlightbackground=C["border"],
+        highlightcolor=C["border"],
+        highlightthickness=1,
+    )
     if title:
-        tk.Label(inner, text=title, bg=C["panel"], fg=C["text"], font=F_BOLD).pack(anchor="w")
-    return inner
+        tk.Label(
+            frame, text=title, bg=C["panel"], fg=C["text"], font=F_BOLD,
+        ).pack(anchor="w", pady=(0, 6))
+    return frame
 
 
 class Collapsible(tk.Frame):

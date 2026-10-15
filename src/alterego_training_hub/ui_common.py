@@ -33,6 +33,28 @@ def apply_theme(root: tk.Tk) -> ttk.Style:
     except tk.TclError:
         pass
 
+    # Classic Tk widgets do not use ttk styles. Set resource defaults before
+    # any page is constructed so Entry/Text/Checkbutton controls inherit the
+    # active palette instead of reverting to white fields and black labels.
+    for pattern, value in (
+        ("*Entry.background", C["panel"]),
+        ("*Entry.foreground", C["text"]),
+        ("*Entry.insertBackground", C["text"]),
+        ("*Entry.selectBackground", C["accent"]),
+        ("*Entry.selectForeground", "#ffffff"),
+        ("*Checkbutton.background", C["panel"]),
+        ("*Checkbutton.foreground", C["text"]),
+        ("*Checkbutton.activeBackground", C["panel"]),
+        ("*Checkbutton.activeForeground", C["text"]),
+        ("*Checkbutton.selectColor", C["panel_alt"]),
+        ("*Text.background", C["panel"]),
+        ("*Text.foreground", C["text"]),
+        ("*Text.insertBackground", C["text"]),
+        ("*Text.selectBackground", C["accent"]),
+        ("*Text.selectForeground", "#ffffff"),
+    ):
+        root.option_add(pattern, value)
+
     style.configure(".", font=F_BASE, background=C["bg"], foreground=C["text"])
     style.configure("TFrame", background=C["bg"])
     style.configure("Panel.TFrame", background=C["panel"])
@@ -60,8 +82,29 @@ def apply_theme(root: tk.Tk) -> ttk.Style:
                      padding=(12, 7))
     style.map("Danger.TButton", background=[("active", C["danger_soft"])])
 
-    style.configure("TEntry", padding=6, fieldbackground=C["panel"])
-    style.configure("TCombobox", padding=5, fieldbackground=C["panel"])
+    style.configure(
+        "TEntry", padding=6, fieldbackground=C["panel"],
+        foreground=C["text"], background=C["panel"],
+    )
+    style.map(
+        "TEntry",
+        fieldbackground=[("disabled", C["panel_alt"]), ("focus", C["panel"])],
+        foreground=[("disabled", C["muted"])],
+    )
+    style.configure(
+        "TCombobox", padding=5, fieldbackground=C["panel"],
+        foreground=C["text"], background=C["panel"],
+        arrowcolor=C["text"], bordercolor=C["border"],
+    )
+    style.map(
+        "TCombobox",
+        fieldbackground=[
+            ("readonly", C["panel"]), ("focus", C["panel"]),
+            ("disabled", C["panel_alt"]),
+        ],
+        foreground=[("readonly", C["text"]), ("disabled", C["muted"])],
+        background=[("readonly", C["panel"]), ("active", C["hover"])],
+    )
 
     style.configure("Treeview", rowheight=28, background=C["panel"], fieldbackground=C["panel"],
                      borderwidth=0, font=F_BASE)

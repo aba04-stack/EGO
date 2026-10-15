@@ -1,6 +1,6 @@
 """Этап 47: API-эмбеддинги в поиске, инвалидация кэша, комплектные шрифты."""
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import pytest
 

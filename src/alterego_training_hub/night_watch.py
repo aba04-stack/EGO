@@ -105,6 +105,44 @@ def due(last_run: float, now: float | None = None,
     return current - last >= interval * 60
 
 
+def _backup_corrupt_file(path: Path) -> Path | None:
+    """Copy a corrupt file to a timestamped backup using an atomic replace."""
+    if not path.is_file():
+        return None
+    try:
+        payload = path.read_bytes()
+    except OSError:
+        return None
+
+    backup = path.with_name(f"{path.name}.corrupt-{time.time_ns()}")
+    temporary_path: Path | None = None
+    descriptor: int | None = None
+    try:
+        descriptor, name = tempfile.mkstemp(
+            prefix=f".{backup.name}.", suffix=".tmp", dir=str(path.parent))
+        temporary_path = Path(name)
+        stream = os.fdopen(descriptor, "wb")
+        descriptor = None
+        with stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary_path, backup)
+        return backup
+    except OSError:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink()
+            except OSError:
+                pass
+        return None
+
+
 class NightWatchLog:
     """Append-only JSON log of watch entries, with safe recovery from corruption."""
 
@@ -113,33 +151,32 @@ class NightWatchLog:
         self.load_error = ""
         self._corrupt_backed_up = False
 
-    def _backup_corrupt(self) -> None:
+    def _backup_corrupt(self) -> bool:
         """Preserve a damaged original at most once per log instance."""
-        if self._corrupt_backed_up or not self.path.is_file():
-            return
-        try:
-            backup = self.path.with_name(
-                f"{self.path.name}.corrupt-{time.time_ns()}")
-            backup.write_bytes(self.path.read_bytes())
-        except OSError:
-            return
-        self._corrupt_backed_up = True
+        if self._corrupt_backed_up:
+            return True
+        self._corrupt_backed_up = _backup_corrupt_file(self.path) is not None
+        return self._corrupt_backed_up
 
     def entries(self) -> list[WatchEntry]:
         if not self.path.is_file():
             return []
         try:
             raw = json.loads(self.path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            self.load_error = "Журнал повреждён; исходный файл сохранён в резервной копии."
-            self._backup_corrupt()
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            backed_up = self._backup_corrupt()
+            detail = ("исходный файл сохранён в резервной копии."
+                      if backed_up else "резервную копию создать не удалось.")
+            self.load_error = f"Журнал повреждён; {detail}"
             return []
         except OSError as exc:
             self.load_error = f"Не удалось прочитать журнал ({type(exc).__name__})."
             return []
         if not isinstance(raw, list):
-            self.load_error = "Формат журнала повреждён; исходный файл сохранён в резервной копии."
-            self._backup_corrupt()
+            backed_up = self._backup_corrupt()
+            detail = ("исходный файл сохранён в резервной копии."
+                      if backed_up else "резервную копию создать не удалось.")
+            self.load_error = f"Формат журнала повреждён; {detail}"
             return []
 
         out: list[WatchEntry] = []
@@ -180,11 +217,13 @@ class NightWatchLog:
                 ok=ok,
             ))
         if skipped:
+            backed_up = self._backup_corrupt()
+            detail = ("исходный файл сохранён в резервной копии."
+                      if backed_up else "резервную копию создать не удалось.")
             self.load_error = (
                 f"В журнале обнаружены некорректные записи/поля: {skipped}; "
-                "исходный файл сохранён в резервной копии."
+                f"{detail}"
             )
-            self._backup_corrupt()
         else:
             self.load_error = ""
         return out
@@ -332,21 +371,60 @@ class WatchState:
         return cls(samples=samples, best_val_loss=best_value)
 
 
+def _state_payload_needs_backup(raw: Any) -> bool:
+    """Identify state payloads whose malformed fields would be discarded."""
+    if not isinstance(raw, dict):
+        return True
+    samples = raw.get("samples", [])
+    if not isinstance(samples, list) or any(
+            not isinstance(item, dict) for item in samples):
+        return True
+    best = raw.get("best_val_loss")
+    if best is not None:
+        if isinstance(best, bool) or not isinstance(best, (int, float)):
+            return True
+        try:
+            if not math.isfinite(float(best)):
+                return True
+        except (TypeError, ValueError, OverflowError):
+            return True
+    return False
+
+
 def load_state(path: str | Path) -> WatchState:
+    target = Path(path)
     try:
-        raw = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        raw = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        _backup_corrupt_file(target)
         return WatchState()
+    if _state_payload_needs_backup(raw):
+        _backup_corrupt_file(target)
     return WatchState.from_dict(raw)
 
 
 def save_state(path: str | Path, state: WatchState) -> Path:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(state.to_dict(), ensure_ascii=False),
-                      encoding="utf-8")
+    temporary_path: Path | None = None
+    try:
+        fd, name = tempfile.mkstemp(
+            prefix=f".{target.name}.", suffix=".tmp", dir=str(target.parent))
+        temporary_path = Path(name)
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as stream:
+            json.dump(state.to_dict(), stream, ensure_ascii=False)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary_path, target)
+    except BaseException:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink()
+            except OSError:
+                pass
+        raise
     return target
-
 
 def state_from_tail(tail: str) -> WatchState:
     """Snapshot (samples + best val_loss) from a training log tail."""

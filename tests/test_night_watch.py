@@ -13,11 +13,14 @@ from alterego_training_hub.night_watch import (
     NightWatchLog,
     WatchConfig,
     WatchEntry,
+    WatchState,
     config_from_dict,
     config_to_dict,
     due,
+    load_state,
     morning_report,
     run_check,
+    save_state,
 )
 
 
@@ -180,3 +183,45 @@ def test_night_watch_log_failed_atomic_replace_keeps_previous_file(tmp_path, mon
 
     assert path.read_bytes() == original
     assert list(tmp_path.glob(".watch.json.*.tmp")) == []
+
+
+def test_night_watch_log_invalid_utf8_preserves_original(tmp_path):
+    path = tmp_path / "watch.json"
+    path.write_bytes(b"\xff\xfe\xfa")
+    original = path.read_bytes()
+
+    log = NightWatchLog(path)
+    assert log.entries() == []
+    assert "резервной копии" in log.load_error
+    backups = list(tmp_path.glob("watch.json.corrupt-*"))
+    assert len(backups) == 1
+    assert backups[0].read_bytes() == original
+
+
+@pytest.mark.parametrize("payload", [b"\xff\xfe", b"{bad", b"[]",
+                                     b'{"samples":[null],"best_val_loss":"nan"}'])
+def test_load_state_preserves_invalid_payload(tmp_path, payload):
+    path = tmp_path / "watch-state.json"
+    path.write_bytes(payload)
+    original = path.read_bytes()
+
+    assert load_state(path) == WatchState()
+    backups = list(tmp_path.glob("watch-state.json.corrupt-*"))
+    assert len(backups) == 1
+    assert backups[0].read_bytes() == original
+
+
+def test_save_state_atomic_replace_keeps_previous_file(tmp_path, monkeypatch):
+    path = tmp_path / "watch-state.json"
+    save_state(path, WatchState(samples=[{"step": 1}], best_val_loss=1.5))
+    original = path.read_bytes()
+
+    def fail_replace(source, target):
+        raise OSError("simulated state replace failure")
+
+    monkeypatch.setattr(night_watch.os, "replace", fail_replace)
+    with pytest.raises(OSError, match="simulated state replace failure"):
+        save_state(path, WatchState(samples=[{"step": 2}], best_val_loss=0.5))
+
+    assert path.read_bytes() == original
+    assert list(tmp_path.glob(".watch-state.json.*.tmp")) == []

@@ -47,6 +47,7 @@ class ScriptConfig:
     engine: str = "auto"  # auto | trainer | trl (этап B: TRL SFTTrainer)
     packing: bool = False  # этап C: только с FlashAttention-2 (изоляция)
     group_by_length: bool = False  # этап C: батчи из похожих по длине
+    dpo_beta: float = 0.1  # этап E: сила KL-штрафа DPO
     sample_every: int = 200  # steps between generation samples in the log
     eval_prompts: tuple[str, ...] = ("Привет! Расскажи о себе.",)
 
@@ -108,6 +109,7 @@ def _config_json(cfg: ScriptConfig) -> str:
         "engine": effective_engine(cfg),
         "packing": bool(cfg.packing),
         "group_by_length": bool(cfg.group_by_length),
+        "dpo": {"beta": float(cfg.dpo_beta)},
         "dataset": cfg.dataset_path,
         "tokenizer": cfg.tokenizer_path,
         "base_model": cfg.base_model,
@@ -486,6 +488,9 @@ def _dispatch(args) -> None:
               flush=True)
     if CONFIG.get("recipe_name") == "classifier":
         train_classifier(args)
+        return
+    if CONFIG.get("recipe_name") == "dpo":
+        train_dpo(args)
         return
     if CONFIG["path"] == "scratch":
         # Scratch строит char-корпус в памяти по дизайну (тензор токенов).
@@ -1035,6 +1040,204 @@ def train_lora_trl(args) -> None:
                    checkpoint="final")
     trainer.save_model(args.output_dir)
     print(f"Готово. Адаптер (TRL): {args.output_dir}", flush=True)
+
+def _generate_reply(model, tokenizer, prompt: str, max_new: int = 24) -> str:
+    """Короткая жадная генерация для сравнения до/после (DPO)."""
+    import torch
+
+    model.eval()
+    try:
+        if getattr(tokenizer, "chat_template", None):
+            text = tokenizer.apply_chat_template(
+                [{"role": "user", "content": prompt}],
+                tokenize=False, add_generation_prompt=True)
+        else:
+            text = prompt
+        inputs = tokenizer(text, return_tensors="pt").to(model.device)
+        with torch.no_grad():
+            out = model.generate(**inputs, max_new_tokens=max_new,
+                                 do_sample=False,
+                                 pad_token_id=tokenizer.pad_token_id)
+        return tokenizer.decode(out[0][inputs["input_ids"].shape[1]:],
+                                skip_special_tokens=True).strip()
+    finally:
+        model.train()
+
+
+def _pref_logp(model, tokenizer, prompt: str, completion: str,
+               device) -> float:
+    """Сумма log-prob завершения при промпте (промпт замаскирован)."""
+    import torch
+
+    p_ids = tokenizer(prompt, add_special_tokens=False)["input_ids"]
+    c_ids = tokenizer(completion, add_special_tokens=False)["input_ids"]
+    ids = torch.tensor([p_ids + c_ids], device=device)
+    labels = torch.tensor([[-100] * len(p_ids) + c_ids], device=device)
+    with torch.no_grad():
+        logits = model(input_ids=ids).logits
+    logp = torch.log_softmax(logits[:, :-1], dim=-1)
+    target = labels[:, 1:]
+    picked = logp.gather(2, target.clamp(min=0).unsqueeze(-1)).squeeze(-1)
+    return float(picked[target != -100].sum())
+
+
+def _preference_metrics(model, tokenizer, pairs, device, beta: float,
+                        ref_model=None) -> dict:
+    """Честные метрики предпочтений, а не только DPO loss.
+
+    acc_logp: доля пар, где модель и так предпочитает chosen по сумме
+    log-prob (сравнима до и после). reward_acc/margin: по неявной награде
+    DPO beta*(logp_pol - logp_ref) — только когда есть отдельная ref.
+    """
+    wins = 0
+    margins = []
+    reward_wins = 0
+    for prompt, chosen, rejected in pairs:
+        lp_c = _pref_logp(model, tokenizer, prompt, chosen, device)
+        lp_r = _pref_logp(model, tokenizer, prompt, rejected, device)
+        wins += lp_c > lp_r
+        margins.append(lp_c - lp_r)
+        if ref_model is not None:
+            ref_c = _pref_logp(ref_model, tokenizer, prompt, chosen, device)
+            ref_r = _pref_logp(ref_model, tokenizer, prompt, rejected,
+                               device)
+            reward_wins += beta * (lp_c - ref_c) > beta * (lp_r - ref_r)
+    out = {"acc_logp": wins / max(1, len(pairs)),
+           "margin_logp": sum(margins) / max(1, len(margins)),
+           "pairs": len(pairs)}
+    if ref_model is not None:
+        out["reward_acc"] = reward_wins / max(1, len(pairs))
+    return out
+
+
+def train_dpo(args) -> None:
+    """DPO (этап E): TRL DPOTrainer + метрики предпочтений до/после.
+
+    Честные ограничения: нужен trl; база ожидается уже SFT-выровненной;
+    качество меряется accuracy пар на отложенной выборке и генерациями
+    до/после на фиксированных промптах, а не одной кривой loss.
+    """
+    try:
+        import torch
+        from datasets import Dataset
+        from peft import LoraConfig
+        from transformers import (AutoModelForCausalLM, AutoTokenizer)
+        from trl import DPOConfig, DPOTrainer
+    except ImportError as exc:
+        raise SystemExit(
+            "Для DPO нужны trl/peft/transformers: "
+            "pip install trl peft transformers datasets") from exc
+
+    rows = []
+    skipped = 0
+    for row in iter_rows_raw(args.dataset):
+        if not isinstance(row, dict):
+            skipped += 1
+            continue
+        prompt = str(row.get("prompt") or "")
+        chosen, rejected = row.get("chosen"), row.get("rejected")
+        if not prompt or chosen is None or rejected is None:
+            skipped += 1
+            continue
+
+        def _flat(value):
+            if isinstance(value, str):
+                return value
+            if isinstance(value, list):
+                return chr(10).join(
+                    f"{m.get('role', '')}: {m.get('content', '')}"
+                    for m in value if isinstance(m, dict))
+            return str(value)
+
+        rows.append({"prompt": prompt, "chosen": _flat(chosen),
+                     "rejected": _flat(rejected)})
+    if len(rows) < 4:
+        raise SystemExit(
+            "Для DPO нужно минимум 4 пары prompt/chosen/rejected "
+            f"(нашлось {len(rows)}; пропущено битых: {skipped}).")
+    import random as _random
+
+    _random.Random(CONFIG["seed"]).shuffle(rows)
+    cut = max(1, int(len(rows) * 0.9)) if len(rows) >= 10 else len(rows)
+    train_rows, eval_rows = rows[:cut], rows[cut:] or rows[-2:]
+    eval_pairs = [(r["prompt"], r["chosen"], r["rejected"])
+                  for r in eval_rows[:32]]
+
+    base = CONFIG["base_model"]
+    tokenizer = AutoTokenizer.from_pretrained(CONFIG["tokenizer"] or base)
+    if tokenizer.eos_token is None:
+        # DPOTrainer дописывает EOS к каждому примеру: без него в данные
+        # попадёт None и обучение упадёт внутри TRL без внятной причины.
+        tokenizer.eos_token = tokenizer.pad_token or tokenizer.unk_token
+        print(f"⚠ У токенизатора не было EOS — взят {tokenizer.eos_token!r}",
+              flush=True)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    model = AutoModelForCausalLM.from_pretrained(base,
+                                                 torch_dtype=torch.float32)
+    device = next(model.parameters()).device
+    beta = float(CONFIG["dpo"]["beta"])
+
+    before = _preference_metrics(model, tokenizer, eval_pairs, device, beta)
+    print(f"DPO до: acc_logp={before['acc_logp']:.3f} "
+          f"margin={before['margin_logp']:.3f} по {before['pairs']} парам",
+          flush=True)
+    for prompt in CONFIG["eval_prompts"]:
+        print(f"[DPO до] {prompt!r} -> "
+              f"{_generate_reply(model, tokenizer, prompt)!r}", flush=True)
+    _RUN_METRICS["pref_acc_before"] = before["acc_logp"]
+
+    lora_cfg = CONFIG["lora"]
+    trainer = DPOTrainer(
+        model=model,
+        ref_model=None,
+        args=DPOConfig(
+            output_dir=args.output_dir,
+            per_device_train_batch_size=CONFIG["batch"],
+            num_train_epochs=args.epochs,
+            learning_rate=args.lr,
+            logging_steps=1,
+            report_to=[], seed=CONFIG["seed"],
+            beta=beta,
+            max_length=CONFIG["seq_len"],
+            max_prompt_length=max(16, CONFIG["seq_len"] // 2)),
+        train_dataset=Dataset.from_list(train_rows),
+        processing_class=tokenizer,
+        peft_config=LoraConfig(
+            r=lora_cfg["r"], lora_alpha=lora_cfg["alpha"],
+            lora_dropout=lora_cfg["dropout"],
+            target_modules=(
+                None if lora_cfg["target_modules"] in ("", "auto")
+                else "all-linear"
+                if lora_cfg["target_modules"] == "all-linear"
+                else [t.strip()
+                      for t in lora_cfg["target_modules"].split(",")
+                      if t.strip()]),
+            task_type="CAUSAL_LM"))
+    trainer.train()
+    trainer.save_model(args.output_dir)
+    tokenizer.save_pretrained(args.output_dir)
+
+    trained = trainer.model
+    after = _preference_metrics(trained, tokenizer, eval_pairs, device,
+                                beta)
+    # reward-метрики — из лога DPOTrainer (он считает их на батчах сам);
+    # отдельная ref-модель ради замера здесь не поднимается.
+    for entry in reversed(trainer.state.log_history):
+        if "rewards/accuracies" in entry:
+            _RUN_METRICS["reward_acc"] = entry["rewards/accuracies"]
+            _RUN_METRICS["reward_margin"] = entry.get("rewards/margins", 0.0)
+            break
+    _RUN_METRICS["pref_acc_after"] = after["acc_logp"]
+    print(f"DPO после: acc_logp={after['acc_logp']:.3f} "
+          f"(было {before['acc_logp']:.3f}), "
+          f"reward_acc(train-log)={_RUN_METRICS.get('reward_acc', 0):.3f}",
+          flush=True)
+    for prompt in CONFIG["eval_prompts"]:
+        print(f"[DPO после] {prompt!r} -> "
+              f"{_generate_reply(trained, tokenizer, prompt)!r}", flush=True)
+    print("Готово. DPO-адаптер сохранён в", args.output_dir, flush=True)
+
 
 def train_classifier(args) -> None:
     """Классификация: SequenceClassification по полю label (НЕ causal LM)."""

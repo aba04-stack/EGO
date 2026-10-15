@@ -1,20 +1,20 @@
 {
   "schema": 2,
   "status": "failed",
-  "error": "SystemExit: TRL-путь: resume не поддержан — выберите движок Trainer для продолжения обучения.",
-  "started_at": 1792074043.4446998,
-  "ended_at": 1792074044.745859,
-  "duration_sec": 1.301,
-  "engine": "trl",
+  "error": "SystemExit: Для DPO нужно минимум 4 пары prompt/chosen/rejected (нашлось 2; пропущено битых: 0).",
+  "started_at": 1792074695.4457586,
+  "ended_at": 1792074697.8652859,
+  "duration_sec": 2.42,
+  "engine": "trainer",
   "path": "lora",
-  "recipe": "",
+  "recipe": "dpo",
   "config": {
     "path": "lora",
-    "recipe_name": "",
-    "engine": "trl",
+    "recipe_name": "dpo",
+    "engine": "trainer",
     "packing": false,
     "group_by_length": false,
-    "dataset": "d.txt",
+    "dataset": "/tmp/pytest-of-user/pytest-22/test_dpo_too_few_pairs_refused0/prefs.jsonl",
     "tokenizer": "",
     "base_model": "m",
     "output_dir": "runs/my-llm",
@@ -41,9 +41,9 @@
   },
   "gpu": "",
   "dataset": {
-    "path": "d.txt",
-    "sha256": "",
-    "bytes": 0
+    "path": "/tmp/pytest-of-user/pytest-22/test_dpo_too_few_pairs_refused0/prefs.jsonl",
+    "sha256": "955e865b2be9eb0412951fc9109dc160937c788e024366bc9608631c70df828c",
+    "bytes": 184
   },
   "metrics": {},
   "artifacts": []

@@ -121,7 +121,20 @@ class TrainingRun:
         if not root.is_dir():
             raise TrainingError(f"Рабочая папка не найдена: {root}")
         try:
-            argv = shlex.split(command)
+            if os.name == "nt":
+                # POSIX shlex treats Windows backslashes as escapes, corrupting
+                # sys.executable paths. Parse Windows quoting and remove only
+                # surrounding grouping quotes before passing argv to Popen.
+                argv = shlex.split(command, posix=False)
+                argv = [
+                    token[1:-1]
+                    if len(token) >= 2 and token[0] == token[-1]
+                    and token[0] in {"'", '"'}
+                    else token
+                    for token in argv
+                ]
+            else:
+                argv = shlex.split(command)
         except ValueError as exc:
             raise TrainingError(f"Не удалось разобрать команду: {exc}") from None
         if not argv:

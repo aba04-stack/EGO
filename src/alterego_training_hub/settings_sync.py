@@ -45,7 +45,8 @@ def _previous_saved_at(file: Path) -> float:
         if not isinstance(raw, dict) or raw.get("app") != "alterego-training-hub":
             return 0.0
         stamp = float(raw.get("saved_at") or 0.0)
-    except (OSError, json.JSONDecodeError, TypeError, ValueError, OverflowError):
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError,
+            TypeError, ValueError, OverflowError):
         return 0.0
     return stamp if math.isfinite(stamp) and stamp > 0 else 0.0
 
@@ -92,8 +93,9 @@ def import_bundle(path: str | Path) -> dict:
         raise SettingsSyncError(f"Файл настроек не найден: {file}")
     try:
         raw = json.loads(file.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise SettingsSyncError(f"Некорректный JSON настроек: {exc}") from None
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise SettingsSyncError(
+            f"Некорректный JSON или кодировка файла настроек: {exc}") from None
     if not isinstance(raw, dict) or not isinstance(raw.get("fields"), dict):
         raise SettingsSyncError("Файл настроек должен содержать объект fields.")
     if raw.get("app") != "alterego-training-hub":
@@ -160,8 +162,24 @@ def pull(settings, folder: str | Path) -> tuple[bool, list[str]]:
     if not file.is_file():
         return False, []
     raw = import_bundle(file)
-    saved_at = float(raw.get("saved_at") or 0.0)
-    if saved_at <= float(getattr(settings, "synced_at", 0.0) or 0.0):
+    saved_raw = raw.get("saved_at", 0.0)
+    if isinstance(saved_raw, bool):
+        raise SettingsSyncError("В файле настроек некорректное время сохранения.")
+    try:
+        saved_at = float(saved_raw or 0.0)
+    except (TypeError, ValueError, OverflowError):
+        raise SettingsSyncError(
+            "В файле настроек некорректное время сохранения.") from None
+    if not math.isfinite(saved_at):
+        raise SettingsSyncError("В файле настроек некорректное время сохранения.")
+    local_raw = getattr(settings, "synced_at", 0.0)
+    try:
+        local_saved_at = float(local_raw or 0.0)
+    except (TypeError, ValueError, OverflowError):
+        local_saved_at = 0.0
+    if not math.isfinite(local_saved_at):
+        local_saved_at = 0.0
+    if saved_at <= local_saved_at:
         return False, []
     changed = apply_bundle(settings, raw)
     settings.synced_at = saved_at

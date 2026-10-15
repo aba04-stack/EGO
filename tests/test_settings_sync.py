@@ -129,3 +129,27 @@ def test_export_settings_replace_failure_keeps_previous_bundle(tmp_path, monkeyp
 
     assert path.read_bytes() == original
     assert list(folder.glob(".alterego-settings.json.*.tmp")) == []
+
+
+
+def test_import_bundle_rejects_invalid_utf8(tmp_path):
+    path = tmp_path / "invalid-encoding.json"
+    path.write_bytes(b"\xff\xfe\xfa")
+
+    with pytest.raises(SettingsSyncError, match="кодировка"):
+        import_bundle(path)
+
+
+@pytest.mark.parametrize("saved_at", ["not-a-time", float("nan"), float("inf"), True])
+def test_pull_rejects_invalid_saved_at(tmp_path, saved_at):
+    folder = tmp_path / "sync"
+    folder.mkdir()
+    (folder / "alterego-settings.json").write_text(json.dumps({
+        "app": "alterego-training-hub",
+        "version": 1,
+        "saved_at": saved_at,
+        "fields": {},
+    }), encoding="utf-8")
+
+    with pytest.raises(SettingsSyncError, match="время сохранения"):
+        pull(AppSettings.load(), folder)

@@ -1117,17 +1117,6 @@ def train_dpo(args) -> None:
     качество меряется accuracy пар на отложенной выборке и генерациями
     до/после на фиксированных промптах, а не одной кривой loss.
     """
-    try:
-        import torch
-        from datasets import Dataset
-        from peft import LoraConfig
-        from transformers import (AutoModelForCausalLM, AutoTokenizer)
-        from trl import DPOConfig, DPOTrainer
-    except ImportError as exc:
-        raise SystemExit(
-            "Для DPO нужны trl/peft/transformers: "
-            "pip install trl peft transformers datasets") from exc
-
     rows = []
     skipped = 0
     for row in iter_rows_raw(args.dataset):
@@ -1155,6 +1144,17 @@ def train_dpo(args) -> None:
         raise SystemExit(
             "Для DPO нужно минимум 4 пары prompt/chosen/rejected "
             f"(нашлось {len(rows)}; пропущено битых: {skipped}).")
+    try:
+        import torch
+        from datasets import Dataset
+        from peft import LoraConfig
+        from transformers import (AutoModelForCausalLM, AutoTokenizer)
+        from trl import DPOConfig, DPOTrainer
+    except ImportError as exc:
+        raise SystemExit(
+            "Для DPO нужны trl/peft/transformers: "
+            "pip install trl peft transformers datasets") from exc
+
     import random as _random
 
     _random.Random(CONFIG["seed"]).shuffle(rows)

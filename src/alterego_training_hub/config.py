@@ -8,6 +8,8 @@ from dataclasses import MISSING as _MISSING
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+# Keep this legacy storage/keyring ID stable across the EGO rebrand so existing
+# settings and saved OS credentials remain available.
 APP_NAME = "AlterEgoTrainingHub"
 
 

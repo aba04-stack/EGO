@@ -1588,10 +1588,11 @@ class TrainingHubApp(tk.Tk):
             from .cloud_queue import CloudJob, CloudJobQueue
 
             try:
+                # Validate the credential/client before writing anything to the
+                # persistent queue. A missing key must be a side-effect-free
+                # refusal, not a failed job left behind in the queue.
                 key = self.secrets.get("runpod_api_key")
-            except RuntimeError as exc:
-                return {"ok": False, "error": str(exc)}
-            try:
+                client = RunPodClient(key)
                 job = CloudJob(
                     name=str(args.get("name") or t('задание')),
                     command=str(args.get("command") or ""),
@@ -1603,7 +1604,6 @@ class TrainingHubApp(tk.Tk):
                     container_disk_gb=int(args.get("container_disk_gb") or 30))
                 queue = CloudJobQueue(self.model_registry().library_dir)
                 queue.add(job)
-                client = RunPodClient(key)
                 queued = queue.submit(job.id, client)
             except Exception as exc:
                 return {"ok": False, "error": str(exc)}

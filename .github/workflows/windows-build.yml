@@ -2,7 +2,7 @@ name: Windows Desktop Build
 
 on:
   push:
-    branches: [feature/desktop-app-mvp, arena/5b5c6f04-repo]
+    branches: [main, feature/desktop-app-mvp, arena/5b5c6f04-repo]
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
@@ -65,38 +65,72 @@ jobs:
           retention-days: 30
 
   release:
-    # Публикация GitHub-релиза по тегу v*: exe + wheel + sdist одним пакетом.
+    # Publish persistent release assets for a new project version on main,
+    # or publish the exact version named by an explicit v* tag.
     timeout-minutes: 15
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && github.event_name == 'push')
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Determine release tag
+        id: meta
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            version="$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+            tag="v${version}"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Check whether this version is already published
+        id: published
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.meta.outputs.tag }}
+        shell: bash
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release $RELEASE_TAG already exists; skipping republish."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Set up Python for release package
+        if: steps.published.outputs.exists != 'true'
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: pyproject.toml
-      - name: Build wheel and sdist
+      - name: Build wheel and source archive
+        if: steps.published.outputs.exists != 'true'
+        shell: bash
         run: |
           python -m pip install build
           python -m build
       - name: Download Windows executable
+        if: steps.published.outputs.exists != 'true'
         uses: actions/download-artifact@v4
         with:
           name: EGO-Windows-x64
           path: release-assets
       - name: Publish GitHub release
+        if: steps.published.outputs.exists != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.meta.outputs.tag }}
+        shell: bash
         run: |
           cp dist/*.whl dist/*.tar.gz release-assets/
           cp release-download/install-windows.bat release-assets/
           cp release-download/install-linux-mac.sh release-assets/
           cp release-download/run-ego.bat release-assets/
           cp release-download/УСТАНОВКА.md release-assets/УСТАНОВКА.md
-          gh release create "${GITHUB_REF_NAME}" release-assets/* \
-            --title "EGO ${GITHUB_REF_NAME}" \
+          gh release create "$RELEASE_TAG" release-assets/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "EGO $RELEASE_TAG" \
             --generate-notes

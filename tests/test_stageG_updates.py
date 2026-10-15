@@ -207,6 +207,7 @@ def test_no_part_leftovers_after_success(tmp_path, keys):
 def test_private_key_scan_and_cli_permissions(tmp_path):
     from alterego_training_hub.signed_update import scan_for_private_keys
 
+    print("DIAG: start private-key scan", flush=True)
     secret = tmp_path / "dist" / "private.pem"
     secret.parent.mkdir()
     secret.write_text("-----BEGIN PRIVATE KEY-----\nx\n", encoding="utf-8")
@@ -217,29 +218,36 @@ def test_private_key_scan_and_cli_permissions(tmp_path):
     (clean / "public.pem").write_text("-----BEGIN PUBLIC KEY-----\n",
                                       encoding="utf-8")
     assert scan_for_private_keys([clean]) == []
+    print("DIAG: private-key scan done", flush=True)
 
     import stat as stat_mod
     import subprocess
     import sys
 
     keys_dir = tmp_path / "keys"
+    print("DIAG: before make-keys", flush=True)
     done = subprocess.run(
         [sys.executable, "scripts/sign_update.py", "make-keys",
          "--out-dir", str(keys_dir)],
         capture_output=True, text=True, timeout=120, cwd=".")
+    print(f"DIAG: make-keys returned {done.returncode}", flush=True)
     assert done.returncode == 0, done.stderr
     if os.name == "posix":
         mode = stat_mod.S_IMODE((keys_dir / "private.pem").stat().st_mode)
         assert mode == 0o600, oct(mode)
+    print("DIAG: before bad check", flush=True)
     bad = subprocess.run(
         [sys.executable, "scripts/sign_update.py", "check",
          str(tmp_path / "dist")],
         capture_output=True, text=True, timeout=120, cwd=".")
+    print(f"DIAG: bad check returned {bad.returncode}", flush=True)
     assert bad.returncode == 1
     assert "НАЙДЕНЫ ЗАКРЫТЫЕ КЛЮЧИ" in bad.stdout
+    print("DIAG: before clean check", flush=True)
     good = subprocess.run(
         [sys.executable, "scripts/sign_update.py", "check", str(clean)],
         capture_output=True, text=True, timeout=120, cwd=".")
+    print(f"DIAG: clean check returned {good.returncode}", flush=True)
     assert good.returncode == 0, good.stdout + good.stderr
     assert "не найдено" in good.stdout
 

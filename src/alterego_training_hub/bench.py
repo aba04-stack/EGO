@@ -7,6 +7,7 @@ output to compute tokens/sec. Results persist to benchmarks.json.
 from __future__ import annotations
 
 import json
+import os
 import re
 import statistics
 import subprocess
@@ -66,7 +67,18 @@ def run_benchmark(model: str, command: str, *, iterations: int = DEFAULT_ITERATI
     import shlex
 
     try:
-        argv = shlex.split(command)
+        if os.name == "nt":
+            # Keep Windows executable paths intact; shlex POSIX mode treats backslashes as escapes.
+            argv = shlex.split(command, posix=False)
+            argv = [
+                token[1:-1]
+                if len(token) >= 2 and token[0] == token[-1]
+                and token[0] in {"'", '"'}
+                else token
+                for token in argv
+            ]
+        else:
+            argv = shlex.split(command)
     except ValueError as exc:
         raise BenchError(f"Не удалось разобрать команду: {exc}") from None
     durations: list[float] = []
@@ -100,8 +112,11 @@ def run_benchmark(model: str, command: str, *, iterations: int = DEFAULT_ITERATI
             tokens = max(tokens, parse_tokens(output))
             output_chars = max(output_chars, len(output))
     mean_raw = statistics.mean(durations) if durations else 0.0
-    mean_ms = max(1, round(mean_raw)) if durations else 0
-    tokens_per_sec = (tokens / (mean_raw / 1000.0)) if tokens and mean_raw > 0 \
+    # Extremely short no-op commands can measure as 0 on coarse clocks.
+    # Use a 1 ms lower bound instead of reporting zero throughput.
+    safe_mean_ms = max(mean_raw, 1.0) if durations else 0.0
+    mean_ms = max(1, round(safe_mean_ms)) if durations else 0
+    tokens_per_sec = (tokens / (safe_mean_ms / 1000.0)) if tokens and safe_mean_ms > 0 \
         else 0.0
     return BenchResult(model=model, command=command, iterations=iterations,
                        duration_ms=mean_ms,

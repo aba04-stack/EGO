@@ -44,6 +44,8 @@ class ScriptConfig:
     qlora: bool = False  # 4-bit base (bitsandbytes) — QLoRA
     target_modules: str = "auto"  # auto | all-linear | q_proj,v_proj,...
     gradient_checkpointing: bool = False
+    engine: str = "auto"  # auto | trainer | trl (этап B: TRL SFTTrainer)
+    packing: bool = False  # этап C: выключено до измерений изоляции
     sample_every: int = 200  # steps between generation samples in the log
     eval_prompts: tuple[str, ...] = ("Привет! Расскажи о себе.",)
 
@@ -102,6 +104,8 @@ def _config_json(cfg: ScriptConfig) -> str:
     payload = {
         "path": cfg.path,
         "recipe_name": cfg.recipe_name,
+        "engine": effective_engine(cfg),
+        "packing": bool(cfg.packing),
         "dataset": cfg.dataset_path,
         "tokenizer": cfg.tokenizer_path,
         "base_model": cfg.base_model,
@@ -225,6 +229,48 @@ def iter_rows_raw(path: str):
                     yield {"text": line.rstrip("\\n")}
 
 
+def _sft_pairs(dataset_path: str):
+    """Поток SFT-примеров: text + prompt + messages (для chat template)."""
+    for row in iter_rows_raw(dataset_path):
+        prompt, full = _row_pair(row)
+        if full.strip():
+            messages = row.get("messages") if isinstance(row, dict) else None
+            yield {"text": full, "prompt": prompt,
+                   "messages": messages if isinstance(messages, list) else []}
+
+
+def _tokenize_sft_batch(batch, tokenizer):
+    """Токенизация с маскированием prompt; chat template, когда он есть."""
+    use_chat_template = bool(getattr(tokenizer, "chat_template", None))
+    max_len = CONFIG["seq_len"]
+
+    def _ids_for(text, messages, *, prompt_only=False):
+        if messages and use_chat_template:
+            ids = tokenizer.apply_chat_template(
+                messages, tokenize=True, add_generation_prompt=prompt_only)
+            return list(ids)[:max_len]
+        return tokenizer(text, truncation=True,
+                         max_length=max_len)["input_ids"]
+
+    input_ids, labels = [], []
+    for text, prompt, messages in zip(
+            batch["text"], batch["prompt"], batch["messages"]):
+        ids = _ids_for(text, messages)
+        if messages and use_chat_template:
+            last = max((i for i, m in enumerate(messages)
+                        if isinstance(m, dict)
+                        and m.get("role") == "assistant"), default=-1)
+            prompt_ids = (_ids_for("", messages[:last], prompt_only=True)
+                          if last > 0 else [])
+        else:
+            prompt_ids = tokenizer(
+                prompt, truncation=True,
+                max_length=max_len)["input_ids"] if prompt else []
+        input_ids.append(ids)
+        labels.append(_mask_labels(ids, prompt_ids))
+    return {"input_ids": input_ids, "labels": labels}
+
+
 def load_texts(path: str) -> list[str]:
     """Датасет построчно (стриминг): .txt, .jsonl, .json список.
 
@@ -277,6 +323,8 @@ def main() -> None:
             raise SystemExit("Датасет пуст — проверьте путь и формат.")
         print(f"Данные: {len(texts)} строк", flush=True)
         train_scratch(args, texts)
+    elif CONFIG.get("engine") == "trl":
+        train_lora_trl(args)
     else:
         train_lora(args)  # потоково читает args.dataset, список не строит
 
@@ -607,19 +655,9 @@ def train_lora(args) -> None:
         ([t.strip() for t in targets.split(",") if t.strip()]
          if targets != "all-linear" else "all-linear"),
         task_type="CAUSAL_LM"))
-    def _pairs():
-        for row in iter_rows_raw(args.dataset):
-            prompt, full = _row_pair(row)
-            if full.strip():
-                messages = row.get("messages") if isinstance(row, dict) \
-                    else None
-                yield {"text": full, "prompt": prompt,
-                       "messages": messages
-                       if isinstance(messages, list) else []}
-
     # from_generator: датасет строится потоково (Arrow на диске),
     # весь корпус в RAM не собирается.
-    full_ds = Dataset.from_generator(_pairs)
+    full_ds = Dataset.from_generator(lambda: _sft_pairs(args.dataset))
     if full_ds.num_rows >= 2:
         parts = full_ds.train_test_split(
             test_size=max(1, full_ds.num_rows // 10), seed=CONFIG["seed"])
@@ -627,42 +665,8 @@ def train_lora(args) -> None:
     else:
         train_ds, eval_ds = full_ds, None
 
-    use_chat_template = bool(getattr(tokenizer, "chat_template", None))
-
-    def _ids_for(text, messages, *, prompt_only=False):
-        """Токены примера: chat template модели > ручной 'role: content'."""
-        max_len = CONFIG["seq_len"]
-        if messages and use_chat_template:
-            ids = tokenizer.apply_chat_template(
-                messages, tokenize=True,
-                add_generation_prompt=prompt_only)
-            return list(ids)[:max_len]
-        return tokenizer(text, truncation=True,
-                         max_length=max_len)["input_ids"]
-
     def tokenize(batch):
-        input_ids, labels = [], []
-        for text, prompt, messages in zip(
-                batch["text"], batch["prompt"], batch["messages"]):
-            ids = _ids_for(text, messages)
-            if messages and use_chat_template:
-                # prompt = диалог до финального assistant + generation prompt
-                last = max((i for i, m in enumerate(messages)
-                            if isinstance(m, dict)
-                            and m.get("role") == "assistant"), default=-1)
-                prompt_ids = (_ids_for("", messages[:last],
-                                       prompt_only=True)
-                              if last > 0 else [])
-            else:
-                prompt_ids = tokenizer(
-                    prompt, truncation=True,
-                    max_length=CONFIG["seq_len"])["input_ids"] if prompt \
-                    else []
-            input_ids.append(ids)
-            # Маскируем prompt (инструкции, system/user): loss только
-            # по целевому ответу. Plain text: prompt пуст — обычный LM.
-            labels.append(_mask_labels(ids, prompt_ids))
-        return {"input_ids": input_ids, "labels": labels}
+        return _tokenize_sft_batch(batch, tokenizer)
 
     trainer = Trainer(
         model=model,
@@ -711,6 +715,118 @@ def train_lora(args) -> None:
     trainer.save_model(args.output_dir)
     print(f"Готово. Адаптер: {args.output_dir}", flush=True)
 
+
+
+def train_lora_trl(args) -> None:
+    """LoRA через TRL SFTTrainer (этап B, альтернативный движок).
+
+    Честные ограничения этой версии пути:
+    * TRL 0.12 не маскирует completion сам — датасет подаётся
+      ПРЕДТОКЕНИЗИРОВАННЫМ нашим проверенным маскированием
+      (_tokenize_sft_batch), SFTTrainer ведёт цикл и конфигурацию.
+    * packing здесь не применяется (см. этап C: изоляция attention).
+    * resume адаптера не поддержан: используйте движок Trainer.
+    """
+    if args.resume:
+        raise SystemExit(
+            "TRL-путь: resume не поддержан — выберите движок Trainer "
+            "для продолжения обучения.")
+    try:
+        import torch
+        from datasets import Dataset
+        from peft import LoraConfig
+        from transformers import (AutoModelForCausalLM, AutoTokenizer,
+                                  DataCollatorForSeq2Seq)
+        from trl import SFTConfig, SFTTrainer
+    except ImportError as exc:
+        raise SystemExit(
+            "Нужен TRL: pip install trl — или выберите движок Trainer "
+            "в мастере (он работает без TRL).") from exc
+
+    base = CONFIG["base_model"]
+    lora_cfg = CONFIG["lora"]
+    print(f"Движок: TRL SFTTrainer · база: {base}", flush=True)
+    tokenizer = AutoTokenizer.from_pretrained(CONFIG["tokenizer"] or base)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    if not getattr(tokenizer, "chat_template", None):
+        # TRL для диалогов нужен шаблон: ставим минимальный, совпадающий
+        # с ручным рендером Trainer-пути, и честно сообщаем об этом.
+        tokenizer.chat_template = (
+            "{% for m in messages %}{{ m['role'] }}: {{ m['content'] }}"
+            + chr(10)
+            + "{% endfor %}{% if add_generation_prompt %}assistant: "
+              "{% endif %}")
+        print("⚠ У токенизатора нет chat template — применён минимальный "
+              "шаблон приложения (role: content). Для фирменного шаблона "
+              "модели используйте движок Trainer.", flush=True)
+    if not torch.cuda.is_available():
+        dtype = torch.float32
+    elif torch.cuda.is_bf16_supported():
+        dtype = torch.bfloat16
+    else:
+        dtype = torch.float16
+    model = AutoModelForCausalLM.from_pretrained(base, torch_dtype=dtype)
+
+    full_ds = Dataset.from_generator(lambda: _sft_pairs(args.dataset))
+    if full_ds.num_rows == 0:
+        raise SystemExit("Датасет пуст — проверьте путь и формат.")
+    if full_ds.num_rows >= 2:
+        parts = full_ds.train_test_split(
+            test_size=max(1, full_ds.num_rows // 10), seed=CONFIG["seed"])
+        train_raw, eval_raw = parts["train"], parts["test"]
+    else:
+        train_raw, eval_raw = full_ds, None
+
+    def tokenize(batch):
+        return _tokenize_sft_batch(batch, tokenizer)
+
+    train_ds = train_raw.map(tokenize, batched=True)
+    eval_ds = eval_raw.map(tokenize, batched=True) \
+        if eval_raw is not None else None
+    targets = lora_cfg["target_modules"]
+    trainer = SFTTrainer(
+        model=model,
+        args=SFTConfig(
+            output_dir=args.output_dir,
+            per_device_train_batch_size=CONFIG["batch"],
+            gradient_accumulation_steps=CONFIG["grad_accum"],
+            num_train_epochs=args.epochs,
+            learning_rate=args.lr,
+            warmup_ratio=CONFIG["warmup_pct"] / 100.0,
+            lr_scheduler_type="cosine",
+            gradient_checkpointing=bool(CONFIG["gradient_checkpointing"]),
+            max_seq_length=CONFIG["seq_len"],
+            packing=False,
+            eval_strategy="epoch" if eval_ds is not None else "no",
+            save_strategy="epoch",
+            report_to=[], seed=CONFIG["seed"]),
+        train_dataset=train_ds,
+        eval_dataset=eval_ds,
+        peft_config=LoraConfig(
+            r=lora_cfg["r"], lora_alpha=lora_cfg["alpha"],
+            lora_dropout=lora_cfg["dropout"],
+            target_modules=None if targets == "auto" else
+            ([t.strip() for t in targets.split(",") if t.strip()]
+             if targets != "all-linear" else "all-linear"),
+            task_type="CAUSAL_LM"),
+        processing_class=tokenizer,
+        data_collator=DataCollatorForSeq2Seq(
+            tokenizer, padding=True, label_pad_token_id=-100))
+    trainer.train()
+    if eval_ds is not None:
+        metrics = trainer.evaluate()
+        val = metrics.get("eval_loss")
+        if val is not None:
+            print(f"eval: val_loss={val:.4f}", flush=True)
+    for prompt in CONFIG["eval_prompts"]:
+        inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+        out = model.generate(**inputs, max_new_tokens=60, do_sample=False)
+        log_sample(int(trainer.state.global_step), prompt,
+                   tokenizer.decode(out[0], skip_special_tokens=True),
+                   checkpoint="final")
+    trainer.save_model(args.output_dir)
+    print(f"Готово. Адаптер (TRL): {args.output_dir}", flush=True)
 
 def train_classifier(args) -> None:
     """Классификация: SequenceClassification по полю label (НЕ causal LM)."""
@@ -787,6 +903,18 @@ def train_classifier(args) -> None:
     print(f"Готово. Классификатор: {args.output_dir}", flush=True)
 
 '''
+
+
+def effective_engine(cfg: ScriptConfig) -> str:
+    """auto: TRL для чат-рецепта при установленном trl, иначе Trainer."""
+    if cfg.engine in {"trainer", "trl"}:
+        return cfg.engine
+    if cfg.recipe_name == "chatbot":
+        import importlib.util
+
+        if importlib.util.find_spec("trl") is not None:
+            return "trl"
+    return "trainer"
 
 
 def generate_script(cfg: ScriptConfig) -> str:

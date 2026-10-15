@@ -16,11 +16,9 @@ import json
 import random
 import subprocess
 import sys
-import time
 from pathlib import Path
 
-WORDS = ("кошка собака птица модель данные обучение сеть токен "
-         "пример вопрос ответ текст слово код файл сервер").split()
+WORDS = ["кошка", "собака", "птица", "модель", "данные", "обучение", "сеть", "токен", "пример", "вопрос", "ответ", "текст", "слово", "код", "файл", "сервер"]
 SEED = 42
 
 _LAUNCHER = r"""
@@ -53,8 +51,7 @@ def build_dataset(work: Path, n: int) -> Path:
 
 def build_base(work: Path, data_rows: list[dict]) -> Path:
     from tokenizers import Tokenizer, models, pre_tokenizers, trainers
-    from transformers import (GPT2Config, GPT2LMHeadModel,
-                              PreTrainedTokenizerFast)
+    from transformers import GPT2Config, GPT2LMHeadModel, PreTrainedTokenizerFast
 
     texts = [" ".join(m["content"] for m in r["messages"])
              for r in data_rows]

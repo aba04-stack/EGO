@@ -217,6 +217,12 @@ class ModelDashboardPage(tk.Frame):
             values=[r.name for r in RECIPES])
         self.recipe_combo.pack(side="left", padx=(4, 10))
         self.recipe_combo.current(0)
+        tk.Label(wiz_row, text=t('Движок'), bg=C["panel"], font=F_BASE).pack(side="left")
+        self.wizard_engine_combo = ttk.Combobox(
+            wiz_row, state="readonly", width=16,
+            values=[t('Авто'), "Trainer (HF)", "TRL SFTTrainer"])
+        self.wizard_engine_combo.pack(side="left", padx=(4, 10))
+        self.wizard_engine_combo.current(0)
         tk.Label(wiz_row, text=t(t('Пресет')), bg=C["panel"], font=F_BASE).pack(side="left")
         self.preset_combo = ttk.Combobox(
             wiz_row, state="readonly", width=22,
@@ -331,8 +337,18 @@ class ModelDashboardPage(tk.Frame):
 
         recipe, preset, plan = self._wizard_plan_obj()
         advice = plan.advice
+        engine_by_index = ("auto", "trainer", "trl")
+        engine_combo = self.__dict__.get("wizard_engine_combo")
+        try:
+            engine_idx = engine_combo.current() if engine_combo else 0
+        except Exception:
+            engine_idx = 0
+        if not isinstance(engine_idx, int) or isinstance(engine_idx, bool):
+            engine_idx = 0
         return ScriptConfig(
-            path=recipe.path, recipe_name=recipe.name, preset=preset,
+            path=recipe.path, recipe_name=recipe.id, preset=preset,
+            engine=engine_by_index[engine_idx]
+            if 0 <= engine_idx < len(engine_by_index) else "auto",
             dataset_path=self.wizard_dataset_var.get().strip(),
             base_model=str(getattr(self.app.settings, "mentor_model", "") or ""),
             lr=advice.lr, batch=advice.batch, epochs=advice.epochs,

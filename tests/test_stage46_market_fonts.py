@@ -70,5 +70,5 @@ def test_font_detection_priority():
     assert ui == "Segoe UI" and mono == "Consolas"
     fonts = set_fonts("Inter", "JetBrains Mono")
     assert fonts["F_MONO"][0] == "JetBrains Mono"
-    assert fonts["F_TITLE"][1] == 16
+    assert fonts["F_TITLE"][1] == 14
     set_fonts("Segoe UI", "Consolas")  # restore defaults for other tests

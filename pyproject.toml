@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ego-desktop"
 version = "1.15.2"
-description = "Experimental EGO hobby project for model training, API mentors, and cloud GPU management; no warranty or support guarantee"
+description = "Desktop studio for training LLMs (SFT/LoRA, datasets, metrics); experimental, no warranty"
 requires-python = ">=3.10"
 dependencies = ["keyring>=25.0", "paramiko>=3.4"]
 

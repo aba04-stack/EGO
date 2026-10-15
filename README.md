@@ -1,18 +1,27 @@
 # EGO
 
-EGO is an experimental desktop app for exploring language models: code editor and terminal, AI mentor, model and dataset catalogue, training metrics, and tools for local or cloud computing.
+**EGO — студия для обучения LLM.** Настольная программа: данные, запуск
+обучения (SFT / LoRA / с нуля), живые метрики, чекпоинты, оценка и
+наставник рядом с логом. Не чат «для дома» — конвейер, чтобы обучить
+свою языковую модель.
 
-EGO — экспериментальная настольная программа для работы с языковыми моделями: редактор кода и терминал, ИИ-наставник, каталог моделей и датасетов, метрики обучения и инструменты для локальных/облачных вычислений.
+EGO is a desktop studio **for training LLMs**: datasets, SFT/LoRA (or
+train-from-scratch), live metrics, checkpoints, evaluation, and a mentor
+next to the training log. It is not a home chatbot.
 
-> **Experimental hobby project — no warranty.** This is a personal project for curiosity and learning. The author is not a professional software developer. The program may be incomplete, unstable, or fail to run; functionality, security, compatibility, and support are not guaranteed. Use it at your own risk.
+> **Experimental project — no warranty.** The program may be incomplete or
+> unstable. Use it at your own risk.
 >
-> **Экспериментальный проект для интереса и обучения.** Автор не профессиональный разработчик. Программа может содержать ошибки или не запуститься; работа, безопасность и поддержка не гарантируются. Используйте на свой риск.
+> **Экспериментальный проект — без гарантий.** Программа может содержать
+> ошибки. Используйте на свой риск.
+
+Назначение подробно: [docs/PURPOSE.md](docs/PURPOSE.md).
 
 ## Интерфейс / Interface
 
 ![Screenshot of the real EGO desktop app running in CI](docs/screenshots/ego-main.png)
 
-*Скриншот будет автоматически обновляться после изменений интерфейса. / The screenshot is refreshed automatically when the UI changes.*
+*Скриншот обновляется в CI после изменений UI.*
 
 ## Последняя версия / Latest version
 
@@ -30,4 +39,4 @@ EGO — экспериментальная настольная программ
 
 Для установки через Python рекомендуется Python 3.11 или 3.12. Инструкции: [УСТАНОВКА.md](release-download/УСТАНОВКА.md). Файлы установщика и wheel должны быть скачаны **из одного и того же релиза**.
 
-[История изменений / Changelog](CHANGELOG.md) · [Исходный код / Source repository](https://github.com/aba04-stack/EGO).
+[История изменений / Changelog](CHANGELOG.md) · [Зачем EGO / Purpose](docs/PURPOSE.md) · [Исходный код](https://github.com/aba04-stack/EGO).

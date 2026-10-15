@@ -137,7 +137,7 @@ class TrainingHubApp(tk.Tk):
         brand.pack(fill="x", pady=(18, 12), padx=16)
         tk.Label(brand, text="EGO", bg=C["sidebar"], fg="#ffffff",
                  font=("Segoe UI", 16, "bold")).pack(anchor="w")
-        tk.Label(brand, text="LLM Studio", bg=C["sidebar"], fg=C["sidebar_fg"],
+        tk.Label(brand, text=t("brand.subtitle"), bg=C["sidebar"], fg=C["sidebar_fg"],
                  font=("Segoe UI", 9)).pack(anchor="w")
         tk.Frame(brand, bg=C["accent"], height=2).pack(fill="x", pady=(10, 0))
 

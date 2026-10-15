@@ -8,6 +8,9 @@ shell drives it with a minute tick; the log persists as JSON.
 from __future__ import annotations
 
 import json
+import math
+import os
+import tempfile
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -81,44 +84,133 @@ def _parse_hhmm(text: str) -> int | None:
 
 def due(last_run: float, now: float | None = None,
         interval_minutes: int = 30) -> bool:
-    """True when ``interval_minutes`` elapsed since ``last_run``."""
+    """True when interval_minutes elapsed; malformed saved times fail safe."""
     try:
         interval = max(5, int(interval_minutes))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return False
-    current = now if now is not None else time.time()
-    return current - float(last_run or 0.0) >= interval * 60
+    try:
+        current = float(now if now is not None else time.time())
+    except (TypeError, ValueError, OverflowError):
+        return False
+    if not math.isfinite(current):
+        return False
+    try:
+        last = float(last_run or 0.0)
+    except (TypeError, ValueError, OverflowError):
+        last = 0.0
+    if not math.isfinite(last):
+        last = 0.0
+    # An invalid last-run timestamp should not permanently suppress the watch.
+    return current - last >= interval * 60
 
 
 class NightWatchLog:
-    """Append-only JSON log of watch entries."""
+    """Append-only JSON log of watch entries, with safe recovery from corruption."""
 
     def __init__(self, path: str | Path):
         self.path = Path(path)
+        self.load_error = ""
+        self._corrupt_backed_up = False
+
+    def _backup_corrupt(self) -> None:
+        """Preserve a damaged original at most once per log instance."""
+        if self._corrupt_backed_up or not self.path.is_file():
+            return
+        try:
+            backup = self.path.with_name(
+                f"{self.path.name}.corrupt-{time.time_ns()}")
+            backup.write_bytes(self.path.read_bytes())
+        except OSError:
+            return
+        self._corrupt_backed_up = True
 
     def entries(self) -> list[WatchEntry]:
         if not self.path.is_file():
             return []
         try:
             raw = json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+        except json.JSONDecodeError:
+            self.load_error = "Журнал повреждён; исходный файл сохранён в резервной копии."
+            self._backup_corrupt()
             return []
+        except OSError as exc:
+            self.load_error = f"Не удалось прочитать журнал ({type(exc).__name__})."
+            return []
+        if not isinstance(raw, list):
+            self.load_error = "Формат журнала повреждён; исходный файл сохранён в резервной копии."
+            self._backup_corrupt()
+            return []
+
         out: list[WatchEntry] = []
-        for item in raw if isinstance(raw, list) else []:
-            if isinstance(item, dict):
-                out.append(WatchEntry(
-                    at=float(item.get("at") or 0.0),
-                    summary=str(item.get("summary") or ""),
-                    issues=[str(x) for x in item.get("issues") or []],
-                    ok=bool(item.get("ok", True))))
+        skipped = 0
+        for item in raw:
+            if not isinstance(item, dict):
+                skipped += 1
+                continue
+            try:
+                stamp = float(item.get("at") or 0.0)
+            except (TypeError, ValueError, OverflowError):
+                skipped += 1
+                continue
+            if not math.isfinite(stamp):
+                skipped += 1
+                continue
+
+            raw_issues = item.get("issues", [])
+            if isinstance(raw_issues, list):
+                issues = [str(value) for value in raw_issues]
+            elif raw_issues in (None, ""):
+                issues = []
+            else:
+                # Keep the rest of this entry even if one field is malformed.
+                issues = [str(raw_issues)]
+                skipped += 1
+            raw_ok = item.get("ok", True)
+            if isinstance(raw_ok, bool):
+                ok = raw_ok
+            else:
+                ok = True
+                skipped += 1
+            out.append(WatchEntry(
+                at=stamp,
+                summary=str(item.get("summary") or ""),
+                issues=issues,
+                ok=ok,
+            ))
+        if skipped:
+            self.load_error = (
+                f"В журнале обнаружены некорректные записи/поля: {skipped}; "
+                "исходный файл сохранён в резервной копии."
+            )
+            self._backup_corrupt()
+        else:
+            self.load_error = ""
         return out
 
     def add(self, entry: WatchEntry) -> None:
         items = [asdict(item) for item in self.entries()]
-        items.append(asdict(entry))
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(items, ensure_ascii=False, indent=2),
-                             encoding="utf-8")
+        temporary_path = None
+        try:
+            fd, name = tempfile.mkstemp(
+                prefix=f".{self.path.name}.", suffix=".tmp",
+                dir=str(self.path.parent))
+            temporary_path = Path(name)
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as stream:
+                json.dump([*items, asdict(entry)], stream,
+                          ensure_ascii=False, indent=2)
+                stream.write("\n")
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary_path, self.path)
+        except BaseException:
+            if temporary_path is not None:
+                try:
+                    temporary_path.unlink()
+                except OSError:
+                    pass
+            raise
 
     def clear(self) -> None:
         if self.path.is_file():
@@ -183,13 +275,29 @@ def config_to_dict(config: WatchConfig) -> dict[str, Any]:
 
 
 def config_from_dict(raw: dict[str, Any]) -> WatchConfig:
+    values = raw if isinstance(raw, dict) else {}
+    interval_raw = values.get("interval_minutes", 30)
+    if interval_raw is None or interval_raw == "":
+        interval_raw = 30
+    if isinstance(interval_raw, bool):
+        raise NightWatchError("Интервал: целое число минут.")
+    try:
+        interval = int(interval_raw)
+        if isinstance(interval_raw, float) and not interval_raw.is_integer():
+            raise ValueError
+    except (TypeError, ValueError, OverflowError):
+        raise NightWatchError("Интервал: целое число минут.") from None
+
+    enabled_raw = values.get("enabled", False)
     config = WatchConfig(
-        enabled=bool((raw or {}).get("enabled", False)),
-        start=str((raw or {}).get("start") or "22:00"),
-        end=str((raw or {}).get("end") or "08:00"),
-        interval_minutes=int((raw or {}).get("interval_minutes") or 30))
+        enabled=enabled_raw if isinstance(enabled_raw, bool) else False,
+        start=str(values.get("start") or "22:00"),
+        end=str(values.get("end") or "08:00"),
+        interval_minutes=interval,
+    )
     config.validate()
     return config
+
 
 
 # ------------------------------------------------- верификатор обучения (этап 38)
@@ -208,11 +316,19 @@ class WatchState:
     def from_dict(cls, raw: Any) -> WatchState:
         if not isinstance(raw, dict):
             return cls()
-        samples = raw.get("samples")
+        raw_samples = raw.get("samples")
+        samples = (
+            [item for item in raw_samples if isinstance(item, dict)]
+            if isinstance(raw_samples, list) else []
+        )
         best = raw.get("best_val_loss")
-        return cls(samples=list(samples) if isinstance(samples, list) else [],
-                   best_val_loss=float(best) if isinstance(best, (int, float))
-                   else None)
+        try:
+            best_value = float(best) if isinstance(best, (int, float)) else None
+        except (TypeError, ValueError, OverflowError):
+            best_value = None
+        if best_value is not None and not math.isfinite(best_value):
+            best_value = None
+        return cls(samples=samples, best_val_loss=best_value)
 
 
 def load_state(path: str | Path) -> WatchState:

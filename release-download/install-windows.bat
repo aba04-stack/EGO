@@ -12,7 +12,7 @@ if errorlevel 1 (
 )
 
 set "WHEEL="
-for %%F in (alterego_training_hub_desktop-*-py3-none-any.whl) do if exist "%%~fF" (
+for %%F in (ego_desktop-*-py3-none-any.whl) do if exist "%%~fF" (
   if defined WHEEL (
     echo Найдено несколько wheel-файлов. Оставьте рядом только wheel этой версии релиза.
     pause
@@ -21,7 +21,7 @@ for %%F in (alterego_training_hub_desktop-*-py3-none-any.whl) do if exist "%%~fF
   set "WHEEL=%%~nxF"
 )
 if not defined WHEEL (
-  echo Рядом не найден alterego_training_hub_desktop-*-py3-none-any.whl.
+  echo Рядом не найден ego_desktop-*-py3-none-any.whl.
   echo Скачайте wheel из того же GitHub Release и положите его рядом с этим установщиком.
   pause
   exit /b 1
@@ -34,6 +34,16 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
+py -m pip show alterego-training-hub-desktop >nul 2>nul
+if not errorlevel 1 (
+  echo Найдена старая установка. Переношу ее на EGO...
+  py -m pip uninstall -y alterego-training-hub-desktop
+  if errorlevel 1 (
+    echo Не удалось удалить старый пакет. Установка остановлена.
+    pause
+    exit /b 1
+  )
+)
 py -m pip install "%WHEEL%" cryptography
 if errorlevel 1 (
   echo Установка не удалась — пришлите текст ошибки выше разработчику.
@@ -41,6 +51,6 @@ if errorlevel 1 (
   exit /b 1
 )
 echo.
-echo Готово! Запуск: alterego-llm-studio
-echo Если команда не найдена, запустите run-alterego.bat рядом.
+echo Готово! Запуск: ego
+echo Если команда не найдена, запустите run-ego.bat рядом.
 pause

@@ -7,7 +7,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any
+from typing import Any, ClassVar
 
 
 class CloudGpuError(RuntimeError):
@@ -219,7 +219,7 @@ class RunPodClient:
                     "команды внутри контейнера — проверьте логи/SSH пода")}
 
     # Конечные состояния RunPod (desiredStatus), подтверждающие действие.
-    _FINAL_STATES = {"stop": {"EXITED", "STOPPED"},
+    _FINAL_STATES: ClassVar[dict[str, set[str]]] = {"stop": {"EXITED", "STOPPED"},
                      "start": {"RUNNING"},
                      "terminate": {"TERMINATED"}}
 

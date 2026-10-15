@@ -193,19 +193,28 @@ def attach_tooltip(widget, text: str) -> None:
 
 
 def card(parent, title: str | None = None) -> tk.Frame:
-    """Panel card. Callers pack/grid the returned inner frame; that geometry
-    is forwarded to the outer 1px border so the card actually appears."""
-    outer = tk.Frame(parent, bg=C["border"], bd=0)
-    inner = tk.Frame(outer, bg=C["panel"], padx=16, pady=14)
-    tk.Frame.pack(inner, fill="both", expand=True, padx=1, pady=1)
+    """Create a directly managed card with a subtle border.
+
+    Callers can pack/grid this frame and place their controls inside it. The
+    previous wrapper-forwarding approach patched Tk geometry methods on the
+    returned frame; that broke tests and could obscure the actual geometry
+    owner. A single managed frame keeps the card predictable.
+    """
+    frame = tk.Frame(
+        parent,
+        bg=C["panel"],
+        bd=0,
+        padx=16,
+        pady=14,
+        highlightbackground=C["border"],
+        highlightcolor=C["border"],
+        highlightthickness=1,
+    )
     if title:
-        tk.Label(inner, text=title, bg=C["panel"], fg=C["text"], font=F_BOLD).pack(anchor="w")
-    inner.pack = outer.pack  # type: ignore[method-assign]
-    inner.pack_forget = outer.pack_forget  # type: ignore[method-assign]
-    inner.grid = outer.grid  # type: ignore[method-assign]
-    inner.grid_forget = outer.grid_forget  # type: ignore[method-assign]
-    inner.place = outer.place  # type: ignore[method-assign]
-    return inner
+        tk.Label(
+            frame, text=title, bg=C["panel"], fg=C["text"], font=F_BOLD,
+        ).pack(anchor="w", pady=(0, 6))
+    return frame
 
 
 class Collapsible(tk.Frame):

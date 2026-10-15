@@ -179,37 +179,104 @@ def _fsync_dir(path: Path) -> None:
 
 
 class _UpdateLock:
-    """Эксклюзивный замок обновления: вторая попытка честно отказывает."""
+    """Эксклюзивный замок обновления с восстановлением после сбоя.
 
-    def __init__(self, target: Path):
+    Замок содержит pid и время. Если процесс-владелец мёртв ИЛИ замок
+    старше `stale_after` секунд, замок считается зависшим: его атомарно
+    переименовывают (rename выигрывает только один процесс) и создание
+    повторяется. Живой свежий замок чужого процесса не удаляется никогда;
+    при выходе замок снимается только если файл всё ещё наш (inode).
+    """
+
+    def __init__(self, target: Path, stale_after: float = 600.0):
         self.path = target.parent / (target.name + ".update.lock")
+        self.stale_after = float(stale_after)
         self.fd: int | None = None
 
-    def __enter__(self) -> _UpdateLock:
+    def _try_create(self) -> bool:
         try:
             self.fd = os.open(self.path,
                               os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
-        except FileExistsError as exc:
-            raise SignedUpdateError(
-                "Уже идёт другое обновление этого файла (замок "
-                f"{self.path.name}); дождитесь его завершения.") from exc
-        os.write(self.fd, f"pid={os.getpid()} time={time.time():.0f}".encode())
-        return self
+        except FileExistsError:
+            return False
+        os.write(self.fd,
+                 f"pid={os.getpid()} time={time.time():.0f}".encode())
+        os.fsync(self.fd)
+        return True
+
+    def _is_stale(self) -> bool:
+        try:
+            text = self.path.read_text(encoding="utf-8", errors="replace")
+            mtime_age = time.time() - self.path.stat().st_mtime
+        except OSError:
+            return False
+        fields = dict(part.split("=", 1) for part in text.split()
+                      if "=" in part)
+        try:
+            pid = int(fields.get("pid", "0"))
+        except ValueError:
+            pid = 0
+        owner_dead = False
+        if pid > 0:
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                owner_dead = True
+            except OSError:
+                owner_dead = False  # нет прав / иная ошибка: считаем живым
+        expired = mtime_age > self.stale_after
+        return owner_dead or expired
+
+    def _recover_stale(self) -> bool:
+        """Атомарно убрать зависший замок; чужие свежие не трогаем."""
+        if not self._is_stale():
+            return False
+        graveyard = self.path.with_name(
+            f"{self.path.name}.stale-{os.getpid()}")
+        try:
+            os.rename(self.path, graveyard)  # выиграет только один процесс
+        except OSError:
+            return False
+        graveyard.unlink(missing_ok=True)
+        return True
+
+    def __enter__(self) -> _UpdateLock:
+        if self._try_create():
+            return self
+        if self._recover_stale() and self._try_create():
+            return self
+        raise SignedUpdateError(
+            "Уже идёт другое обновление этого файла (замок "
+            f"{self.path.name}); дождитесь его завершения. Если процесс "
+            "обновления аварийно завершился, замок будет признан "
+            "зависшим по мёртвому pid или возрасту.")
 
     def __exit__(self, *exc: object) -> None:
-        if self.fd is not None:
+        if self.fd is None:
+            return
+        try:
+            mine = os.fstat(self.fd)
+            try:
+                current = self.path.stat()
+                owned = (current.st_ino, current.st_dev) == \
+                    (mine.st_ino, mine.st_dev)
+            except OSError:
+                owned = False
+        finally:
             os.close(self.fd)
             self.fd = None
-        try:
-            self.path.unlink()
-        except OSError:
-            pass
+        if owned:
+            try:
+                self.path.unlink()
+            except OSError:
+                pass
 
 
 def apply_update(*, manifest: dict[str, Any], artifact: Path,
                  target: Path, current_version: str,
                  public_key_pem: bytes,
-                 allow_downgrade: bool = False) -> dict[str, Any]:
+                 allow_downgrade: bool = False,
+                 lock_stale_after: float = 600.0) -> dict[str, Any]:
     """Проверить и атомарно применить; старый файл остаётся в `.bak`.
 
     Гарантии при любом отказе до `os.replace`: установленный файл не
@@ -237,7 +304,7 @@ def apply_update(*, manifest: dict[str, Any], artifact: Path,
     target.parent.mkdir(parents=True, exist_ok=True)
     backup = target.with_suffix(target.suffix + ".bak")
     tmp_name = ""
-    with _UpdateLock(target):
+    with _UpdateLock(target, stale_after=lock_stale_after):
         try:
             if target.exists():
                 # .bak тоже пишем атомарно и сверяем по хэшу до замены.

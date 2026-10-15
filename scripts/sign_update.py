@@ -2,7 +2,7 @@
 """Релизный инструмент этапа G: ключи и подпись манифеста обновления.
 
   python scripts/sign_update.py make-keys --out-dir keys/
-  python scripts/sign_update.py sign --artifact app.zip --version 1.14.0 \
+  python scripts/sign_update.py sign --artifact app.zip --version 1.15.0 \
       --url https://example.com/app.zip --key keys/private.pem \
       --out manifest.json
 
@@ -57,18 +57,44 @@ def main() -> int:
             os.chmod(out_dir, 0o700)
         except OSError:
             pass
+        private_path = out_dir / "private.pem"
+        public_path = out_dir / "public.pem"
+        # Никакой перезаписи: существующий ключ (или symlink на его месте) —
+        # отказ до генерации и записи. O_EXCL не следует по symlink.
+        for candidate in (private_path, public_path):
+            if os.path.lexists(candidate):
+                print(f"Отказ: {candidate} уже существует — существующий "
+                      "ключ не перезаписывается. Удалите его вручную, "
+                      "если ротация ключа действительно нужна.")
+                return 1
         private, public = generate_keypair()
-        # Закрытый ключ: 0600 с момента создания, а не после записи.
-        fd = os.open(out_dir / "private.pem",
-                     os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "wb") as fh:
-            fh.write(private)
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        created = []
         try:
-            os.chmod(out_dir / "private.pem", 0o600)
-        except OSError:
-            pass
-        (out_dir / "public.pem").write_bytes(public)
-        print(f"Ключи: {out_dir}/private.pem (СЕКРЕТ, права 0600) и public.pem")
+            # Закрытый ключ: 0600 с момента создания, а не после записи.
+            fd = os.open(private_path, flags, 0o600)
+            created.append(private_path)
+            with os.fdopen(fd, "wb") as fh:
+                fh.write(private)
+                fh.flush()
+                os.fsync(fh.fileno())
+            fd = os.open(public_path, flags, 0o644)
+            created.append(public_path)
+            with os.fdopen(fd, "wb") as fh:
+                fh.write(public)
+        except FileExistsError:
+            for path in created:
+                path.unlink(missing_ok=True)
+            print("Отказ: файл ключа появился во время создания — "
+                  "существующий ключ не перезаписывается.")
+            return 1
+        except BaseException:
+            for path in created:
+                path.unlink(missing_ok=True)
+            raise
+        print(f"Ключи созданы: {private_path} (СЕКРЕТ, 0600) и {public_path}")
         return 0
     manifest = build_manifest(version=args.version,
                               artifact=Path(args.artifact), url=args.url)

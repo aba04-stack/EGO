@@ -184,7 +184,9 @@ def test_backup_matches_previous_and_rollback_restores(tmp_path, keys):
 def test_concurrent_update_rejected_by_lock(tmp_path, keys):
     manifest, artifact, target = _installed(tmp_path, keys)
     lock = tmp_path / "installed.bin.update.lock"
-    lock.write_text("pid=999", encoding="utf-8")
+    lock.write_text(f"pid={os.getpid()} "
+                    f"time={int(__import__('time').time())}",
+                    encoding="utf-8")
     with pytest.raises(SignedUpdateError, match="замок"):
         apply_update(manifest=manifest, artifact=artifact, target=target,
                      current_version="1.0.0", public_key_pem=keys[1])
@@ -240,3 +242,72 @@ def test_private_key_scan_and_cli_permissions(tmp_path):
         capture_output=True, text=True, timeout=120, cwd=".")
     assert good.returncode == 0, good.stdout + good.stderr
     assert "не найдено" in good.stdout
+
+
+def _run_cli(*argv):
+    import subprocess
+    import sys
+
+    return subprocess.run([sys.executable, "scripts/sign_update.py", *argv],
+                          capture_output=True, text=True, timeout=120,
+                          cwd=".")
+
+
+def test_make_keys_never_overwrites(tmp_path):
+    keys_dir = tmp_path / "keys"
+    first = _run_cli("make-keys", "--out-dir", str(keys_dir))
+    assert first.returncode == 0, first.stderr
+    private_before = (keys_dir / "private.pem").read_bytes()
+    public_before = (keys_dir / "public.pem").read_bytes()
+    second = _run_cli("make-keys", "--out-dir", str(keys_dir))
+    assert second.returncode == 1
+    assert "не перезаписывается" in second.stdout
+    assert (keys_dir / "private.pem").read_bytes() == private_before
+    assert (keys_dir / "public.pem").read_bytes() == public_before
+
+
+def test_make_keys_refuses_symlink_target(tmp_path):
+    keys_dir = tmp_path / "keys"
+    keys_dir.mkdir()
+    victim = tmp_path / "victim.txt"
+    victim.write_text("не трогать", encoding="utf-8")
+    (keys_dir / "private.pem").symlink_to(victim)
+    done = _run_cli("make-keys", "--out-dir", str(keys_dir))
+    assert done.returncode == 1
+    assert victim.read_text(encoding="utf-8") == "не трогать"
+    assert not (keys_dir / "public.pem").exists()
+
+
+def test_stale_lock_from_dead_process_recovered(tmp_path, keys):
+    import subprocess
+    import sys as _sys
+
+    manifest, artifact, target = _installed(tmp_path, keys)
+    dead = subprocess.run([_sys.executable, "-c", "pass"], timeout=60)
+    lock = tmp_path / "installed.bin.update.lock"
+    lock.write_text(f"pid={dead.pid if hasattr(dead, 'pid') else 999999} "
+                    f"time={int(__import__('time').time())}",
+                    encoding="utf-8")
+    # pid завершившегося процесса; даже при спорном pid возрастной
+    # порог 0 делает замок зависшим детерминированно:
+    result = apply_update(manifest=manifest, artifact=artifact,
+                          target=target, current_version="1.0.0",
+                          public_key_pem=keys[1], lock_stale_after=0.0)
+    assert result["applied"] == "2.0.0"
+    assert target.read_bytes() == b"new-binary"
+    assert not lock.exists()
+
+
+def test_live_lock_not_stolen(tmp_path, keys):
+    import time as _time
+
+    manifest, artifact, target = _installed(tmp_path, keys)
+    lock = tmp_path / "installed.bin.update.lock"
+    content = f"pid={os.getpid()} time={int(_time.time())}"
+    lock.write_text(content, encoding="utf-8")
+    with pytest.raises(SignedUpdateError, match="замок"):
+        apply_update(manifest=manifest, artifact=artifact, target=target,
+                     current_version="1.0.0", public_key_pem=keys[1],
+                     lock_stale_after=3600.0)
+    assert lock.read_text(encoding="utf-8") == content  # чужой замок цел
+    assert target.read_bytes() == b"old-binary"

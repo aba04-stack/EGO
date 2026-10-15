@@ -7,7 +7,7 @@ JSON манифеста без поля `signature` (ключи отсортир
 ## Сторона релизера
 ```bash
 python scripts/sign_update.py make-keys --out-dir keys/   # один раз; private.pem — секрет CI, не коммитить
-python scripts/sign_update.py sign --artifact app.zip --version 1.14.0 \
+python scripts/sign_update.py sign --artifact app.zip --version 1.15.0 \
     --url https://example.com/app.zip --key keys/private.pem --out manifest.json
 ```
 `public.pem` встраивается распространителем в конфигурацию приложения.

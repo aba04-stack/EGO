@@ -138,7 +138,7 @@ def draw_shell(c: Canvas, active: str, status: str, badge: str):
     c.rect(0, 0, VW, VH, C["bg"])
     # Sidebar
     c.rect(0, 0, SIDE, VH, C["sidebar"])
-    c.text(18, 26, "AlterEgo", 16, bold=True, fill="#ffffff")
+    c.text(18, 26, "EGO", 16, bold=True, fill="#ffffff")
     c.text(18, 52, "LLM Studio", 11, fill=C["sidebar_fg"])
     y = 88
     for group_title, items in NAV_GROUPS:
@@ -225,7 +225,7 @@ def draw_chat_panel(c: Canvas, *, agent_mode: bool = True):
         c.rect(x + 42, 68, 196, 22, C["accent"], radius=4)
         c.text(x + 52, 73, "· Ассистент — подтверждает действия", 8, bold=True,
                fill="#ffffff")
-    c.text(x, 98, "агент · папка: alterego-train", 8, fill=C["muted"])
+    c.text(x, 98, "агент · папка: ego-workspace", 8, fill=C["muted"])
 
     # Conversation bubbles
     c.text(x, 122, "Вы · 14:02", 7.6, bold=True, fill=C["muted"])
@@ -278,7 +278,7 @@ def card(c: Canvas, x, y, w, h, title=None):
 def render_chat(name: str = "ui-chat.png") -> Path:
     """IDE view: code editor in the center, terminal below, agent chat at right."""
     c = Canvas()
-    draw_shell(c, "Редактор кода", "Готово: ответ наставника", "папка: alterego-train")
+    draw_shell(c, "Редактор кода", "Готово: ответ наставника", "папка: ego-workspace")
     c.text(CX0, 32, "Редактор кода", 15, bold=True)
     c.text(CX0, 58, "Сборка проекта, шаблоны обучения и правка файлов в рабочей "
                     "папке.", 9, fill=C["muted"])
@@ -304,7 +304,7 @@ def render_chat(name: str = "ui-chat.png") -> Path:
     c.rect(CX0 + 1, 151, tw - 2, 340, C["panel"], radius=6)
     c.text(CX0 + 12, 160, "ФАЙЛЫ ПРОЕКТА", 7.8, bold=True, fill=C["muted"])
     tree = [
-        ("> alterego-train", C["muted"], True),
+        ("> ego-workspace", C["muted"], True),
         ("  v src", C["muted"], True),
         ("    train.py", C["accent"], False),
         ("    data.py", C["text"], False),
@@ -390,7 +390,7 @@ def render_chat(name: str = "ui-chat.png") -> Path:
 def render_dashboard() -> Path:
     """Model & progress page in the center, terminal below, chat at right."""
     c = Canvas()
-    draw_shell(c, "Модель и прогресс", "Готово: оценка наставника", "папка: alterego-train")
+    draw_shell(c, "Модель и прогресс", "Готово: оценка наставника", "папка: ego-workspace")
     c.text(CX0, 32, "Модель и прогресс", 15, bold=True)
     c.text(CX0, 58, "Сводка по выбранной модели: прогресс обучения, оценка "
                     "наставника и журнал действий.", 9, fill=C["muted"])
@@ -498,7 +498,7 @@ def render_dashboard() -> Path:
 def render_servers() -> Path:
     """Servers page: collapsible connection settings, list, remote command."""
     c = Canvas()
-    draw_shell(c, "Серверы", "Готово: команда на gpu-box", "папка: alterego-train")
+    draw_shell(c, "Серверы", "Готово: команда на gpu-box", "папка: ego-workspace")
     c.text(CX0, 32, "Серверы", 15, bold=True)
     c.text(CX0, 58, "Подключение удалённых серверов по SSH: проверка связи, состояние "
                     "системы и команды — вручную или через агента.", 9, fill=C["muted"])

@@ -86,7 +86,9 @@ class TrainingHubApp(tk.Tk):
 
     # ------------------------------------------------------------------ layout
     def _build_layout(self):
-        self.status_bar = tk.Frame(self, bg=C["statusbar"])
+        self.status_bar = tk.Frame(self, bg=C["statusbar"],
+                                   highlightbackground=C["border"],
+                                   highlightthickness=1)
         self.status_bar.pack(side="bottom", fill="x")
         self.status_text = tk.StringVar(value=t('Готово'))
         tk.Label(self.status_bar, textvariable=self.status_text, bg=C["statusbar"],
@@ -128,15 +130,16 @@ class TrainingHubApp(tk.Tk):
         self._container = container
 
         # ---- Sidebar (navigation, dockable to left/right) -------------
-        sidebar = tk.Frame(container, bg=C["sidebar"], width=200)
+        sidebar = tk.Frame(container, bg=C["sidebar"], width=216)
         sidebar.pack_propagate(False)
         self._sidebar_frame = sidebar
         brand = tk.Frame(sidebar, bg=C["sidebar"])
         brand.pack(fill="x", pady=(18, 12), padx=16)
         tk.Label(brand, text="EGO", bg=C["sidebar"], fg="#ffffff",
-                 font=("Segoe UI", 15, "bold")).pack(anchor="w")
+                 font=("Segoe UI", 16, "bold")).pack(anchor="w")
         tk.Label(brand, text="LLM Studio", bg=C["sidebar"], fg=C["sidebar_fg"],
-                 font=("Segoe UI", 10)).pack(anchor="w")
+                 font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Frame(brand, bg=C["accent"], height=2).pack(fill="x", pady=(10, 0))
 
         self._compact_btn = tk.Label(sidebar, text="«", bg=C["sidebar"],
                                      fg=C["sidebar_fg"], font=F_NAV,
@@ -175,9 +178,10 @@ class TrainingHubApp(tk.Tk):
             ]),
         ]
         for group_title, items in nav_groups:
-            tk.Label(sidebar, text=group_title, bg=C["sidebar"], fg="#5b6b85",
+            tk.Label(sidebar, text=group_title, bg=C["sidebar"],
+                     fg=C["sidebar_muted"],
                      font=F_NAV_SMALL, anchor="w", padx=16).pack(fill="x",
-                                                                 pady=(10, 2))
+                                                                 pady=(12, 2))
             for key, label in items:
                 self._make_nav_item(sidebar, key, label)
 
@@ -193,13 +197,13 @@ class TrainingHubApp(tk.Tk):
         tk.Label(sidebar,
                  text=t("brand.version").format(version=__version__),
                  bg=C["sidebar"],
-                 fg="#5b6b85", font=F_NAV_SMALL).pack(side="bottom", pady=12)
+                 fg=C["sidebar_muted"], font=F_NAV_SMALL).pack(side="bottom", pady=12)
 
         # ---- Chat panel (docked left/right) ---------------------------
         from .ui_chat import ChatPage
 
         self.chat_panel = ChatPage(container, self)
-        self.chat_panel.configure(width=390)
+        self.chat_panel.configure(width=348)
         self.chat_panel.pack_propagate(False)
 
         # ---- Center: pages + terminal ---------------------------------
@@ -252,9 +256,9 @@ class TrainingHubApp(tk.Tk):
         self.bottom = tk.Frame(center, bg=C["panel"])
         self.bottom.pack(side="bottom", fill="x", pady=(0, 2))
         try:
-            dock_height = int(self.settings.bottom_height or 210)
+            dock_height = int(self.settings.bottom_height or 156)
         except (TypeError, ValueError):
-            dock_height = 210
+            dock_height = 156
         self.bottom.configure(height=max(80, min(800, dock_height)))
         self.bottom.pack_propagate(False)
         bottom_bar = tk.Frame(self.bottom, bg=C["panel"])
@@ -262,21 +266,21 @@ class TrainingHubApp(tk.Tk):
         self._make_height_grip(self.bottom)
         self._bottom_view = "terminal"
         self._bottom_visible = True
-        self.terminal_tab = tk.Label(bottom_bar, text=t('ТЕРМИНАЛ'), bg=C["panel"],
-                                     fg=C["accent"], font=F_NAV_SMALL, padx=12,
-                                     pady=6, cursor="hand2")
+        self.terminal_tab = tk.Label(bottom_bar, text=t('Терминал'), bg=C["panel"],
+                                     fg=C["accent"], font=F_NAV_SMALL, padx=14,
+                                     pady=8, cursor="hand2")
         self.terminal_tab.pack(side="left")
         self.terminal_tab.bind("<Button-1>",
                                lambda _e: self.show_bottom("terminal"))
-        self.problems_tab = tk.Label(bottom_bar, text=t('ПРОБЛЕМЫ'), bg=C["panel"],
-                                     fg=C["muted"], font=F_NAV_SMALL, padx=12,
-                                     pady=6, cursor="hand2")
+        self.problems_tab = tk.Label(bottom_bar, text=t('Проблемы'), bg=C["panel"],
+                                     fg=C["muted"], font=F_NAV_SMALL, padx=14,
+                                     pady=8, cursor="hand2")
         self.problems_tab.pack(side="left")
         self.problems_tab.bind("<Button-1>",
                                lambda _e: self.show_bottom("problems"))
-        self.git_tab = tk.Label(bottom_bar, text=t('ГИТ'), bg=C["panel"],
-                                fg=C["muted"], font=F_NAV_SMALL, padx=12,
-                                pady=6, cursor="hand2")
+        self.git_tab = tk.Label(bottom_bar, text=t('Git'), bg=C["panel"],
+                                fg=C["muted"], font=F_NAV_SMALL, padx=14,
+                                pady=8, cursor="hand2")
         self.git_tab.pack(side="left")
         self.git_tab.bind("<Button-1>",
                           lambda _e: self.show_bottom("git"))

@@ -10,6 +10,29 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+SAMPLE_PY = '''"""Minimal training loop sketch used for the README screenshot."""
+from pathlib import Path
+
+
+def main() -> None:
+    data = Path("data.jsonl")
+    print(f"EGO workspace ready · {data}")
+    for step in range(3):
+        loss = 2.4 / (step + 1)
+        print(f"step {step:03d}  val_loss={loss:.4f}")
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+
+def _seed_workspace() -> Path:
+    root = Path(tempfile.mkdtemp(prefix="ego-screenshot-ws-"))
+    (root / "train.py").write_text(SAMPLE_PY, encoding="utf-8")
+    (root / "README.md").write_text("# demo\n", encoding="utf-8")
+    return root
+
 
 def main() -> int:
     if len(sys.argv) != 2:
@@ -23,16 +46,36 @@ def main() -> int:
 
     from PIL import ImageGrab
 
+    from alterego_training_hub.theme import set_palette
     from alterego_training_hub.ui import TrainingHubApp
 
+    workspace = _seed_workspace()
+    set_palette("dark")
     app = TrainingHubApp()
+    app.settings.ui_theme = "dark"
+    app.settings.workspace_path = str(workspace)
+    app._refresh_workspace_badge()
     app.geometry("1480x860+0+0")
     failures: list[BaseException] = []
     captured = False
 
+    def prepare() -> None:
+        try:
+            editor = app.pages.get("editor")
+            if editor is not None:
+                editor.refresh_tree()
+                editor.open_file(workspace / "train.py")
+            app.show_page("editor")
+            app.show_bottom("terminal")
+            app.update_idletasks()
+            app.update()
+        except BaseException as exc:
+            failures.append(exc)
+
     def capture() -> None:
         nonlocal captured
         try:
+            prepare()
             app.update_idletasks()
             app.update()
             x, y = app.winfo_rootx(), app.winfo_rooty()
@@ -55,7 +98,7 @@ def main() -> int:
             failures.append(TimeoutError("EGO did not finish rendering within 20 seconds"))
             app.destroy()
 
-    app.after(1400, capture)
+    app.after(1600, capture)
     app.after(20000, timeout)
     try:
         app.mainloop()

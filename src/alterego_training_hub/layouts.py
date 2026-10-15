@@ -30,7 +30,7 @@ class LayoutState:
     geometry: str = ""
     sidebar_side: str = "left"     # left | right (drag-and-drop docking)
     chat_side: str = "right"       # left | right
-    bottom_height: int = 210       # px, adjustable by dragging the grip
+    bottom_height: int = 156       # px, adjustable by dragging the grip
 
     def validate(self) -> None:
         if self.page not in VALID_PAGES:

@@ -46,12 +46,14 @@ class ChatPage(tk.Frame):
                    command=self.new_session).pack(side="left", padx=(4, 0))
         ttk.Button(row, text="✕", width=3, style="Danger.TButton",
                    command=self.delete_session).pack(side="left", padx=(3, 0))
-        ttk.Button(row, text=t(t('Выгрузить')),
-                   command=self.export_session).pack(side="left", padx=(8, 0))
-        ttk.Button(row, text=t(t('Импорт')),
-                   command=self.import_session).pack(side="left", padx=(3, 0))
-        ttk.Button(row, text=t(t('Метрики')),
-                   command=self.post_dashboard).pack(side="left", padx=(8, 0))
+        extras = tk.Frame(top, bg=C["panel"])
+        extras.pack(fill="x", pady=(6, 0))
+        ttk.Button(extras, text=t(t('Выгрузить')),
+                   command=self.export_session).pack(side="left")
+        ttk.Button(extras, text=t(t('Импорт')),
+                   command=self.import_session).pack(side="left", padx=(4, 0))
+        ttk.Button(extras, text=t(t('Метрики')),
+                   command=self.post_dashboard).pack(side="left", padx=(4, 0))
 
         search_row = tk.Frame(top, bg=C["panel"])
         search_row.pack(fill="x", pady=(6, 0))
@@ -79,8 +81,8 @@ class ChatPage(tk.Frame):
                                                                     pady=(6, 0))
 
         self.messages = tk.Text(self, wrap="word", state="disabled", bd=0,
-                                bg=C["panel"], fg=C["text"], font=F_BASE,
-                                padx=10, pady=8, spacing3=5)
+                                bg=C["panel_alt"], fg=C["text"], font=F_BASE,
+                                padx=12, pady=10, spacing3=6)
         self.messages.pack(fill="both", expand=True)
         self.messages.tag_configure("user", background=C["user_bubble"], lmargin1=40,
                                     lmargin2=40, rmargin=6, spacing3=6)

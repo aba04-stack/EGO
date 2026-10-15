@@ -73,11 +73,12 @@ class EditorPage(tk.Frame):
             t(t('Редактор кода')),
             t(t('Файлы рабочей папки: просмотр, правка и разбор кода с наставником. Ctrl+P — быстрое открытие, Ctrl+F — поиск, Ctrl+F2 — закладка.')),
         )
-        header.pack(fill="x", padx=24, pady=(20, 10))
+        header.pack(fill="x", padx=16, pady=(12, 6))
 
-        # Project scaffolding bar (collapsible)
-        scaffold_section = Collapsible(self, t(t('Новый проект из шаблона')))
-        scaffold_section.pack(fill="x", padx=24, pady=(0, 10))
+        # Project scaffolding bar (collapsible, closed so the editor owns the page)
+        scaffold_section = Collapsible(self, t(t('Новый проект из шаблона')),
+                                       open=False)
+        scaffold_section.pack(fill="x", padx=16, pady=(0, 8))
         scaffold = scaffold_section.body
         row = tk.Frame(scaffold, bg=C["panel"])
         row.pack(fill="x")
@@ -89,15 +90,16 @@ class EditorPage(tk.Frame):
         templates = [f"{item.id} — {item.title}" for item in list_templates()]
         self.template_var = tk.StringVar(value=templates[0] if templates else "")
         ttk.Combobox(row, textvariable=self.template_var, values=templates,
-                     state="readonly", width=42).pack(side="left", padx=(0, 8))
+                     state="readonly", width=32).pack(side="left", padx=(0, 8),
+                                                      fill="x", expand=True)
         ttk.Button(row, text=t(t('Создать проект')), style="Accent.TButton",
-                   command=self.create_project).pack(side="left")
+                   command=self.create_project).pack(side="left", padx=(0, 4))
         self.project_hint = tk.StringVar(value="")
         tk.Label(row, textvariable=self.project_hint, bg=C["panel"], fg=C["muted"],
                  font=F_SMALL).pack(side="left", padx=12)
 
         body = tk.Frame(self, bg=C["bg"])
-        body.pack(fill="both", expand=True, padx=24, pady=(0, 14))
+        body.pack(fill="both", expand=True, padx=16, pady=(0, 8))
 
         # File tree
         left = card(body, t(t('Файлы')))
@@ -129,6 +131,14 @@ class EditorPage(tk.Frame):
         right.pack(side="left", fill="both", expand=True)
         self.tab_bar = tk.Frame(right, bg=C["panel"])
         self.tab_bar.pack(fill="x")
+        self.empty_hint = tk.Label(
+            right,
+            text=t("Откройте файл из дерева слева, создайте проект из шаблона "
+                   "или нажмите Ctrl+P для быстрого поиска."),
+            bg=C["panel"], fg=C["muted"], font=F_SMALL, justify="left",
+            wraplength=520, anchor="w",
+        )
+        self.empty_hint.pack(fill="x", padx=8, pady=16)
 
         # Find / replace bar (hidden until Ctrl+F)
         self.find_bar = tk.Frame(right, bg=C["panel_alt"])
@@ -482,6 +492,12 @@ class EditorPage(tk.Frame):
             label.bind("<Button-2>",
                        lambda _e, i=index: self.close_tab(i))
             self._tab_widgets.append(label)
+        hint = getattr(self, "empty_hint", None)
+        if hint is not None:
+            if self._tabs:
+                hint.pack_forget()
+            else:
+                hint.pack(fill="x", padx=8, pady=16)
 
     def _stash_buffer(self):
         if self._active is not None and 0 <= self._active < len(self._tabs):

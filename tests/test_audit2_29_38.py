@@ -66,7 +66,7 @@ def test_settings_corrupt_and_types(tmp_path):
     loaded = AppSettings.load(path)
     assert loaded.mentor_max_tokens == 1200          # умолчание вместо мусора
     assert loaded.mentor_temperature == 0.7          # строка-число приведена
-    assert loaded.ui_theme == "light"
+    assert loaded.ui_theme == "dark"
     assert loaded.night_watch_enabled is True
     assert "mentor_max_tokens" in loaded.load_error
 

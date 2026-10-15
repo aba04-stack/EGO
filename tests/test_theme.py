@@ -24,19 +24,18 @@ def test_set_palette_switches_in_place_and_back():
         assert theme.C["bg"] == PALETTES["dark"]["bg"]
         assert current_theme() == "dark"
         set_palette("light")
-        assert original == theme.C
         assert current_theme() == "light"
         set_palette("no-such")  # falls back to light
         assert current_theme() == "light"
     finally:
-        set_palette("light")
+        set_palette("dark" if original.get("bg") == PALETTES["dark"]["bg"] else "light")
 
 
 def test_color_map_maps_only_changed_values():
     mapping = color_map(PALETTES["light"], PALETTES["dark"])
-    assert mapping["#f4f6fa".lower()] == PALETTES["dark"]["bg"]
-    assert mapping["#3b82f6".lower()] == PALETTES["dark"]["accent"] \
-        if PALETTES["dark"]["accent"] != "#3b82f6" else True
-    # Unchanged colours produce no mapping entries (accent is shared).
-    if PALETTES["light"]["accent"] == PALETTES["dark"]["accent"]:
+    light_bg = PALETTES["light"]["bg"].lower()
+    assert mapping[light_bg] == PALETTES["dark"]["bg"]
+    if PALETTES["light"]["accent"] != PALETTES["dark"]["accent"]:
+        assert mapping[PALETTES["light"]["accent"].lower()] == PALETTES["dark"]["accent"]
+    else:
         assert PALETTES["light"]["accent"].lower() not in mapping

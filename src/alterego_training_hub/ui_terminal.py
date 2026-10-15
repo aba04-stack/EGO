@@ -42,16 +42,18 @@ class TerminalPanel(tk.Frame):
         self.body = tk.Frame(self, bg=C["panel"])
         self.body.pack(fill="both", expand=True, padx=1, pady=(0, 1))
 
-        self.cmd_entry = tk.Entry(self.body, bd=1, relief="solid", font=F_MONO)
-        self.cmd_entry.pack(fill="x", padx=7, pady=(0, 4))
+        cmd_row = tk.Frame(self.body, bg=C["panel"])
+        cmd_row.pack(fill="x", padx=8, pady=(0, 4))
+        self.cmd_entry = tk.Entry(cmd_row, bd=1, relief="solid", font=F_MONO)
+        self.cmd_entry.pack(side="left", fill="x", expand=True)
         self.cmd_entry.bind("<Return>", lambda _e: self.run_command())
         self.cmd_entry.bind("<Up>", lambda _e: self._history_up())
-        ttk.Button(self.body, text=t(t('▶ Выполнить')), style="Accent.TButton",
-                   command=self.run_command).pack(anchor="w", padx=7)
-        self.output = tk.Text(self.body, height=7, wrap="word", state="disabled",
+        ttk.Button(cmd_row, text=t(t('▶ Выполнить')), style="Accent.TButton",
+                   command=self.run_command).pack(side="left", padx=(8, 0))
+        self.output = tk.Text(self.body, height=6, wrap="word", state="disabled",
                               bg=C["code_bg"], fg=C["code_fg"], font=F_MONO,
                               bd=0, padx=10, pady=6)
-        self.output.pack(fill="both", expand=True, padx=1, pady=(4, 1))
+        self.output.pack(fill="both", expand=True, padx=1, pady=(0, 1))
 
     def toggle(self):
         self.set_open(not self._open)

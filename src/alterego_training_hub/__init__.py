@@ -10,6 +10,6 @@ except PackageNotFoundError:
         # Support an already-installed package from before the EGO rename.
         __version__ = _pkg_version("alterego-training-hub-desktop")
     except PackageNotFoundError:  # running from an unpacked source tree
-        __version__ = "1.15.1"
+        __version__ = "1.15.2"
 
 __all__ = ["__version__"]

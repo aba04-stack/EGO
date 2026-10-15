@@ -68,12 +68,8 @@ class EditorPage(tk.Frame):
         self.completion = CompletionPopup(self)
 
     def _build(self):
-        header = page_header(
-            self,
-            t(t('Редактор кода')),
-            t(t('Файлы рабочей папки: просмотр, правка и разбор кода с наставником. Ctrl+P — быстрое открытие, Ctrl+F — поиск, Ctrl+F2 — закладка.')),
-        )
-        header.pack(fill="x", padx=16, pady=(12, 6))
+        header = page_header(self, t(t('Редактор кода')))
+        header.pack(fill="x", padx=16, pady=(10, 4))
 
         # Project scaffolding bar (collapsible, closed so the editor owns the page)
         scaffold_section = Collapsible(self, t(t('Новый проект из шаблона')),

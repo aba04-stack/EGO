@@ -148,10 +148,12 @@ class TrainingHubApp(tk.Tk):
         self._compact_btn.bind("<Button-1>",
                                lambda _e: self.toggle_sidebar_compact())
 
-        _quick = tk.Label(sidebar, text=t('⌕ Поиск и команды…  Ctrl+Shift+P'),
-                          bg=C["sidebar"], fg=C["sidebar_fg"], font=F_NAV_SMALL,
-                          anchor="w", padx=16, pady=6, cursor="hand2")
-        _quick.pack(fill="x", pady=(2, 4))
+        _quick_wrap = tk.Frame(sidebar, bg=C["sidebar"])
+        _quick_wrap.pack(fill="x", padx=12, pady=(4, 8))
+        _quick = tk.Label(_quick_wrap, text=t('⌕  Поиск и команды…'),
+                          bg=C["sidebar_hover"], fg=C["sidebar_fg"], font=F_NAV_SMALL,
+                          anchor="w", padx=10, pady=7, cursor="hand2")
+        _quick.pack(fill="x")
         _quick.bind("<Button-1>",
                     lambda _e: self.open_command_palette("commands"))
 

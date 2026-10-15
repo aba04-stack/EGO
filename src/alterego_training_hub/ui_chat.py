@@ -39,19 +39,32 @@ class ChatPage(tk.Frame):
                  font=("Segoe UI", 11, "bold")).pack(anchor="w")
         row = tk.Frame(top, bg=C["panel"])
         row.pack(fill="x", pady=(6, 0))
-        self.sessions_combo = ttk.Combobox(row, state="readonly", width=22)
-        self.sessions_combo.pack(side="left")
+        self.sessions_combo = ttk.Combobox(row, state="readonly", width=15)
+        self.sessions_combo.pack(side="left", fill="x", expand=True)
         self.sessions_combo.bind("<<ComboboxSelected>>", lambda _e: self._select_session())
-        ttk.Button(row, text="+", width=3,
-                   command=self.new_session).pack(side="left", padx=(4, 0))
-        ttk.Button(row, text="✕", width=3, style="Danger.TButton",
-                   command=self.delete_session).pack(side="left", padx=(3, 0))
-        ttk.Button(row, text=t(t('Выгрузить')),
-                   command=self.export_session).pack(side="left", padx=(8, 0))
-        ttk.Button(row, text=t(t('Импорт')),
-                   command=self.import_session).pack(side="left", padx=(3, 0))
-        ttk.Button(row, text=t(t('Метрики')),
-                   command=self.post_dashboard).pack(side="left", padx=(8, 0))
+        self.new_session_btn = ttk.Button(
+            row, text="+", width=3, command=self.new_session)
+        self.new_session_btn.pack(side="left", padx=(4, 0))
+        self.delete_session_btn = ttk.Button(
+            row, text="✕", width=3, style="Danger.TButton",
+            command=self.delete_session)
+        self.delete_session_btn.pack(side="left", padx=(3, 0))
+
+        # Keep all session actions inside the dock width. A single long row
+        # overflowed into the window edge when the mentor panel was narrow.
+        actions_row = tk.Frame(top, bg=C["panel"])
+        actions_row.pack(fill="x", pady=(4, 0))
+        self.session_action_buttons = []
+        for column, (label, command) in enumerate((
+            (t(t("Выгрузить")), self.export_session),
+            (t(t("Импорт")), self.import_session),
+            (t(t("Метрики")), self.post_dashboard),
+        )):
+            button = ttk.Button(actions_row, text=label, command=command)
+            button.grid(row=0, column=column, sticky="ew",
+                        padx=(0 if column == 0 else 4, 0))
+            actions_row.columnconfigure(column, weight=1, uniform="session-actions")
+            self.session_action_buttons.append(button)
 
         search_row = tk.Frame(top, bg=C["panel"])
         search_row.pack(fill="x", pady=(6, 0))

@@ -45,7 +45,8 @@ class ScriptConfig:
     target_modules: str = "auto"  # auto | all-linear | q_proj,v_proj,...
     gradient_checkpointing: bool = False
     engine: str = "auto"  # auto | trainer | trl (этап B: TRL SFTTrainer)
-    packing: bool = False  # этап C: выключено до измерений изоляции
+    packing: bool = False  # этап C: только с FlashAttention-2 (изоляция)
+    group_by_length: bool = False  # этап C: батчи из похожих по длине
     sample_every: int = 200  # steps between generation samples in the log
     eval_prompts: tuple[str, ...] = ("Привет! Расскажи о себе.",)
 
@@ -106,6 +107,7 @@ def _config_json(cfg: ScriptConfig) -> str:
         "recipe_name": cfg.recipe_name,
         "engine": effective_engine(cfg),
         "packing": bool(cfg.packing),
+        "group_by_length": bool(cfg.group_by_length),
         "dataset": cfg.dataset_path,
         "tokenizer": cfg.tokenizer_path,
         "base_model": cfg.base_model,
@@ -239,6 +241,60 @@ def _sft_pairs(dataset_path: str):
                    "messages": messages if isinstance(messages, list) else []}
 
 
+def _pack_sequences(examples, max_len: int, pad_id: int):
+    """Упаковать примеры в последовательности до max_len (этап C).
+
+    Изоляция примеров держится НЕ на EOS: у каждого примера свои
+    position_ids с нуля и первый токен замаскирован в labels (-100).
+    Реальная изоляция attention обеспечивается FlashAttention-2,
+    который по position_ids режет поток на независимые отрезки;
+    без FA2 вызывающий код обязан отказаться от packing.
+    """
+    packed = []
+    cur_ids: list[int] = []
+    cur_labels: list[int] = []
+    cur_pos: list[int] = []
+
+    def flush():
+        if not cur_ids:
+            return
+        pad = max_len - len(cur_ids)
+        packed.append({
+            "input_ids": cur_ids + [pad_id] * pad,
+            "labels": cur_labels + [-100] * pad,
+            "position_ids": cur_pos + [0] * pad,
+            "attention_mask": [1] * len(cur_ids) + [0] * pad})
+
+    for ids, labels in examples:
+        ids, labels = list(ids)[:max_len], list(labels)[:max_len]
+        if len(cur_ids) + len(ids) > max_len:
+            flush()
+            cur_ids, cur_labels, cur_pos = [], [], []
+        start = len(cur_ids)
+        cur_ids += ids
+        # первый токен примера не должен предсказываться из чужого контекста
+        cur_labels += ([-100] + list(labels[1:])) if labels else []
+        cur_pos += list(range(len(ids)))
+        _ = start
+    flush()
+    return packed
+
+
+def _pick_attn_implementation(torch_module, *, want_packing: bool,
+                              dtype) -> str | None:
+    """backend внимания по факту поддержки; packing требует FA2."""
+    if not torch_module.cuda.is_available():
+        return None
+    if dtype in (torch_module.float16, torch_module.bfloat16):
+        try:
+            import flash_attn  # noqa: F401
+
+            return "flash_attention_2"
+        except ImportError:
+            pass
+    return "sdpa"
+
+
 def _tokenize_sft_batch(batch, tokenizer):
     """Токенизация с маскированием prompt; chat template, когда он есть."""
     use_chat_template = bool(getattr(tokenizer, "chat_template", None))
@@ -268,7 +324,8 @@ def _tokenize_sft_batch(batch, tokenizer):
                 max_length=max_len)["input_ids"] if prompt else []
         input_ids.append(ids)
         labels.append(_mask_labels(ids, prompt_ids))
-    return {"input_ids": input_ids, "labels": labels}
+    return {"input_ids": input_ids, "labels": labels,
+            "length": [len(ids) for ids in input_ids]}
 
 
 def load_texts(path: str) -> list[str]:
@@ -630,7 +687,19 @@ def train_lora(args) -> None:
         compute_dtype = torch.bfloat16
     else:
         compute_dtype = torch.float16
+    attn_impl = _pick_attn_implementation(
+        torch, want_packing=bool(CONFIG["packing"]), dtype=compute_dtype)
+    packing_active = bool(CONFIG["packing"]) and attn_impl == "flash_attention_2"
+    if CONFIG["packing"] and not packing_active:
+        # EOS не изолирует примеры: без FA2 внимание утечёт через границу.
+        print("⚠ packing отключён: нет FlashAttention-2 (нужны CUDA + "
+              "fp16/bf16 + пакет flash-attn). Обучение пойдёт без упаковки.",
+              flush=True)
+    if attn_impl:
+        print(f"Attention backend: {attn_impl}", flush=True)
     load_kwargs = {"torch_dtype": compute_dtype}
+    if attn_impl:
+        load_kwargs["attn_implementation"] = attn_impl
     if lora_cfg["qlora"]:
         from transformers import BitsAndBytesConfig
         load_kwargs["quantization_config"] = BitsAndBytesConfig(
@@ -668,6 +737,31 @@ def train_lora(args) -> None:
     def tokenize(batch):
         return _tokenize_sft_batch(batch, tokenizer)
 
+    train_tok = train_ds.map(tokenize, batched=True)
+    eval_tok = (eval_ds.map(tokenize, batched=True)
+                if eval_ds is not None else None)
+    collator = DataCollatorForSeq2Seq(
+        tokenizer, padding=True, label_pad_token_id=-100)
+    if packing_active:
+        from datasets import Dataset as _Dataset
+
+        pairs = [(row["input_ids"], row["labels"]) for row in train_tok]
+        packed = _pack_sequences(pairs, CONFIG["seq_len"],
+                                 tokenizer.pad_token_id)
+        train_tok = _Dataset.from_list(packed)
+        print(f"packing: {len(pairs)} примеров -> {len(packed)} "
+              "последовательностей (FA2, изоляция по position_ids)",
+              flush=True)
+
+        def collator(features):  # фиксированная длина после упаковки
+            import torch as _torch
+
+            return {
+                key: _torch.tensor([f[key] for f in features],
+                                   dtype=_torch.long)
+                for key in ("input_ids", "labels", "position_ids",
+                            "attention_mask")}
+
     trainer = Trainer(
         model=model,
         args=TrainingArguments(
@@ -680,18 +774,17 @@ def train_lora(args) -> None:
             warmup_ratio=CONFIG["warmup_pct"] / 100.0,
             lr_scheduler_type="cosine",
             gradient_checkpointing=bool(CONFIG["gradient_checkpointing"]),
+            group_by_length=bool(CONFIG["group_by_length"]),
+            length_column_name="length",
             logging_steps=20,
             eval_strategy="epoch" if eval_ds is not None else "no",
             save_strategy="epoch",
             report_to=[], seed=CONFIG["seed"]),
-        train_dataset=train_ds.map(tokenize, batched=True),
-        eval_dataset=(eval_ds.map(tokenize, batched=True)
-                      if eval_ds is not None else None),
+        train_dataset=train_tok,
+        eval_dataset=eval_tok,
         # Динамический padding: примеры разной длины дополняются до
-        # максимума в батче, labels дополняются -100 (без этого коллатор
-        # по умолчанию падает на разной длине последовательностей).
-        data_collator=DataCollatorForSeq2Seq(
-            tokenizer, padding=True, label_pad_token_id=-100),
+        # максимума в батче, labels дополняются -100.
+        data_collator=collator,
     )
     resume_ckpt = None
     if args.resume and os.path.isdir(args.resume):

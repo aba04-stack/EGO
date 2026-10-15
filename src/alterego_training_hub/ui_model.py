@@ -252,6 +252,14 @@ class ModelDashboardPage(tk.Frame):
         tk.Checkbutton(wiz_lora, text=t('QLoRA (4-bit)'),
                        variable=self.wizard_qlora_var, bg=C["panel"],
                        font=F_BASE).pack(side="left", padx=(0, 8))
+        self.wizard_packing_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(wiz_lora, text=t('Packing (нужен FlashAttention-2)'),
+                       variable=self.wizard_packing_var, bg=C["panel"],
+                       font=F_BASE).pack(side="left", padx=(0, 8))
+        self.wizard_group_len_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(wiz_lora, text=t('Группировать по длине'),
+                       variable=self.wizard_group_len_var, bg=C["panel"],
+                       font=F_BASE).pack(side="left", padx=(0, 8))
         tk.Label(wiz_lora, text=t('Grad accum'), bg=C["panel"],
                  font=F_BASE).pack(side="left")
         self.wizard_grad_accum_var = tk.StringVar(value="1")
@@ -356,6 +364,10 @@ class ModelDashboardPage(tk.Frame):
             lora_r=self._wizard_int(self.wizard_lora_r_var, 16),
             lora_alpha=self._wizard_int(self.wizard_lora_alpha_var, 32),
             qlora=bool(self.wizard_qlora_var.get()),
+            packing=bool(self.__dict__.get(
+                "wizard_packing_var") and self.wizard_packing_var.get()),
+            group_by_length=bool(self.__dict__.get(
+                "wizard_group_len_var") and self.wizard_group_len_var.get()),
             grad_accum=self._wizard_int(self.wizard_grad_accum_var, 1),
             gpus=self._wizard_int(self.wizard_gpus_var, 1))
 

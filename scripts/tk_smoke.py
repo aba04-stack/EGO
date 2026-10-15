@@ -30,9 +30,10 @@ def main() -> int:
     app.update_idletasks()
     app.update()
 
-    expected = {"chat", "training", "editor", "search", "settings"}
+    expected = {"training", "editor", "search", "settings"}
     missing = expected - set(app.pages)
     assert not missing, f"pages missing: {missing}"
+    assert hasattr(app, "chat_panel"), "docked chat panel missing"
     for page in sorted(expected):
         app.show_page(page)
         app.update_idletasks()

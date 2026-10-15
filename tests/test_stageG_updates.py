@@ -54,7 +54,7 @@ def test_tampered_artifact_rejected(tmp_path, keys):
 
 
 def test_tampered_manifest_breaks_signature(tmp_path, keys):
-    manifest, artifact = _signed(tmp_path, keys)
+    manifest, _artifact = _signed(tmp_path, keys)
     manifest["version"] = "9.9.9"  # подпись считалась по исходному
     with pytest.raises(SignedUpdateError, match="Подпись"):
         verify_manifest(manifest, keys[1])

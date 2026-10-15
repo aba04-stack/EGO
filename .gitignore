@@ -23,3 +23,6 @@ private*.pem
 *_private.pem
 id_ed25519
 id_rsa
+.coverage
+.coverage.*
+coverage.xml

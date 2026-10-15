@@ -14,3 +14,12 @@ dist/
 .DS_Store
 Thumbs.db
 *.egg-info/
+
+# Ключи подписи обновлений (этап G): закрытый ключ НЕ в Git
+keys/
+*.pem
+*.key
+private*.pem
+*_private.pem
+id_ed25519
+id_rsa

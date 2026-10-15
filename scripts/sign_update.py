@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from alterego_training_hub.signed_update import (
     build_manifest,
     generate_keypair,
+    scan_for_private_keys,
     sign_manifest,
 )
 
@@ -35,14 +36,39 @@ def main() -> int:
     sign.add_argument("--url", required=True)
     sign.add_argument("--key", required=True)
     sign.add_argument("--out", default="manifest.json")
+    check = sub.add_parser("check")
+    check.add_argument("paths", nargs="+",
+                       help="файлы/каталоги для поиска закрытых ключей")
     args = parser.parse_args()
+    if args.cmd == "check":
+        leaks = scan_for_private_keys([Path(x) for x in args.paths])
+        if leaks:
+            print("НАЙДЕНЫ ЗАКРЫТЫЕ КЛЮЧИ:")
+            print("\n".join(leaks))
+            return 1
+        print("Закрытых ключей не найдено.")
+        return 0
     if args.cmd == "make-keys":
+        import os
+
         out_dir = Path(args.out_dir)
-        out_dir.mkdir(parents=True, exist_ok=True)
+        out_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        try:
+            os.chmod(out_dir, 0o700)
+        except OSError:
+            pass
         private, public = generate_keypair()
-        (out_dir / "private.pem").write_bytes(private)
+        # Закрытый ключ: 0600 с момента создания, а не после записи.
+        fd = os.open(out_dir / "private.pem",
+                     os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(private)
+        try:
+            os.chmod(out_dir / "private.pem", 0o600)
+        except OSError:
+            pass
         (out_dir / "public.pem").write_bytes(public)
-        print(f"Ключи: {out_dir}/private.pem (СЕКРЕТ) и public.pem")
+        print(f"Ключи: {out_dir}/private.pem (СЕКРЕТ, права 0600) и public.pem")
         return 0
     manifest = build_manifest(version=args.version,
                               artifact=Path(args.artifact), url=args.url)

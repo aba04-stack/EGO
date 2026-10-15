@@ -16,7 +16,11 @@ import base64
 import hashlib
 import json
 import os
+import re
 import shutil
+import stat
+import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -91,17 +95,63 @@ def sign_manifest(manifest: dict[str, Any], private_key_pem: bytes) -> dict[str,
     return signed
 
 
+_VERSION_RE = re.compile(r"^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
+_SHA256_RE = re.compile(r"^[0-9a-fA-F]{64}$")
+
+
+def _validate_manifest_fields(manifest: Any) -> None:
+    """Строгие типы ДО проверки подписи: мусор не доходит до криптографии."""
+    if not isinstance(manifest, dict) or manifest.get("schema") != SCHEMA:
+        raise SignedUpdateError("Манифест: нет schema=1.")
+    version = manifest.get("version")
+    if not isinstance(version, str) or not _VERSION_RE.match(version):
+        raise SignedUpdateError(
+            f"Манифест: некорректная версия {version!r} (нужна вида 1.2.3).")
+    url = manifest.get("url")
+    if not isinstance(url, str) or not url.strip():
+        raise SignedUpdateError("Манифест: пустой или не строковый url.")
+    sha = manifest.get("sha256")
+    if not isinstance(sha, str) or not _SHA256_RE.match(sha):
+        raise SignedUpdateError("Манифест: sha256 — не 64 hex-символа.")
+    size = manifest.get("size")
+    if isinstance(size, bool) or not isinstance(size, int) or size <= 0:
+        raise SignedUpdateError(
+            f"Манифест: size должен быть положительным int, не {size!r}.")
+    if not isinstance(manifest.get("signature"), str) or not manifest["signature"]:
+        raise SignedUpdateError("Манифест: нет подписи.")
+
+
+def scan_for_private_keys(paths: list[Path]) -> list[str]:
+    """Найти закрытые ключи в файлах/каталогах (сток в Git или релиз)."""
+    leaks: list[str] = []
+    for root in paths:
+        root = Path(root)
+        files = [root] if root.is_file() else (
+            [f for f in root.rglob("*") if f.is_file()]
+            if root.exists() else [])
+        for f in files:
+            name = f.name.lower()
+            if name in {"private.pem", "private_key.pem"} or \
+                    name.endswith(("_private.pem", "-private.pem")) or \
+                    (name.endswith(".pem") and "private" in name):
+                leaks.append(f"{f}: имя файла закрытого ключа")
+                continue
+            try:
+                data = f.read_bytes()
+            except OSError:
+                continue
+            if b"PRIVATE KEY-----" in data:
+                leaks.append(f"{f}: содержимое закрытого ключа (PEM)")
+    return leaks
+
+
 def verify_manifest(manifest: dict[str, Any], public_key_pem: bytes) -> None:
     """Бросает SignedUpdateError при любой проблеме; молча не пропускает."""
     from cryptography.exceptions import InvalidSignature
     from cryptography.hazmat.primitives import serialization
 
     _, Ed25519PublicKey = _ed25519()
-    if not isinstance(manifest, dict) or manifest.get("schema") != SCHEMA:
-        raise SignedUpdateError("Манифест: нет schema=1.")
-    for field in ("version", "url", "sha256", "size", "signature"):
-        if not manifest.get(field):
-            raise SignedUpdateError(f"Манифест: нет поля {field}.")
+    _validate_manifest_fields(manifest)
     key = serialization.load_pem_public_key(public_key_pem)
     if not isinstance(key, Ed25519PublicKey):
         raise SignedUpdateError("Открытый ключ — не Ed25519.")
@@ -117,11 +167,55 @@ def verify_manifest(manifest: dict[str, Any], public_key_pem: bytes) -> None:
             "подписан чужим ключом).") from exc
 
 
+def _fsync_dir(path: Path) -> None:
+    try:
+        fd = os.open(path, os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    except OSError:
+        pass  # Windows/ФС без fsync каталога: замена всё равно атомарна
+
+
+class _UpdateLock:
+    """Эксклюзивный замок обновления: вторая попытка честно отказывает."""
+
+    def __init__(self, target: Path):
+        self.path = target.parent / (target.name + ".update.lock")
+        self.fd: int | None = None
+
+    def __enter__(self) -> _UpdateLock:
+        try:
+            self.fd = os.open(self.path,
+                              os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        except FileExistsError as exc:
+            raise SignedUpdateError(
+                "Уже идёт другое обновление этого файла (замок "
+                f"{self.path.name}); дождитесь его завершения.") from exc
+        os.write(self.fd, f"pid={os.getpid()} time={time.time():.0f}".encode())
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        if self.fd is not None:
+            os.close(self.fd)
+            self.fd = None
+        try:
+            self.path.unlink()
+        except OSError:
+            pass
+
+
 def apply_update(*, manifest: dict[str, Any], artifact: Path,
                  target: Path, current_version: str,
                  public_key_pem: bytes,
                  allow_downgrade: bool = False) -> dict[str, Any]:
-    """Проверить и атомарно применить; старый файл остаётся в `.bak`."""
+    """Проверить и атомарно применить; старый файл остаётся в `.bak`.
+
+    Гарантии при любом отказе до `os.replace`: установленный файл не
+    тронут, временный файл убран, `.bak` (если создан) равен прежнему
+    содержимому байт-в-байт.
+    """
     verify_manifest(manifest, public_key_pem)
     version = str(manifest["version"])
     if not allow_downgrade and not is_newer(version, current_version):
@@ -131,6 +225,8 @@ def apply_update(*, manifest: dict[str, Any], artifact: Path,
     artifact, target = Path(artifact), Path(target)
     if not artifact.is_file():
         raise SignedUpdateError(f"Артефакт не найден: {artifact}")
+    if artifact.resolve() == target.resolve():
+        raise SignedUpdateError("Артефакт и целевой файл совпадают.")
     actual = sha256_file(artifact)
     if actual != str(manifest["sha256"]).lower():
         raise SignedUpdateError(
@@ -140,14 +236,49 @@ def apply_update(*, manifest: dict[str, Any], artifact: Path,
         raise SignedUpdateError("Размер артефакта не совпал с манифестом.")
     target.parent.mkdir(parents=True, exist_ok=True)
     backup = target.with_suffix(target.suffix + ".bak")
-    if target.exists():
-        shutil.copy2(target, backup)
-    tmp = target.with_suffix(target.suffix + ".part")
-    with artifact.open("rb") as src, tmp.open("wb") as dst:
-        shutil.copyfileobj(src, dst)
-        dst.flush()
-        os.fsync(dst.fileno())
-    os.replace(tmp, target)  # атомарная замена в том же каталоге
+    tmp_name = ""
+    with _UpdateLock(target):
+        try:
+            if target.exists():
+                # .bak тоже пишем атомарно и сверяем по хэшу до замены.
+                with tempfile.NamedTemporaryFile(
+                        mode="wb", dir=target.parent,
+                        prefix=target.name + ".bak-", delete=False) as bak:
+                    tmp_bak = Path(bak.name)
+                    with target.open("rb") as src:
+                        shutil.copyfileobj(src, bak)
+                    bak.flush()
+                    os.fsync(bak.fileno())
+                try:
+                    if sha256_file(tmp_bak) != sha256_file(target):
+                        raise SignedUpdateError(
+                            "Резервная копия не совпала с установленным "
+                            "файлом — обновление прервано до замены.")
+                    os.replace(tmp_bak, backup)
+                finally:
+                    tmp_bak.unlink(missing_ok=True)
+            mode = (stat.S_IMODE(target.stat().st_mode)
+                    if target.exists() else 0o644)
+            with tempfile.NamedTemporaryFile(
+                    mode="wb", dir=target.parent,
+                    prefix=target.name + ".", suffix=".part",
+                    delete=False) as dst:
+                tmp_name = dst.name
+                with artifact.open("rb") as src:
+                    shutil.copyfileobj(src, dst)
+                dst.flush()
+                os.fsync(dst.fileno())
+            os.chmod(tmp_name, mode)
+            if sha256_file(Path(tmp_name)) != actual:
+                raise SignedUpdateError(
+                    "Временный файл повреждён при записи — обновление "
+                    "прервано, установленный файл не тронут.")
+            os.replace(tmp_name, target)  # атомарная замена, тот же каталог
+            tmp_name = ""
+            _fsync_dir(target.parent)
+        finally:
+            if tmp_name:
+                Path(tmp_name).unlink(missing_ok=True)
     return {"applied": version, "target": str(target),
             "backup": str(backup) if backup.exists() else "",
             "sha256": actual}

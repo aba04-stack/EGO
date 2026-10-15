@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alterego-training-hub-desktop"
-version = "1.14.0"
+version = "1.15.0"
 description = "Desktop control panel for AlterEgo training repositories, API mentors, and cloud GPUs"
 requires-python = ">=3.10"
 dependencies = ["keyring>=25.0", "paramiko>=3.4"]
@@ -13,8 +13,9 @@ dependencies = ["keyring>=25.0", "paramiko>=3.4"]
 alterego-llm-studio = "alterego_training_hub.ui:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "coverage>=7.0", "mypy>=1.10"]
-package = ["pyinstaller>=6.0"]
+dev = ["pytest>=8.0", "coverage>=7.0", "mypy>=1.10", "cryptography>=42.0"]
+# Релизная сборка: cryptography ОБЯЗАТЕЛЬНА (подписанные обновления этапа G)
+package = ["pyinstaller>=6.0", "cryptography>=42.0"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -72,10 +72,11 @@ class EditorPage(tk.Frame):
         header.pack(fill="x", padx=16, pady=(10, 4))
 
         # Project scaffolding bar (collapsible, closed so the editor owns the page)
-        scaffold_section = Collapsible(self, t(t('Новый проект из шаблона')),
-                                       open=False)
-        scaffold_section.pack(fill="x", padx=16, pady=(0, 8))
-        scaffold = scaffold_section.body
+        self.scaffold_section = Collapsible(
+            self, t(t("Новый проект из шаблона")), open=False,
+        )
+        self.scaffold_section.pack(fill="x", padx=16, pady=(0, 8))
+        scaffold = self.scaffold_section.body
         row = tk.Frame(scaffold, bg=C["panel"])
         row.pack(fill="x")
         self._project_form_row = row

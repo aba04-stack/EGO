@@ -1,0 +1,80 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ego-desktop"
+version = "1.15.1"
+description = "Experimental EGO hobby project for model training, API mentors, and cloud GPU management; no warranty or support guarantee"
+requires-python = ">=3.10"
+dependencies = ["keyring>=25.0", "paramiko>=3.4"]
+
+[project.scripts]
+ego = "alterego_training_hub.ui:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "coverage>=7.0", "mypy>=1.10", "cryptography>=42.0", "ruff>=0.8", "pillow>=10.0"]
+# Релизная сборка: cryptography ОБЯЗАТЕЛЬНА (подписанные обновления этапа G)
+package = ["pyinstaller>=6.0", "cryptography>=42.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+alterego_training_hub = ["assets/fonts/*.ttf", "assets/fonts/*.txt"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra"
+
+[tool.ruff]
+# Stabilization baseline (этап 29): CI enforces this set. Broad-except and
+# try-except-pass in UI modules are deliberate resilience patterns (a page
+# must never die on odd data), so BLE/S families stay opt-in, not enforced.
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["F", "E9", "I", "UP", "SIM", "RUF"]
+ignore = [
+    "RUF001",  # Cyrillic look-alike chars in Russian UI text are intentional
+    "RUF002",
+    "RUF003",
+    "SIM105",  # try/except/pass with explicit comment is our resilience idiom
+    "SIM108",  # ternaries hurt readability in several guarded UI spots
+    "SIM102",  # nested guards in metrics/settings keep distinct semantics
+]
+
+[tool.coverage.run]
+source = ["src/alterego_training_hub"]
+omit = ["src/alterego_training_hub/_l10n_ui.py"]
+
+[tool.coverage.report]
+fail_under = 75
+show_missing = false
+
+[tool.mypy]
+python_version = "3.11"
+files = [
+    "src/alterego_training_hub/agent.py",
+    "src/alterego_training_hub/agent_bench.py",
+    "src/alterego_training_hub/live_bench.py",
+    "src/alterego_training_hub/critique.py",
+    "src/alterego_training_hub/smoke_run.py",
+    "src/alterego_training_hub/train_script.py",
+    "src/alterego_training_hub/wizard_plan.py",
+    "src/alterego_training_hub/context_view.py",
+    "src/alterego_training_hub/thought_stream.py",
+    "src/alterego_training_hub/action_trace.py",
+    "src/alterego_training_hub/gen_preview.py",
+    "src/alterego_training_hub/data_audit.py",
+    "src/alterego_training_hub/resource_calc.py",
+    "src/alterego_training_hub/model_recipes.py",
+    "src/alterego_training_hub/tokenizer_train.py",
+    "src/alterego_training_hub/ui_patterns.py",
+    "src/alterego_training_hub/semantic_search.py",
+    "src/alterego_training_hub/update_check.py",
+    "src/alterego_training_hub/night_watch.py",
+]
+ignore_missing_imports = true
+warn_unused_ignores = false

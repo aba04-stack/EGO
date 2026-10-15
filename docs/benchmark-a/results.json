@@ -1,0 +1,28 @@
+{
+  "seed": 42,
+  "examples": 512,
+  "engines": {
+    "ours": {
+      "returncode": 0,
+      "wall_s": 4.48,
+      "peak_rss_mb": 645.7,
+      "cmd": "/home/user/-/.venv/bin/python /tmp/alterego-bench-a/ours_train.py --output-dir /tmp/alterego-bench-a/out_ours",
+      "eval": {
+        "val_loss_masked": 6.2436,
+        "val_examples": 51,
+        "val_target_tokens": 426
+      }
+    },
+    "trl": {
+      "returncode": 0,
+      "wall_s": 4.82,
+      "peak_rss_mb": 647.3,
+      "cmd": "/home/user/-/.venv/bin/python /tmp/alterego-bench-a/trl_train.py /tmp/alterego-bench-a /tmp/alterego-bench-a/base /tmp/alterego-bench-a/out_trl",
+      "eval": {
+        "val_loss_masked": 6.2466,
+        "val_examples": 51,
+        "val_target_tokens": 426
+      }
+    }
+  }
+}

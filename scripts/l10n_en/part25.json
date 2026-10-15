@@ -1,0 +1,16 @@
+{
+ "Eval-датасет для деконтаминации": "Eval dataset for decontamination",
+ "Near-dup дедупликация": "Near-dup deduplication",
+ "SFT-валидация": "SFT validation",
+ "Валидация формата": "Format validation",
+ "Деконтаминация": "Decontamination",
+ "Деконтаминация от eval…": "Decontaminate vs eval…",
+ "Запустить Ollama": "Start Ollama",
+ "Локальный сервер": "Local server",
+ "Проверить Ollama/vLLM": "Probe Ollama/vLLM",
+ "Проверка локальных серверов": "Probing local servers",
+ "Удалено почти-дублей: {v1}; осталось {v2}": "Near-duplicates removed: {v1}; kept {v2}",
+ "из приложения сервер не запущен": "no server started from the app",
+ "локальные серверы не проверены": "local servers not probed yet",
+ "локальный сервер остановлен": "local server stopped"
+}

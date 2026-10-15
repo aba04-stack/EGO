@@ -1,0 +1,4 @@
+{
+  "Команда обучения не задана: передайте command (например, python train_llm.py) или сгенерируйте скрипт в мастере.": "No training command set: pass a command (e.g. python train_llm.py) or generate a script in the wizard.",
+  "Команда обучения пуста. Укажите команду (например, python train_llm.py) или сгенерируйте скрипт в мастере «Своя ЛЛМ».": "The training command is empty. Enter a command (e.g. python train_llm.py) or generate a script in the «Your LLM» wizard."
+}

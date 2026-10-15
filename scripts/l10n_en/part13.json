@@ -1,0 +1,16 @@
+{
+    "\n\nФайл: {v1}\n```\n{snippet}\n```\n": "\n\nFile: {v1}\n```\n{snippet}\n```\n",
+    "Вложен файл: ": "Attached file: ",
+    "Модель: мастер «Своя ЛЛМ» — план": "Model: “Your own LLM” wizard — plan",
+    "Модель: сравнить до/после": "Model: compare before/after",
+    "Модель: сэмплы генерации": "Model: generation samples",
+    "Прикрепить файл к сообщению": "Attach a file to the message",
+    "Сайдбар: свернуть в иконки (activity bar)": "Sidebar: collapse to icons (activity bar)",
+    "Чат: контекст модели": "Chat: model context",
+    "Чат: мысли агента": "Chat: agent thoughts",
+    "Чат: проверить ответ (критик)": "Chat: check answer (critic)",
+    "Чат: что агент сделал": "Chat: what the agent did",
+    "идёт": "running",
+    "🎟 {tokens_today} ток.": "🎟 {tokens_today} tok.",
+    "🤖 модель не выбрана": "🤖 no model selected"
+}

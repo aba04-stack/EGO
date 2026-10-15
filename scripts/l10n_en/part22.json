@@ -1,0 +1,5 @@
+{
+ "🧠 По смыслу": "🧠 Semantic",
+ "Смысловой поиск: {pattern}": "Semantic search: {pattern}",
+ "По смыслу: {v1} результатов · индекс: {v2} файлов, {v3} новых чанков": "Semantic: {v1} results · index: {v2} files, {v3} new chunks"
+}

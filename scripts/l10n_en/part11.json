@@ -1,0 +1,20 @@
+{
+    "Агент пока не вызывал инструментов в этом диалоге.": "The agent has not called any tools in this conversation yet.",
+    "Контекст модели": "Model context",
+    "Критик": "Critic",
+    "Критик ответов": "Answer critic",
+    "Модель не использовала структурный протокол в последнем ответе. Включите «Протокол мыслей» на странице «Модель» — тогда каждый ответ будет раскрываться в цепочку «Мысль → Действие → Ответ».": "The model did not use the structured protocol in its last reply. Enable “Thought protocol” on the Model page — then every reply expands into a “Thought → Action → Answer” chain.",
+    "Мысли агента": "Agent thoughts",
+    "Пока нет ответов для проверки.": "No answers to check yet.",
+    "Пока нет ответов наставника.": "No mentor answers yet.",
+    "Проверка ответа": "Answer check",
+    "Прозрачность и генерации": "Transparency & generations",
+    "Протокол «Мысль → Действие → Ответ» раскрывает, почему агент ответил так; «Критик» вторым проходом сверяет ответ с действиями и метриками; сэмплы показывают, что модель реально генерирует при обучении.": "The “Thought → Action → Answer” protocol reveals why the agent answered that way; the Critic re-checks the answer against actions and metrics in a second pass; samples show what the model actually generates while training.",
+    "Протокол мыслей": "Thought protocol",
+    "Сохранено: протокол — {v1}, критик — {v2}": "Saved: protocol — {v1}, critic — {v2}",
+    "Сэмплов в логе обучения пока нет. Добавьте в команду обучения печать строк вида {\"sample\": {\"step\": 100, \"prompt\": \"…\", \"text\": \"…\"}} или блоков ### sample @100 — и они появятся здесь.": "No samples in the training log yet. Make your training command print lines like {\"sample\": {\"step\": 100, \"prompt\": \"…\", \"text\": \"…\"}} or ### sample @100 blocks — they will appear here.",
+    "Сэмплы генерации": "Generation samples",
+    "Что агент сделал": "What the agent did",
+    "вкл": "on",
+    "выкл": "off"
+}

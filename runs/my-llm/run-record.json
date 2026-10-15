@@ -1,0 +1,50 @@
+{
+  "schema": 2,
+  "status": "failed",
+  "error": "SystemExit: Для DPO нужно минимум 4 пары prompt/chosen/rejected (нашлось 2; пропущено битых: 0).",
+  "started_at": 1792075302.884681,
+  "ended_at": 1792075305.3236134,
+  "duration_sec": 2.439,
+  "engine": "trainer",
+  "path": "lora",
+  "recipe": "dpo",
+  "config": {
+    "path": "lora",
+    "recipe_name": "dpo",
+    "engine": "trainer",
+    "packing": false,
+    "group_by_length": false,
+    "dataset": "/tmp/pytest-of-user/pytest-25/test_dpo_too_few_pairs_refused0/prefs.jsonl",
+    "tokenizer": "",
+    "base_model": "m",
+    "output_dir": "runs/my-llm",
+    "lr": 0.0001,
+    "batch": 16,
+    "epochs": 3,
+    "seq_len": 1024,
+    "warmup_pct": 3,
+    "seed": 42,
+    "grad_accum": 1,
+    "gradient_checkpointing": false,
+    "gpus": 1,
+    "sample_every": 200
+  },
+  "python": "3.11.2",
+  "platform": "Linux-6.1.158+-x86_64-with-glibc2.36",
+  "versions": {
+    "torch": "2.5.1",
+    "transformers": "4.46.3",
+    "peft": "0.13.2",
+    "trl": "0.12.2",
+    "datasets": "3.1.0",
+    "accelerate": "1.1.1"
+  },
+  "gpu": "",
+  "dataset": {
+    "path": "/tmp/pytest-of-user/pytest-25/test_dpo_too_few_pairs_refused0/prefs.jsonl",
+    "sha256": "955e865b2be9eb0412951fc9109dc160937c788e024366bc9608631c70df828c",
+    "bytes": 184
+  },
+  "metrics": {},
+  "artifacts": []
+}

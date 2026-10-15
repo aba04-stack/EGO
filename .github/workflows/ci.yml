@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install
+        run: python -m pip install -e ".[dev,package]"
+      - name: Lint (ruff)
+        run: python -m ruff check src tests scripts
+      - name: Compile
+        run: python -m compileall -q src run_app.py tests
+      - name: Release gate — этап G без пропусков
+        run: ALTEREGO_REQUIRE_CRYPTO=1 python -m pytest tests/test_stageG_updates.py -q
+      - name: Tests with coverage (ядро, порог из pyproject)
+        run: |
+          python -m coverage run -m pytest -q
+          python -m coverage report
+      - name: Types (mypy, чистые модули)
+        run: python -m mypy
+      - name: Real end-to-end check (без моков)
+        run: python scripts/real_check.py --quick
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Build wheel and sdist
+        run: |
+          python -m pip install build
+          python -m build
+      - name: Release gate — нет закрытых ключей в артефактах
+        run: python scripts/sign_update.py check dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  desktop-bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Build standalone bundle (PyInstaller)
+        run: |
+          python -m pip install -e ".[package]" pyinstaller
+          python scripts/build_desktop.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AlterEgoTrainingHub-Linux-x64
+          path: dist/AlterEgoTrainingHub
+          if-no-files-found: error
+          retention-days: 7
+
+  tk-smoke:
+    # Настоящий Tk под виртуальным дисплеем: окно приложения целиком.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system Python + Tk + xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-tk python3-venv xvfb
+      - name: Create venv with system Tk
+        run: |
+          python3 -m venv --system-site-packages .venv-tk
+          .venv-tk/bin/pip install -e ".[package]"
+      - name: Real Tk smoke under xvfb
+        run: xvfb-run -a .venv-tk/bin/python scripts/tk_smoke.py
+
+  real-training:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install package and real torch (CPU)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install "transformers==4.46.3" "peft==0.13.2" "datasets==3.1.0" "accelerate==1.1.1" "tokenizers==0.20.3" "trl==0.12.2"
+      - name: Real training check (torch обязателен)
+        run: python scripts/real_check.py --require-torch

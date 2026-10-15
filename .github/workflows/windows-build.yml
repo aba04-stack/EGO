@@ -1,0 +1,87 @@
+name: Windows Desktop Build
+
+on:
+  push:
+    branches: [feature/desktop-app-mvp, arena/5b5c6f04-repo]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install app and build tools
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,package]"
+      - name: Compile and test
+        shell: pwsh
+        run: |
+          python -m compileall -q src run_app.py tests
+          python -m pytest -q --tb=long
+      - name: Package Windows executable
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name EGO --paths src --collect-submodules keyring.backends --add-data "src/alterego_training_hub/assets/fonts;alterego_training_hub/assets/fonts" run_app.py
+          if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed." }
+          Compress-Archive -Path dist\EGO.exe -DestinationPath dist\EGO-Windows-x64.zip -Force
+      - name: Upload Windows build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EGO-Windows-x64
+          path: dist/EGO-Windows-x64.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    # Публикация GitHub-релиза по тегу v*: exe + wheel + sdist одним пакетом.
+    timeout-minutes: 15
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Build wheel and sdist
+        run: |
+          python -m pip install build
+          python -m build
+      - name: Download Windows executable
+        uses: actions/download-artifact@v4
+        with:
+          name: EGO-Windows-x64
+          path: release-assets
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp dist/*.whl dist/*.tar.gz release-assets/
+          cp release-download/install-windows.bat release-assets/
+          cp release-download/install-linux-mac.sh release-assets/
+          cp release-download/run-ego.bat release-assets/
+          cp release-download/УСТАНОВКА.md release-assets/УСТАНОВКА.md
+          gh release create "${GITHUB_REF_NAME}" release-assets/* \
+            --title "EGO ${GITHUB_REF_NAME}" \
+            --generate-notes

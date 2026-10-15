@@ -1,0 +1,14 @@
+{
+ "Push на HF…": "Push to HF…",
+ "Push на Hugging Face": "Push to Hugging Face",
+ "Команда resume готова — нажмите «Запустить».": "Resume command is ready — press “Start”.",
+ "Оставить 3": "Keep 3",
+ "Скачать с HF…": "Download from HF…",
+ "Скачивание {v1}": "Downloading {v1}",
+ "Сначала выберите модель с локальной папкой.": "First select a model with a local folder.",
+ "Сначала выберите чекпоинт.": "First select a checkpoint.",
+ "Удалено чекпоинтов: {v1}": "Checkpoints deleted: {v1}",
+ "Удалить старые чекпоинты ({v1})?": "Delete old checkpoints ({v1})?",
+ "Удалять нечего: чекпоинтов не больше трёх.": "Nothing to delete: no more than three checkpoints.",
+ "Чекпоинты": "Checkpoints"
+}

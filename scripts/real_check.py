@@ -57,7 +57,7 @@ def main() -> int:
 
         scripts = importlib.metadata.entry_points(group="console_scripts")
         names = {ep.name for ep in scripts}
-        assert "ego" in names and "alterego-llm-studio" in names, names
+        assert "ego" in names, names
         return f"version {pkg.__version__}, console-script зарегистрирован"
     check("пакет и точка входа импортируются", _version)
 

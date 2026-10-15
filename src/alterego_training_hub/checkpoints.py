@@ -103,6 +103,19 @@ def find_checkpoints(root: Path, max_results: int = 100) -> list[Checkpoint]:
             continue
         if any(part in {".git", ".venv", "__pycache__"} for part in rel.parts):
             continue
+        # A weight file inside a Trainer checkpoint or adapter directory is
+        # part of that checkpoint, not a second independent checkpoint entry.
+        if item.is_file():
+            parents = [
+                root.joinpath(*rel.parts[:index])
+                for index in range(1, len(rel.parts))
+            ]
+            if any(
+                parent.name.startswith("checkpoint-")
+                or (parent / "adapter_config.json").is_file()
+                for parent in parents
+            ):
+                continue
         checkpoint = _classify(item)
         if checkpoint is not None:
             found.append(checkpoint)

@@ -90,11 +90,12 @@ jobs:
         id: published
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.meta.outputs.tag }}
         shell: bash
         run: |
-          if gh release view "${{ steps.meta.outputs.tag }}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Release ${{ steps.meta.outputs.tag }} already exists; skipping republish."
+            echo "Release $RELEASE_TAG already exists; skipping republish."
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
@@ -121,6 +122,7 @@ jobs:
         if: steps.published.outputs.exists != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.meta.outputs.tag }}
         shell: bash
         run: |
           cp dist/*.whl dist/*.tar.gz release-assets/
@@ -128,7 +130,7 @@ jobs:
           cp release-download/install-linux-mac.sh release-assets/
           cp release-download/run-ego.bat release-assets/
           cp release-download/УСТАНОВКА.md release-assets/УСТАНОВКА.md
-          gh release create "${{ steps.meta.outputs.tag }}" release-assets/* \
+          gh release create "$RELEASE_TAG" release-assets/* \
             --repo "$GITHUB_REPOSITORY" \
-            --title "EGO ${{ steps.meta.outputs.tag }}" \
+            --title "EGO $RELEASE_TAG" \
             --generate-notes

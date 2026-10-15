@@ -36,7 +36,7 @@ class TrainingHubApp(tk.Tk):
         super().__init__()
         setup_logging()
         install_excepthook()
-        self.title("EGO — LLM Studio")
+        self.title("EGO")
         self.geometry("1480x860")
         self.minsize(1180, 720)
 

@@ -69,6 +69,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp dist/*.whl dist/*.tar.gz release-assets/
+          cp release-download/install-windows.bat release-assets/
+          cp release-download/install-linux-mac.sh release-assets/
+          cp release-download/run-alterego.bat release-assets/
+          cp release-download/УСТАНОВКА.md release-assets/УСТАНОВКА.md
           gh release create "${GITHUB_REF_NAME}" release-assets/* \
             --title "AlterEgo LLM Studio ${GITHUB_REF_NAME}" \
             --generate-notes

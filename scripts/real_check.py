@@ -46,7 +46,7 @@ def main() -> int:
     quick = "--quick" in sys.argv
     require_torch = "--require-torch" in sys.argv
     repo = Path(__file__).resolve().parents[1]
-    tmp = Path(tempfile.mkdtemp(prefix="alterego-real-"))
+    tmp = Path(tempfile.mkdtemp(prefix="ego-real-"))
     os.environ["XDG_CONFIG_HOME"] = str(tmp / "config")
 
     # 1. Package imports and version -------------------------------------
@@ -57,7 +57,7 @@ def main() -> int:
 
         scripts = importlib.metadata.entry_points(group="console_scripts")
         names = {ep.name for ep in scripts}
-        assert "alterego-llm-studio" in names, names
+        assert "ego" in names and "alterego-llm-studio" in names, names
         return f"version {pkg.__version__}, console-script зарегистрирован"
     check("пакет и точка входа импортируются", _version)
 

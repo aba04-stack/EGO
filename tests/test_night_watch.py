@@ -157,8 +157,8 @@ def test_night_watch_log_skips_bad_rows_and_preserves_original(tmp_path):
     assert len(entries) == 1
     assert entries[0].summary == "kept"
     assert entries[0].issues == ["17"]
-    # A malformed non-boolean flag must not turn a failed record into success.
-    assert entries[0].ok is True
+    # A malformed non-boolean flag must never be treated as a successful check.
+    assert entries[0].ok is False
     assert "некорректные записи" in log.load_error
     backups = list(tmp_path.glob("watch.json.corrupt-*"))
     assert len(backups) == 1

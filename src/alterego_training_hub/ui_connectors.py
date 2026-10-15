@@ -164,8 +164,8 @@ class ConnectorsPage(tk.Frame):
             t(t('Отправка письма')),
             lambda: self._manager().gmail_send(
                 self.mail_to.get().strip(),
-                t(t('AlterEgo Training Hub — тест')),
-                t(t('Тестовое уведомление от AlterEgo Training Hub.')),
+                t(t('EGO — тест')),
+                t(t('Тестовое уведомление от EGO.')),
             ),
             done,
         )

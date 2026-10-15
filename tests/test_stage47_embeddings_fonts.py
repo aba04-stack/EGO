@@ -1,5 +1,8 @@
 """Этап 47: API-эмбеддинги в поиске, инвалидация кэша, комплектные шрифты."""
+import sys
 from pathlib import Path
+
+import pytest
 
 from alterego_training_hub.semantic_search import (
     ApiEmbedder,
@@ -40,6 +43,8 @@ def test_bundled_fonts_ship_with_package():
     assert (fonts / "OFL-Inter.txt").exists()
 
 
+@pytest.mark.skipif(not sys.platform.startswith("linux"),
+                    reason="checks the Linux per-user font directory")
 def test_register_bundled_fonts_linux_copies(tmp_path, monkeypatch):
 
     home = tmp_path / "home"

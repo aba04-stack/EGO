@@ -217,7 +217,11 @@ class _UpdateLock:
         except ValueError:
             pid = 0
         owner_dead = False
-        if pid > 0:
+        # POSIX permits os.kill(pid, 0) as a liveness probe. On Windows,
+        # signal value 0 is CTRL_C_EVENT, so this can interrupt the current
+        # console process group instead of merely checking the PID.
+        # On Windows, conservatively recover a lock only after its age expires.
+        if pid > 0 and os.name != "nt":
             try:
                 os.kill(pid, 0)
             except ProcessLookupError:

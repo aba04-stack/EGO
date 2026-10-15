@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -91,11 +92,16 @@ def build_meta(payload: dict, path: str | Path) -> tuple[dict, str]:
 def _worker(request: dict, *, timeout: float, memory_mb: int) -> dict:
     """Run one request in the sandbox worker subprocess."""
     try:
+        worker_env = os.environ.copy()
+        # The worker protocol is UTF-8 JSON, including Russian error messages.
+        worker_env["PYTHONUTF8"] = "1"
+        worker_env["PYTHONIOENCODING"] = "utf-8"
         completed = subprocess.run(
             [sys.executable, "-m", "alterego_training_hub.plugin_worker",
              "--memory-mb", str(int(memory_mb))],
             input=json.dumps(request, ensure_ascii=False),
-            capture_output=True, text=True, timeout=max(1.0, float(timeout)))
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            env=worker_env, timeout=max(1.0, float(timeout)))
     except subprocess.TimeoutExpired:
         raise SandboxError(
             f"Песочница: превышен таймаут ({int(timeout)} с).") from None

@@ -54,7 +54,8 @@ def test_install_checks_sha256(tmp_path):
 
     source = tmp_path / "mini.py"
     source.write_text(PLUGIN_SOURCE, encoding="utf-8")
-    good = hashlib.sha256(PLUGIN_SOURCE.encode("utf-8")).hexdigest()
+    # Hash bytes actually written; Windows text files may use CRLF.
+    good = hashlib.sha256(source.read_bytes()).hexdigest()
     entry = CatalogEntry(id="mini", name="Mini", source=f"file:{source}",
                          sha256=good)
     assert install_entry(entry, tmp_path / "plugins").exists()

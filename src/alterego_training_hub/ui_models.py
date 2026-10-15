@@ -109,8 +109,12 @@ class ModelsPage(tk.Frame):
         # Editor
         edit_card = card(self, t(t('Карточка модели')))
         edit_card.pack(fill="x", padx=24, pady=(0, 12))
-        edit_card.columnconfigure(1, weight=1)
-        edit_card.columnconfigure(3, weight=1)
+        # card() packs its caption into the returned frame; keep all grid
+        # controls inside a child frame to avoid mixing pack and grid.
+        edit_content = tk.Frame(edit_card, bg=C["panel"])
+        edit_content.pack(fill="both", expand=True)
+        edit_content.columnconfigure(1, weight=1)
+        edit_content.columnconfigure(3, weight=1)
 
         self.var_name = tk.StringVar()
         self.var_kind = tk.StringVar(value="local")
@@ -119,13 +123,13 @@ class ModelsPage(tk.Frame):
         self.var_model_id = tk.StringVar()
 
         def field(row, col, label, var, widget="entry", width=None):
-            tk.Label(edit_card, text=label, bg=C["panel"], font=F_BASE).grid(
+            tk.Label(edit_content, text=label, bg=C["panel"], font=F_BASE).grid(
                 row=row, column=col, sticky="w", padx=(0, 8), pady=4)
             if widget == "combo":
-                w = ttk.Combobox(edit_card, textvariable=var, values=("local", "cloud"),
+                w = ttk.Combobox(edit_content, textvariable=var, values=("local", "cloud"),
                                  state="readonly", width=10)
             else:
-                w = tk.Entry(edit_card, textvariable=var, bd=1, relief="solid",
+                w = tk.Entry(edit_content, textvariable=var, bd=1, relief="solid",
                              font=F_BASE, width=width)
             w.grid(row=row, column=col + 1, sticky="ew", padx=(0, 16), pady=4)
 
@@ -135,9 +139,9 @@ class ModelsPage(tk.Frame):
         field(1, 2, "API model id", self.var_model_id)
         field(2, 0, t(t('URL инференса')), self.var_base_url)
 
-        tk.Label(edit_card, text=t(t('Заметки')), bg=C["panel"], font=F_BASE).grid(
+        tk.Label(edit_content, text=t(t('Заметки')), bg=C["panel"], font=F_BASE).grid(
             row=3, column=0, sticky="nw", padx=(0, 8), pady=4)
-        self.notes = tk.Text(edit_card, height=3, wrap="word", bd=1, relief="solid",
+        self.notes = tk.Text(edit_content, height=3, wrap="word", bd=1, relief="solid",
                              font=F_BASE)
         self.notes.grid(row=3, column=1, columnspan=3, sticky="ew", pady=4)
 

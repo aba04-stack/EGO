@@ -18,6 +18,10 @@ jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 20
+    env:
+      # Keep Russian diagnostics readable in Windows subprocesses.
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -30,11 +34,22 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev,package]"
+      - name: Key-generation CLI preflight
+        shell: pwsh
+        run: |
+          $keyDir = Join-Path $env:RUNNER_TEMP "ego-keygen-preflight"
+          python scripts/sign_update.py make-keys --out-dir $keyDir
+          if ($LASTEXITCODE -ne 0) { throw "Key-generation CLI preflight failed." }
+          if (!(Test-Path (Join-Path $keyDir "private.pem")) -or
+              !(Test-Path (Join-Path $keyDir "public.pem"))) {
+            throw "Key-generation CLI did not create both key files."
+          }
+          Remove-Item -Recurse -Force $keyDir
       - name: Compile and test
         shell: pwsh
         run: |
           python -m compileall -q src run_app.py tests
-          python -m pytest -q --tb=long
+          python -m pytest -vv -s --tb=long
       - name: Package Windows executable
         shell: pwsh
         run: |

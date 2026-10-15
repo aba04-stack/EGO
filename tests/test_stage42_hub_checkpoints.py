@@ -89,6 +89,12 @@ def test_find_and_bind_checkpoints(tmp_path):
     found = find_checkpoints(root)
     kinds = {c.kind for c in found}
     assert kinds == {"trainer", "adapter", "weights"}
+    # Nested model weights belong to their enclosing trainer checkpoint and
+    # should not be returned as a duplicate standalone weight artifact.
+    assert not any(
+        c.kind == "weights" and "checkpoint-200" in c.path.parts
+        for c in found
+    )
     trainer = next(c for c in found if c.kind == "trainer")
     assert trainer.step == 200 and trainer.val_loss == 1.9
     record = RunRecord(command="python train_llm.py", workspace=str(root),

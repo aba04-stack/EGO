@@ -25,7 +25,15 @@ def main() -> int:
 
     from alterego_training_hub.ui import TrainingHubApp
 
-    app = TrainingHubApp()
+    try:
+        app = TrainingHubApp()
+    except BaseException:
+        # The GUI's crash hook intentionally opens a dialog and can hide
+        # tracebacks in headless CI; print the startup error for diagnostics.
+        sys.__excepthook__(*sys.exc_info())
+        return 1
+    # Expose test failures directly rather than through a modal GUI dialog.
+    sys.excepthook = sys.__excepthook__
     assert isinstance(app, tk.Tk)
     app.update_idletasks()
     app.update()
@@ -33,6 +41,7 @@ def main() -> int:
     expected = {"chat", "training", "editor", "search", "settings"}
     missing = expected - set(app.pages)
     assert not missing, f"pages missing: {missing}"
+    assert hasattr(app, "chat_panel"), "docked chat panel missing"
     for page in sorted(expected):
         app.show_page(page)
         app.update_idletasks()

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 
@@ -209,48 +210,55 @@ def test_private_key_scan_and_cli_permissions(tmp_path):
 
     secret = tmp_path / "dist" / "private.pem"
     secret.parent.mkdir()
-    secret.write_text("-----BEGIN PRIVATE KEY-----\nx\n", encoding="utf-8")
+    secret.write_text("-----BEGIN PRIVATE KEY-----\\nx\\n", encoding="utf-8")
     leaks = scan_for_private_keys([tmp_path / "dist"])
     assert leaks and "private" in leaks[0].lower()
     clean = tmp_path / "clean"
     clean.mkdir()
-    (clean / "public.pem").write_text("-----BEGIN PUBLIC KEY-----\n",
+    (clean / "public.pem").write_text("-----BEGIN PUBLIC KEY-----\\n",
                                       encoding="utf-8")
     assert scan_for_private_keys([clean]) == []
 
     import stat as stat_mod
-    import subprocess
-    import sys
 
     keys_dir = tmp_path / "keys"
-    done = subprocess.run(
-        [sys.executable, "scripts/sign_update.py", "make-keys",
-         "--out-dir", str(keys_dir)],
-        capture_output=True, text=True, timeout=120, cwd=".")
+    done = _run_cli("make-keys", "--out-dir", str(keys_dir))
     assert done.returncode == 0, done.stderr
     if os.name == "posix":
         mode = stat_mod.S_IMODE((keys_dir / "private.pem").stat().st_mode)
         assert mode == 0o600, oct(mode)
-    bad = subprocess.run(
-        [sys.executable, "scripts/sign_update.py", "check",
-         str(tmp_path / "dist")],
-        capture_output=True, text=True, timeout=120, cwd=".")
+    bad = _run_cli("check", str(tmp_path / "dist"))
     assert bad.returncode == 1
     assert "НАЙДЕНЫ ЗАКРЫТЫЕ КЛЮЧИ" in bad.stdout
-    good = subprocess.run(
-        [sys.executable, "scripts/sign_update.py", "check", str(clean)],
-        capture_output=True, text=True, timeout=120, cwd=".")
+    good = _run_cli("check", str(clean))
     assert good.returncode == 0, good.stdout + good.stderr
     assert "не найдено" in good.stdout
 
 
 def _run_cli(*argv):
-    import subprocess
+    """Run the CLI entry point in-process; avoids orphanable Windows children."""
+    import contextlib
+    import io
+    import runpy
     import sys
+    from types import SimpleNamespace
 
-    return subprocess.run([sys.executable, "scripts/sign_update.py", *argv],
-                          capture_output=True, text=True, timeout=120,
-                          cwd=".")
+    script_path = Path(__file__).resolve().parents[1] / "scripts" / "sign_update.py"
+    command = [str(script_path), *(str(arg) for arg in argv)]
+    saved_argv = sys.argv
+    stdout, stderr = io.StringIO(), io.StringIO()
+    try:
+        module = runpy.run_path(str(script_path), run_name="_ego_sign_update_test")
+        sys.argv = command
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            try:
+                returncode = module["main"]()
+            except SystemExit as exc:
+                returncode = int(exc.code or 0)
+    finally:
+        sys.argv = saved_argv
+    return SimpleNamespace(returncode=returncode, stdout=stdout.getvalue(),
+                           stderr=stderr.getvalue())
 
 
 def test_make_keys_never_overwrites(tmp_path):
@@ -277,16 +285,11 @@ def test_make_keys_refuses_symlink_target(tmp_path):
     assert victim.read_text(encoding="utf-8") == "не трогать"
     assert not (keys_dir / "public.pem").exists()
 
-
 def test_stale_lock_from_dead_process_recovered(tmp_path, keys):
-    import subprocess
-    import sys as _sys
-
     manifest, artifact, target = _installed(tmp_path, keys)
-    dead = subprocess.run([_sys.executable, "-c", "pass"], timeout=60)
     lock = tmp_path / "installed.bin.update.lock"
-    lock.write_text(f"pid={dead.pid if hasattr(dead, 'pid') else 999999} "
-                    f"time={int(__import__('time').time())}",
+    # Use a deterministic PID known not to belong to this test process.
+    lock.write_text(f"pid=999999 time={int(__import__('time').time())}",
                     encoding="utf-8")
     # pid завершившегося процесса; даже при спорном pid возрастной
     # порог 0 делает замок зависшим детерминированно:

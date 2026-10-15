@@ -3,13 +3,15 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "alterego-training-hub-desktop"
+name = "ego-desktop"
 version = "1.15.1"
-description = "Desktop control panel for AlterEgo training repositories, API mentors, and cloud GPUs"
+description = "EGO desktop environment for model training, API mentors, and cloud GPU management"
 requires-python = ">=3.10"
 dependencies = ["keyring>=25.0", "paramiko>=3.4"]
 
 [project.scripts]
+ego = "alterego_training_hub.ui:main"
+# Compatibility alias for existing installations and scripts.
 alterego-llm-studio = "alterego_training_hub.ui:main"
 
 [project.optional-dependencies]

@@ -1,0 +1,63 @@
+Базовая модель: /tmp/alterego-bench-a/base · LoRA r=16, alpha=32, QLoRA=False
+{'loss': 6.2685, 'grad_norm': 0.11469365656375885, 'learning_rate': 9.504844339512095e-05, 'epoch': 0.17}
+{'loss': 6.2649, 'grad_norm': 0.10159716010093689, 'learning_rate': 7.660160382576683e-05, 'epoch': 0.34}
+{'loss': 6.2637, 'grad_norm': 0.11387069523334503, 'learning_rate': 5e-05, 'epoch': 0.52}
+{'loss': 6.2664, 'grad_norm': 0.1312563270330429, 'learning_rate': 2.3398396174233178e-05, 'epoch': 0.69}
+{'loss': 6.2673, 'grad_norm': 0.1550748348236084, 'learning_rate': 4.951556604879048e-06, 'epoch': 0.86}
+{'eval_loss': 6.266705513000488, 'eval_runtime': 0.0197, 'eval_samples_per_second': 2583.323, 'eval_steps_per_second': 354.574, 'epoch': 1.0}
+{'train_runtime': 0.7418, 'train_samples_per_second': 621.454, 'train_steps_per_second': 156.375, 'train_loss': 6.263908254689183, 'epoch': 1.0}
+eval: val_loss=6.2667
+{"sample": {"step": 116, "prompt": "Вопрос 0:", "text": "Вопрос 0 :", "checkpoint": "final"}}
+Готово. Адаптер: /tmp/alterego-bench-a/out_ours
+{"__bench__": {"wall_s": 4.48, "peak_rss_mb": 645.7, "returncode": 0}}
+
+--- STDERR ---
+/home/user/-/.venv/lib/python3.11/site-packages/peft/tuners/lora/layer.py:1150: UserWarning: fan_in_fan_out is set to False but the target module is `Conv1D`. Setting fan_in_fan_out to True.
+  warnings.warn(
+
+Map:   0%|          | 0/461 [00:00<?, ? examples/s]
+Map: 100%|██████████| 461/461 [00:00<00:00, 7298.99 examples/s]
+
+Map:   0%|          | 0/51 [00:00<?, ? examples/s]
+Map: 100%|██████████| 51/51 [00:00<00:00, 5654.34 examples/s]
+
+  0%|          | 0/116 [00:00<?, ?it/s]
+ 13%|█▎        | 15/116 [00:00<00:00, 146.11it/s]
+                                                 
+
+ 17%|█▋        | 20/116 [00:00<00:00, 146.11it/s]
+ 28%|██▊       | 32/116 [00:00<00:00, 156.89it/s]
+                                                 
+
+ 34%|███▍      | 40/116 [00:00<00:00, 156.89it/s]
+ 42%|████▏     | 49/116 [00:00<00:00, 160.63it/s]
+                                                 
+
+ 52%|█████▏    | 60/116 [00:00<00:00, 160.63it/s]
+ 57%|█████▋    | 66/116 [00:00<00:00, 163.15it/s]
+                                                 
+
+ 69%|██████▉   | 80/116 [00:00<00:00, 163.15it/s]
+ 72%|███████▏  | 84/116 [00:00<00:00, 166.03it/s]
+                                                 
+
+ 86%|████████▌ | 100/116 [00:00<00:00, 166.03it/s]
+ 87%|████████▋ | 101/116 [00:00<00:00, 165.82it/s]
+
+  0%|          | 0/7 [00:00<?, ?it/s][A
+                                                  
+
+                                     
+[A
+100%|██████████| 116/116 [00:00<00:00, 165.82it/s]
+
+100%|██████████| 7/7 [00:00<00:00, 439.14it/s][A
+
+                                              [A
+                                                  
+
+100%|██████████| 116/116 [00:00<00:00, 165.82it/s]
+100%|██████████| 116/116 [00:00<00:00, 156.39it/s]
+
+  0%|          | 0/7 [00:00<?, ?it/s]
+100%|██████████| 7/7 [00:00<00:00, 437.35it/s]

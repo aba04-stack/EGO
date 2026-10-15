@@ -1,0 +1,31 @@
+{'train_runtime': 0.8257, 'train_samples_per_second': 558.298, 'train_steps_per_second': 140.483, 'train_loss': 6.279446832064925, 'epoch': 1.0}
+eval: val_loss=6.2725
+{"__bench__": {"wall_s": 4.82, "peak_rss_mb": 647.3, "returncode": 0}}
+
+--- STDERR ---
+/home/user/-/.venv/lib/python3.11/site-packages/trl/trainer/sft_trainer.py:202: UserWarning: You passed a model_id to the SFTTrainer. This will automatically create an `AutoModelForCausalLM` or a `PeftModel` (if you passed a `peft_config`) for you.
+  warnings.warn(
+/home/user/-/.venv/lib/python3.11/site-packages/peft/tuners/lora/layer.py:1150: UserWarning: fan_in_fan_out is set to False but the target module is `Conv1D`. Setting fan_in_fan_out to True.
+  warnings.warn(
+
+Map:   0%|          | 0/461 [00:00<?, ? examples/s]
+Map: 100%|██████████| 461/461 [00:00<00:00, 12443.52 examples/s]
+
+Map:   0%|          | 0/51 [00:00<?, ? examples/s]
+Map: 100%|██████████| 51/51 [00:00<00:00, 9336.13 examples/s]
+
+  0%|          | 0/116 [00:00<?, ?it/s]
+ 12%|█▏        | 14/116 [00:00<00:00, 131.55it/s]
+ 24%|██▍       | 28/116 [00:00<00:00, 135.63it/s]
+ 37%|███▋      | 43/116 [00:00<00:00, 140.91it/s]
+ 51%|█████     | 59/116 [00:00<00:00, 145.31it/s]
+ 65%|██████▍   | 75/116 [00:00<00:00, 149.87it/s]
+ 78%|███████▊  | 91/116 [00:00<00:00, 153.20it/s]
+ 92%|█████████▏| 107/116 [00:00<00:00, 144.83it/s]
+                                                  
+
+100%|██████████| 116/116 [00:00<00:00, 144.83it/s]
+100%|██████████| 116/116 [00:00<00:00, 140.50it/s]
+
+  0%|          | 0/7 [00:00<?, ?it/s]
+100%|██████████| 7/7 [00:00<00:00, 370.30it/s]

@@ -81,48 +81,73 @@ class EditorPage(tk.Frame):
         scaffold = scaffold_section.body
         row = tk.Frame(scaffold, bg=C["panel"])
         row.pack(fill="x")
-        tk.Label(row, text=t(t('Новый проект')), bg=C["panel"], font=F_BASE).pack(
-            side="left", padx=(0, 8))
+        self._project_form_row = row
+        self._project_layout_mode: str | None = None
+        self.project_label = tk.Label(
+            row, text=t(t("Новый проект")), bg=C["panel"], font=F_BASE,
+        )
         self.project_var = tk.StringVar()
-        tk.Entry(row, textvariable=self.project_var, width=22, bd=1,
-                 relief="solid", font=F_BASE).pack(side="left", padx=(0, 8))
+        self.project_entry = tk.Entry(
+            row, textvariable=self.project_var, width=16, bd=1,
+            relief="solid", font=F_BASE,
+        )
         templates = [f"{item.id} — {item.title}" for item in list_templates()]
         self.template_var = tk.StringVar(value=templates[0] if templates else "")
-        ttk.Combobox(row, textvariable=self.template_var, values=templates,
-                     state="readonly", width=42).pack(side="left", padx=(0, 8))
-        ttk.Button(row, text=t(t('Создать проект')), style="Accent.TButton",
-                   command=self.create_project).pack(side="left")
+        self.template_combo = ttk.Combobox(
+            row, textvariable=self.template_var, values=templates,
+            state="readonly", width=28,
+        )
+        self.project_create_button = ttk.Button(
+            row, text=t(t("Создать проект")), style="Accent.TButton",
+            command=self.create_project,
+        )
         self.project_hint = tk.StringVar(value="")
-        tk.Label(row, textvariable=self.project_hint, bg=C["panel"], fg=C["muted"],
-                 font=F_SMALL).pack(side="left", padx=12)
+        self.project_hint_label = tk.Label(
+            row, textvariable=self.project_hint, bg=C["panel"], fg=C["muted"],
+            font=F_SMALL, anchor="w", justify="left",
+        )
+        row.bind("<Configure>", self._layout_project_form, add="+")
+        self.after_idle(self._layout_project_form)
 
         body = tk.Frame(self, bg=C["bg"])
         body.pack(fill="both", expand=True, padx=24, pady=(0, 14))
 
         # File tree
-        left = card(body, t(t('Файлы')))
+        left = card(body, t(t("Файлы")))
+        left.configure(width=236)
+        left.pack_propagate(False)
         left.pack(side="left", fill="y", padx=(0, 10))
         self.tree = ttk.Treeview(left, columns=("path",), show="tree",
                                  height=22, selectmode="browse")
+        self.tree.column("#0", width=174, minwidth=110, stretch=True)
         self.tree.pack(fill="both", expand=True)
         self.tree.bind("<Double-1>", lambda _e: self.open_selected())
         tree_btns = tk.Frame(left, bg=C["panel"])
         tree_btns.pack(fill="x", pady=(6, 0))
-        ttk.Button(tree_btns, text=t(t('Обновить')), command=self.refresh_tree).pack(
-            side="left")
-        ttk.Button(tree_btns, text=t(t('Открыть')), command=self.open_selected).pack(
-            side="left", padx=6)
+        ttk.Button(
+            tree_btns, text=t(t("Обновить")), command=self.refresh_tree,
+        ).pack(side="left", fill="x", expand=True, padx=(0, 4))
+        ttk.Button(
+            tree_btns, text=t(t("Открыть")), command=self.open_selected,
+        ).pack(side="left", fill="x", expand=True)
         file_ops = tk.Frame(left, bg=C["panel"])
-        file_ops.pack(fill="x", pady=(4, 0))
+        file_ops.pack(fill="x", pady=(6, 0))
         self.new_name_var = tk.StringVar()
-        tk.Entry(file_ops, textvariable=self.new_name_var, width=16, bd=1,
-                 relief="solid", font=F_BASE).pack(side="left")
-        ttk.Button(file_ops, text=t(t('+ Файл')),
-                   command=self.create_file).pack(side="left", padx=4)
-        ttk.Button(file_ops, text=t(t('Переименовать')),
-                   command=self.rename_selected).pack(side="left")
-        ttk.Button(file_ops, text=t(t('Удалить')),
-                   command=self.delete_selected).pack(side="left", padx=4)
+        tk.Entry(
+            file_ops, textvariable=self.new_name_var, width=12, bd=1,
+            relief="solid", font=F_BASE,
+        ).grid(row=0, column=0, sticky="ew", padx=(0, 4))
+        ttk.Button(
+            file_ops, text=t(t("+ Файл")), command=self.create_file,
+        ).grid(row=0, column=1, sticky="ew")
+        ttk.Button(
+            file_ops, text=t(t("Переименовать")), command=self.rename_selected,
+        ).grid(row=1, column=0, sticky="ew", padx=(0, 4), pady=(4, 0))
+        ttk.Button(
+            file_ops, text=t(t("Удалить")), command=self.delete_selected,
+        ).grid(row=1, column=1, sticky="ew", pady=(4, 0))
+        file_ops.columnconfigure(0, weight=1, minsize=0)
+        file_ops.columnconfigure(1, weight=1, minsize=0)
 
         # Editor card: tab bar + find bar + gutter + text
         right = card(body, t(t('Редактор')))
@@ -195,29 +220,56 @@ class EditorPage(tk.Frame):
 
         bar = tk.Frame(right, bg=C["panel"])
         bar.pack(fill="x", pady=(4, 6))
-        self.file_var = tk.StringVar(value=t(t('файл не открыт')))
-        tk.Label(bar, textvariable=self.file_var, bg=C["panel"], fg=C["muted"],
-                 font=F_MONO).pack(side="left")
+        self.file_var = tk.StringVar(value=t(t("файл не открыт")))
+        tk.Label(
+            bar, textvariable=self.file_var, bg=C["panel"], fg=C["muted"],
+            font=F_MONO, anchor="w",
+        ).pack(fill="x", pady=(0, 4))
+
+        options_row = tk.Frame(bar, bg=C["panel"])
+        options_row.pack(fill="x", pady=(0, 4))
         self.format_on_save = tk.BooleanVar(value=False)
-        tk.Checkbutton(bar, text=t(t('формат при сохранении')),
-                       variable=self.format_on_save, bg=C["panel"],
-                       font=F_SMALL).pack(side="left", padx=(10, 0))
+        tk.Checkbutton(
+            options_row, text=t(t("формат при сохранении")),
+            variable=self.format_on_save, bg=C["panel"], font=F_SMALL,
+        ).pack(side="left", padx=(0, 8))
         self.lint_on_save = tk.BooleanVar(value=True)
-        tk.Checkbutton(bar, text=t(t('линт при сохранении')),
-                       variable=self.lint_on_save, bg=C["panel"],
-                       font=F_SMALL).pack(side="left", padx=(6, 0))
-        ttk.Button(bar, text=t(t('Сохранить')), style="Accent.TButton",
-                   command=self.save_file).pack(side="right")
-        ttk.Button(bar, text=t(t('Перечитать')),
-                   command=self.reload_file).pack(side="right", padx=6)
-        ttk.Button(bar, text=t(t('Формат')),
-                   command=self.format_file).pack(side="right", padx=6)
-        ttk.Button(bar, text=t(t('Разделить')),
-                   command=self.toggle_split).pack(side="right", padx=6)
-        ttk.Button(bar, text=t(t('Проверить')),
-                   command=self.run_lint).pack(side="right", padx=6)
-        ttk.Button(bar, text=t(t('Обсудить с наставником')),
-                   command=self.send_to_mentor).pack(side="right", padx=6)
+        tk.Checkbutton(
+            options_row, text=t(t("линт при сохранении")),
+            variable=self.lint_on_save, bg=C["panel"], font=F_SMALL,
+        ).pack(side="left")
+
+        # Two rows of compact actions fit even when both side docks are open.
+        actions = tk.Frame(bar, bg=C["panel"])
+        actions.pack(fill="x")
+        action_items = (
+            (t(t("Обсудить")), self.send_to_mentor, None,
+             t(t("Обсудить с наставником"))),
+            (t(t("Проверить")), self.run_lint, None, t(t("Проверить код"))),
+            (t(t("Разделить")), self.toggle_split, None,
+             t(t("Разделить редактор"))),
+            (t(t("Формат")), self.format_file, None, t(t("Форматировать код"))),
+            (t(t("Перечитать")), self.reload_file, None,
+             t(t("Перечитать файл с диска"))),
+            (t(t("Сохранить")), self.save_file, "Accent.TButton",
+             t(t("Сохранить файл"))),
+        )
+        from .ui_common import attach_tooltip
+
+        self.action_buttons = []
+        for index, (label, command, style, help_text) in enumerate(action_items):
+            options = {"text": label, "command": command}
+            if style:
+                options["style"] = style
+            button = ttk.Button(actions, **options)
+            button.grid(
+                row=index // 3, column=index % 3, sticky="ew",
+                padx=(0, 4) if index % 3 < 2 else (0, 0),
+                pady=(0, 4) if index < 3 else (0, 0),
+            )
+            actions.columnconfigure(index % 3, weight=1, uniform="editor-actions")
+            attach_tooltip(button, help_text)
+            self.action_buttons.append(button)
 
         # Code area: primary pane (+ optional synchronized split pane)
         code_wrap = tk.Frame(right, bg=C["code_bg"])
@@ -333,6 +385,70 @@ class EditorPage(tk.Frame):
     # ------------------------------------------------------------- projects
     def on_show(self):
         self.refresh_tree()
+
+    def _layout_project_form(self, _event=None):
+        """Use a stacked form on narrow center panes, never clip the action."""
+        row = self._project_form_row
+        try:
+            width = int(row.winfo_width() or 0)
+        except Exception:
+            width = 0
+        if width < 2:
+            return
+        mode = "stacked" if width < 720 else "inline"
+        if mode == self._project_layout_mode:
+            return
+        self._project_layout_mode = mode
+
+        for widget in (
+            self.project_label,
+            self.project_entry,
+            self.template_combo,
+            self.project_create_button,
+            self.project_hint_label,
+        ):
+            widget.grid_forget()
+
+        if mode == "stacked":
+            self.project_entry.configure(width=14)
+            self.template_combo.configure(width=26)
+            self.project_label.grid(
+                row=0, column=0, sticky="w", padx=(0, 8), pady=(0, 6))
+            self.project_entry.grid(
+                row=0, column=1, sticky="ew", pady=(0, 6))
+            self.template_combo.grid(
+                row=1, column=0, columnspan=2, sticky="ew",
+                padx=(0, 8), pady=(0, 6))
+            self.project_create_button.grid(
+                row=1, column=2, sticky="ew", pady=(0, 6))
+            self.project_hint_label.grid(
+                row=2, column=0, columnspan=3, sticky="w")
+            row.columnconfigure(0, weight=0, minsize=0)
+            row.columnconfigure(1, weight=1, minsize=0)
+            row.columnconfigure(2, weight=0, minsize=0)
+        else:
+            self.project_entry.configure(width=16)
+            self.template_combo.configure(width=28)
+            self.project_label.grid(
+                row=0, column=0, sticky="w", padx=(0, 8))
+            self.project_entry.grid(
+                row=0, column=1, sticky="ew", padx=(0, 8))
+            self.template_combo.grid(
+                row=0, column=2, sticky="ew", padx=(0, 8))
+            self.project_create_button.grid(
+                row=0, column=3, sticky="ew")
+            self.project_hint_label.grid(
+                row=1, column=0, columnspan=4, sticky="w", pady=(4, 0))
+            row.columnconfigure(0, weight=0, minsize=0)
+            row.columnconfigure(1, weight=1, minsize=0)
+            row.columnconfigure(2, weight=2, minsize=0)
+            row.columnconfigure(3, weight=0, minsize=0)
+
+        try:
+            self.project_hint_label.configure(
+                wraplength=max(160, int(row.winfo_width()) - 24))
+        except Exception:
+            pass
 
     def create_project(self):
         root = self.app.workspace_root()

@@ -4,11 +4,7 @@ A desktop development environment for LLM research with an IDE layout: code edit
 
 ## Interface
 
-| Editor + terminal + agent chat | Model dashboard | Servers (SSH) |
-| --- | --- | --- |
-| ![IDE with agent chat](docs/ui-chat.png) | ![Dashboard](docs/ui-dashboard.png) | ![Servers](docs/ui-servers.png) |
-
-Mockups are rendered from the app's real design tokens by `scripts/render_ui_mockup.py`. Settings panels at the top of pages collapse/expand (▼/▶) so the workspace stays clean.
+Real screenshots of the running application are not available yet. The previous images were generated mockups, not captures of the actual program, so they have been removed. Real screenshots will be added only after they are captured from a running build.
 
 ## Keyboard shortcuts
 

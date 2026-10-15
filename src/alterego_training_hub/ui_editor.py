@@ -239,12 +239,16 @@ class EditorPage(tk.Frame):
         self.format_on_save = tk.BooleanVar(value=False)
         self.format_check = tk.Checkbutton(
             options_row, text=t(t("формат при сохранении")),
-            variable=self.format_on_save, bg=C["panel"], font=F_SMALL,
+            variable=self.format_on_save, bg=C["panel"], fg=C["text"],
+            activebackground=C["panel"], activeforeground=C["text"],
+            selectcolor=C["panel_alt"], font=F_SMALL,
         )
         self.lint_on_save = tk.BooleanVar(value=True)
         self.lint_check = tk.Checkbutton(
             options_row, text=t(t("линт при сохранении")),
-            variable=self.lint_on_save, bg=C["panel"], font=F_SMALL,
+            variable=self.lint_on_save, bg=C["panel"], fg=C["text"],
+            activebackground=C["panel"], activeforeground=C["text"],
+            selectcolor=C["panel_alt"], font=F_SMALL,
         )
         self._options_layout_mode: str | None = None
         options_row.bind("<Configure>", self._layout_editor_options, add="+")

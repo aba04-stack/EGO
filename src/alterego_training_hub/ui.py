@@ -156,12 +156,17 @@ class TrainingHubApp(tk.Tk):
 
         _quick_wrap = tk.Frame(sidebar, bg=C["sidebar"])
         _quick_wrap.pack(fill="x", padx=12, pady=(4, 8))
-        _quick = tk.Label(_quick_wrap, text=t('⌕  Поиск и команды…'),
-                          bg=C["sidebar_hover"], fg=C["sidebar_fg"], font=F_NAV_SMALL,
-                          anchor="w", padx=10, pady=7, cursor="hand2")
+        quick_label = t(t("⌕ Поиск и команды…  Ctrl+Shift+P"))
+        _quick = tk.Label(
+            _quick_wrap, text=quick_label.replace("  Ctrl+Shift+P", ""),
+            bg=C["sidebar_hover"], fg=C["sidebar_fg"], font=F_NAV_SMALL,
+            anchor="w", padx=10, pady=7, cursor="hand2",
+        )
         _quick.pack(fill="x")
         _quick.bind("<Button-1>",
                     lambda _e: self.open_command_palette("commands"))
+        from .ui_common import attach_tooltip
+        attach_tooltip(_quick, quick_label)
 
         nav_groups = [
             (t("nav.development"), [

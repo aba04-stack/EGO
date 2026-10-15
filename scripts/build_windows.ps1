@@ -17,4 +17,4 @@ python -m PyInstaller --noconfirm --clean --onefile --windowed --name EGO --path
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed." }
 
 Write-Host ""
-Write-Host "Build complete: dist\AlterEgoTrainingHub.exe"
+Write-Host "Build complete: dist\EGO.exe"

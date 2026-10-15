@@ -127,11 +127,13 @@ class EditorPage(tk.Frame):
         tree_btns.pack(side="bottom", fill="x", pady=(6, 0))
         self.refresh_tree_button = ttk.Button(
             tree_btns, text=t(t("Обновить")), command=self.refresh_tree,
+            style="TreeAction.TButton",
         )
         self.refresh_tree_button.pack(
             side="left", fill="x", expand=True, padx=(0, 4))
         self.open_selected_button = ttk.Button(
             tree_btns, text=t(t("Открыть")), command=self.open_selected,
+            style="TreeAction.TButton",
         )
         self.open_selected_button.pack(side="left", fill="x", expand=True)
 
@@ -145,15 +147,18 @@ class EditorPage(tk.Frame):
         self.new_name_entry.grid(row=0, column=0, sticky="ew", padx=(0, 4))
         self.create_file_button = ttk.Button(
             file_ops, text=t(t("+ Файл")), command=self.create_file,
+            style="TreeAction.TButton",
         )
         self.create_file_button.grid(row=0, column=1, sticky="ew")
         self.rename_file_button = ttk.Button(
             file_ops, text=t(t("Переименовать")), command=self.rename_selected,
+            style="TreeAction.TButton",
         )
         self.rename_file_button.grid(
             row=1, column=0, sticky="ew", padx=(0, 4), pady=(4, 0))
         self.delete_file_button = ttk.Button(
             file_ops, text=t(t("Удалить")), command=self.delete_selected,
+            style="TreeAction.TButton",
         )
         self.delete_file_button.grid(
             row=1, column=1, sticky="ew", pady=(4, 0))

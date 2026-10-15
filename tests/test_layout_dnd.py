@@ -70,4 +70,4 @@ def test_load_old_layout_gains_defaults(tmp_path):
     assert loaded.bottom_view == "git"
     assert loaded.sidebar_side == "left"   # defaults for new fields
     assert loaded.chat_side == "right"
-    assert loaded.bottom_height == 210
+    assert loaded.bottom_height == 156

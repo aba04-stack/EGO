@@ -39,7 +39,7 @@ class AppSettings:
     model_library_path: str = ""
     active_model_id: str = ""
     chat_autonomy: str = "assist"  # "assist" | "agent"
-    ui_theme: str = "light"  # "light" | "dark"
+    ui_theme: str = "dark"  # "light" | "dark"
     llm_provider: str = "openai"  # id from llm_providers.PROVIDERS
     agent_max_steps: int = 20
     agent_verify: bool = True
@@ -64,7 +64,7 @@ class AppSettings:
     update_repo: str = "aba04-stack/-"  # GitHub repo для проверки обновлений
     plugin_market_urls: list = field(default_factory=list)  # git-маркеты плагинов
     chat_side: str = "right"     # left | right
-    bottom_height: int = 210     # px
+    bottom_height: int = 156     # px
     settings_sync_dir: str = ""
     synced_at: float = 0.0
     night_watch_enabled: bool = False

@@ -1497,7 +1497,7 @@ def test_stage23_live_language_and_panel_dnd(fake_ui, tmp_path):
     app.apply_layout(layout_info("code"))
     assert app.settings.chat_side == "right"
     assert app.settings.sidebar_side == "left"
-    assert app.settings.bottom_height == 210
+    assert app.settings.bottom_height == 156
 
     app.settings.bottom_height = 320
     assert app.current_layout().bottom_height == 320

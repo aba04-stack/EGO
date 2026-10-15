@@ -33,6 +33,28 @@ def apply_theme(root: tk.Tk) -> ttk.Style:
     except tk.TclError:
         pass
 
+    # Classic Tk widgets do not use ttk styles. Set resource defaults before
+    # any page is constructed so Entry/Text/Checkbutton controls inherit the
+    # active palette instead of reverting to white fields and black labels.
+    for pattern, value in (
+        ("*Entry.background", C["panel"]),
+        ("*Entry.foreground", C["text"]),
+        ("*Entry.insertBackground", C["text"]),
+        ("*Entry.selectBackground", C["accent"]),
+        ("*Entry.selectForeground", "#ffffff"),
+        ("*Checkbutton.background", C["panel"]),
+        ("*Checkbutton.foreground", C["text"]),
+        ("*Checkbutton.activeBackground", C["panel"]),
+        ("*Checkbutton.activeForeground", C["text"]),
+        ("*Checkbutton.selectColor", C["panel_alt"]),
+        ("*Text.background", C["panel"]),
+        ("*Text.foreground", C["text"]),
+        ("*Text.insertBackground", C["text"]),
+        ("*Text.selectBackground", C["accent"]),
+        ("*Text.selectForeground", "#ffffff"),
+    ):
+        root.option_add(pattern, value)
+
     style.configure(".", font=F_BASE, background=C["bg"], foreground=C["text"])
     style.configure("TFrame", background=C["bg"])
     style.configure("Panel.TFrame", background=C["panel"])
@@ -46,21 +68,52 @@ def apply_theme(root: tk.Tk) -> ttk.Style:
     style.configure("Status.TLabel", background=C["statusbar"], foreground=C["muted"], font=F_SMALL,
                      padding=(10, 4))
 
-    style.configure("TButton", font=F_BASE, padding=(12, 6), background=C["panel"])
+    style.configure("TButton", font=F_BASE, padding=(12, 7), background=C["panel"],
+                     relief="flat", borderwidth=1)
     style.map("TButton",
               background=[("active", C["hover"])],
               foreground=[("disabled", "#9aa7b8")])
+    style.configure(
+        "TreeAction.TButton", font=F_SMALL, padding=(1, 2),
+        background=C["panel"], foreground=C["text"], relief="flat",
+    )
+    style.map(
+        "TreeAction.TButton",
+        background=[("active", C["hover"])],
+        foreground=[("disabled", C["muted"])],
+    )
     style.configure("Accent.TButton", background=C["accent"], foreground="#ffffff", font=F_BOLD,
-                     padding=(14, 7))
+                     padding=(16, 8), relief="flat")
     style.map("Accent.TButton",
               background=[("active", C["accent_hover"]), ("disabled", "#9db8e8")],
               foreground=[("disabled", "#eef4ff")])
     style.configure("Danger.TButton", background=C["panel"], foreground=C["danger"],
-                     padding=(12, 6))
+                     padding=(12, 7))
     style.map("Danger.TButton", background=[("active", C["danger_soft"])])
 
-    style.configure("TEntry", padding=5)
-    style.configure("TCombobox", padding=4)
+    style.configure(
+        "TEntry", padding=6, fieldbackground=C["panel"],
+        foreground=C["text"], background=C["panel"],
+    )
+    style.map(
+        "TEntry",
+        fieldbackground=[("disabled", C["panel_alt"]), ("focus", C["panel"])],
+        foreground=[("disabled", C["muted"])],
+    )
+    style.configure(
+        "TCombobox", padding=5, fieldbackground=C["panel"],
+        foreground=C["text"], background=C["panel"],
+        arrowcolor=C["text"], bordercolor=C["border"],
+    )
+    style.map(
+        "TCombobox",
+        fieldbackground=[
+            ("readonly", C["panel"]), ("focus", C["panel"]),
+            ("disabled", C["panel_alt"]),
+        ],
+        foreground=[("readonly", C["text"]), ("disabled", C["muted"])],
+        background=[("readonly", C["panel"]), ("active", C["hover"])],
+    )
 
     style.configure("Treeview", rowheight=28, background=C["panel"], fieldbackground=C["panel"],
                      borderwidth=0, font=F_BASE)
@@ -148,12 +201,10 @@ def page_header(parent, title: str, subtitle: str = "", actions=None) -> tk.Fram
     frame = tk.Frame(parent, bg=C["bg"])
     left = tk.Frame(frame, bg=C["bg"])
     left.pack(side="left", fill="x", expand=True)
-    tk.Label(left, text="EGO / " + title, bg=C["bg"],
-             fg=C["muted"], font=F_SMALL).pack(anchor="w")
     tk.Label(left, text=title, bg=C["bg"], fg=C["text"], font=F_TITLE).pack(anchor="w")
     if subtitle:
-        tk.Label(left, text=subtitle, bg=C["bg"], fg=C["muted"], font=F_SUB,
-                 wraplength=900, justify="left").pack(anchor="w", pady=(4, 0))
+        tk.Label(left, text=subtitle, bg=C["bg"], fg=C["muted"], font=F_SMALL,
+                 wraplength=720, justify="left").pack(anchor="w", pady=(2, 0))
     for item in reversed(list(actions or [])):
         label, command = item[0], item[1]
         style = item[2] if len(item) > 2 else "Accent.TButton"
@@ -194,13 +245,28 @@ def attach_tooltip(widget, text: str) -> None:
 
 
 def card(parent, title: str | None = None) -> tk.Frame:
-    """White card container with optional caption."""
-    outer = tk.Frame(parent, bg=C["border"], bd=0)
-    inner = tk.Frame(outer, bg=C["panel"], padx=14, pady=12)
-    inner.pack(fill="both", expand=True, padx=1, pady=1)
+    """Create a directly managed card with a subtle border.
+
+    Callers can pack/grid this frame and place their controls inside it. The
+    previous wrapper-forwarding approach patched Tk geometry methods on the
+    returned frame; that broke tests and could obscure the actual geometry
+    owner. A single managed frame keeps the card predictable.
+    """
+    frame = tk.Frame(
+        parent,
+        bg=C["panel"],
+        bd=0,
+        padx=16,
+        pady=14,
+        highlightbackground=C["border"],
+        highlightcolor=C["border"],
+        highlightthickness=1,
+    )
     if title:
-        tk.Label(inner, text=title, bg=C["panel"], fg=C["text"], font=F_BOLD).pack(anchor="w")
-    return inner
+        tk.Label(
+            frame, text=title, bg=C["panel"], fg=C["text"], font=F_BOLD,
+        ).pack(anchor="w", pady=(0, 6))
+    return frame
 
 
 class Collapsible(tk.Frame):

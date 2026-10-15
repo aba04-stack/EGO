@@ -38,6 +38,7 @@ def test_bundle_round_trip(tmp_path):
 def test_apply_bundle_skips_unknown_and_mismatched_types():
     settings = AppSettings.load()
     settings.ui_language = "ru"
+    settings.ui_theme = "light"  # dark is now the application default
     changed = apply_bundle(settings, {"fields": {
         "ui_language": 5,            # type mismatch: skipped
         "hacker_field": "x",         # unknown: skipped
@@ -66,6 +67,7 @@ def test_push_pull_last_write_wins(tmp_path):
     folder = tmp_path / "sync"
     a = AppSettings.load()
     a.ui_language = "en"
+    a.ui_theme = "light"  # make the first synchronized change observable
     push(a, folder)
 
     b = AppSettings.load()
@@ -94,6 +96,7 @@ def test_push_pull_same_clock_tick_is_monotonic(tmp_path, monkeypatch):
     folder = tmp_path / "sync"
     source = AppSettings.load()
     source.ui_language = "en"
+    source.ui_theme = "light"  # frozen-clock test needs a real value change
     target = AppSettings.load()
 
     # Simulate a low-resolution/frozen system clock: ordering must not depend

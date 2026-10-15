@@ -5,60 +5,64 @@
 # so every module holding a reference sees the new colours.
 PALETTES: dict[str, dict[str, str]] = {
     "light": {
-        "sidebar": "#141b2d",
-        "sidebar_hover": "#1d2941",
+        "sidebar": "#0e1526",
+        "sidebar_hover": "#1a2540",
         "sidebar_active": "#243656",
         "sidebar_fg": "#9fb0c9",
         "sidebar_fg_active": "#ffffff",
+        "sidebar_muted": "#6b7c99",
         "accent": "#3b82f6",
         "accent_hover": "#2563eb",
-        "bg": "#f4f6fa",
+        "accent_soft": "#dbeafe",
+        "bg": "#eef2f7",
         "panel": "#ffffff",
-        "panel_alt": "#f8fafc",
-        "border": "#dde3ec",
-        "text": "#1b2430",
-        "muted": "#64748b",
+        "panel_alt": "#f6f8fc",
+        "border": "#d7dee8",
+        "text": "#111827",
+        "muted": "#5b6b82",
         "success": "#16a34a",
         "warning": "#d97706",
         "danger": "#dc2626",
-        "code_bg": "#0f172a",
+        "code_bg": "#0b1220",
         "code_fg": "#e2e8f0",
         "user_bubble": "#dbeafe",
         "tool_bubble": "#fef3c7",
-        "assistant_bubble": "#ffffff",
-        "statusbar": "#e8edf5",
-        "hover": "#e7edf7",
+        "assistant_bubble": "#f8fafc",
+        "statusbar": "#e6ebf3",
+        "hover": "#e8eef8",
         "danger_soft": "#fde8e8",
     },
     "dark": {
-        "sidebar": "#0b1220",
-        "sidebar_hover": "#131c2e",
+        "sidebar": "#080d18",
+        "sidebar_hover": "#121b2e",
         "sidebar_active": "#1c2a45",
         "sidebar_fg": "#8fa3c0",
         "sidebar_fg_active": "#ffffff",
+        "sidebar_muted": "#5c6e8a",
         "accent": "#3b82f6",
         "accent_hover": "#2563eb",
-        "bg": "#111827",
-        "panel": "#1f2937",
-        "panel_alt": "#172033",
-        "border": "#334155",
+        "accent_soft": "#1e3a5f",
+        "bg": "#0d1320",
+        "panel": "#161e2e",
+        "panel_alt": "#121a28",
+        "border": "#2a364a",
         "text": "#e5e7eb",
         "muted": "#94a3b8",
         "success": "#22c55e",
         "warning": "#f59e0b",
         "danger": "#ef4444",
-        "code_bg": "#0b1220",
+        "code_bg": "#080d18",
         "code_fg": "#e2e8f0",
         "user_bubble": "#1e3a5f",
         "tool_bubble": "#3f3a1e",
-        "assistant_bubble": "#1f2937",
-        "statusbar": "#0b1220",
+        "assistant_bubble": "#161e2e",
+        "statusbar": "#080d18",
         "hover": "#24324a",
         "danger_soft": "#4a1f27",
     },
 }
 
-C: dict[str, str] = dict(PALETTES["light"])
+C: dict[str, str] = dict(PALETTES["dark"])
 
 
 def set_palette(name: str) -> dict[str, str]:
@@ -172,7 +176,7 @@ def detect_fonts(families) -> tuple[str, str]:
 
 F_BASE = (DEFAULT_UI_FONT, 10)
 F_BOLD = (DEFAULT_UI_FONT, 10, "bold")
-F_TITLE = (DEFAULT_UI_FONT, 16, "bold")
+F_TITLE = (DEFAULT_UI_FONT, 14, "bold")
 F_SUB = (DEFAULT_UI_FONT, 10)
 F_SMALL = (DEFAULT_UI_FONT, 9)
 F_MONO = (DEFAULT_MONO_FONT, 10)
@@ -185,7 +189,7 @@ def set_fonts(ui_family: str, mono_family: str) -> dict[str, tuple]:
     global F_BASE, F_BOLD, F_TITLE, F_SUB, F_SMALL, F_MONO, F_NAV, F_NAV_SMALL
     F_BASE = (ui_family, 10)
     F_BOLD = (ui_family, 10, "bold")
-    F_TITLE = (ui_family, 16, "bold")
+    F_TITLE = (ui_family, 14, "bold")
     F_SUB = (ui_family, 10)
     F_SMALL = (ui_family, 9)
     F_MONO = (mono_family, 10)

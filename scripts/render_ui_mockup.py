@@ -139,10 +139,10 @@ def draw_shell(c: Canvas, active: str, status: str, badge: str):
     # Sidebar
     c.rect(0, 0, SIDE, VH, C["sidebar"])
     c.text(18, 26, "EGO", 16, bold=True, fill="#ffffff")
-    c.text(18, 52, "LLM Studio", 11, fill=C["sidebar_fg"])
+    c.text(18, 52, "IDE для LLM", 11, fill=C["sidebar_fg"])
     y = 88
     for group_title, items in NAV_GROUPS:
-        c.text(16, y, group_title, 7.6, bold=True, fill="#5b6b85")
+        c.text(16, y, group_title, 7.6, bold=True, fill=C["sidebar_muted"])
         y += 18
         for label in items:
             is_active = label == active
@@ -153,7 +153,7 @@ def draw_shell(c: Canvas, active: str, status: str, badge: str):
                    fill=C["sidebar_fg_active"] if is_active else C["sidebar_fg"])
             y += 34
         y += 6
-    c.text(18, VH - 40, "v0.5 · локальный контур", 8.2, fill="#5b6b85")
+    c.text(18, VH - 40, "v0.5 · локальный контур", 8.2, fill=C["sidebar_muted"])
 
     # Right chat panel background
     cxp = VW - CHAT_W

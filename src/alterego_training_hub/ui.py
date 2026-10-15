@@ -76,6 +76,7 @@ class TrainingHubApp(tk.Tk):
         self._nav_meta: dict[str, tuple[str, str]] = {}
         self._nav_badges: dict[str, str] = {}
         self._sidebar_compact = False
+        self._sidebar_refresh_after: str | None = None
         self._tokens_today = 0
         self.pages: dict[str, tk.Frame] = {}
 
@@ -133,6 +134,11 @@ class TrainingHubApp(tk.Tk):
         sidebar = tk.Frame(container, bg=C["sidebar"], width=216)
         sidebar.pack_propagate(False)
         self._sidebar_frame = sidebar
+        sidebar.bind(
+            "<Configure>",
+            lambda _event: self._schedule_sidebar_label_refresh(),
+            add="+",
+        )
         brand = tk.Frame(sidebar, bg=C["sidebar"])
         brand.pack(fill="x", pady=(18, 12), padx=16)
         tk.Label(brand, text="EGO", bg=C["sidebar"], fg="#ffffff",
@@ -602,6 +608,76 @@ class TrainingHubApp(tk.Tk):
             t('Ctrl+1…Ctrl+9 — страницы (редактор, папка, модели, датасеты,\n   модель, playground, обучение, GPU, серверы)\nCtrl+0 — настройки\nCtrl+P — быстрое открытие файла\nCtrl+Shift+P — палитра команд\nCtrl+Shift+F — поиск по проекту\nCtrl+K — фокус в чат наставника\nCtrl+J — свернуть/развернуть нижнюю панель\nCtrl+Shift+M — панель «Проблемы»\nCtrl+W — закрыть вкладку редактора\nCtrl+Tab — следующая вкладка редактора\nCtrl+F / Ctrl+H — поиск и замена в редакторе\nF3 / Shift+F3 — следующее/предыдущее совпадение\nCtrl+F2 — закладка, F2 / Shift+F2 — между закладками\nCtrl+G — перейти к строке; Ctrl+Shift+G — панель Git\nCtrl+\\ — разделённый вид; Ctrl++ / Ctrl+- — масштаб шрифта\nF5 — обновить текущую страницу\nF1 — эта справка\nCtrl+Enter — отправить сообщение в чате\nCtrl+S — сохранить файл в редакторе'),
             parent=self)
 
+    def _schedule_sidebar_label_refresh(self):
+        """Coalesce resize notifications before fitting navigation labels."""
+        if getattr(self, "_sidebar_refresh_after", None):
+            return
+        try:
+            self._sidebar_refresh_after = self.after_idle(
+                self._refresh_sidebar_labels)
+        except Exception:
+            self._sidebar_refresh_after = None
+
+    def _refresh_sidebar_labels(self):
+        """Measure sidebar labels against their actual width and truncate safely."""
+        self._sidebar_refresh_after = None
+        if not self._nav_buttons:
+            return
+
+        from tkinter import font as tkfont
+        from .ui_patterns import nav_icon, nav_label
+
+        try:
+            sidebar_width = int(self._sidebar_frame.winfo_width() or 0)
+        except Exception:
+            sidebar_width = 0
+        if sidebar_width < 20:
+            sidebar_width = 64 if self._sidebar_compact else 216
+
+        for key, button in self._nav_buttons.items():
+            _key, label = self._nav_meta.get(key, (key, key))
+            badge = self._nav_badges.get(key, "")
+            full_text = nav_label(
+                key, label, compact=self._sidebar_compact, badge=badge)
+            if self._sidebar_compact:
+                button.configure(text=full_text)
+                continue
+
+            try:
+                button_width = int(button.winfo_width() or 0)
+            except Exception:
+                button_width = 0
+            available = max(28, (button_width or sidebar_width - 4) - 20)
+            try:
+                font = tkfont.Font(root=self, font=button.cget("font"))
+                fitted = full_text
+                if font.measure(full_text) > available:
+                    prefix = f"{nav_icon(key)}  "
+                    suffix = f"  · {badge}" if badge else ""
+                    visible = label.rstrip()
+                    fitted = prefix + visible + "…" + suffix
+                    while visible and font.measure(fitted) > available:
+                        visible = visible[:-1].rstrip()
+                        fitted = (
+                            prefix + visible + "…" + suffix
+                            if visible else nav_icon(key) + "…" + suffix
+                        )
+                    if font.measure(fitted) > available and suffix:
+                        suffix = ""
+                        visible = label.rstrip()
+                        fitted = prefix + visible + "…"
+                        while visible and font.measure(fitted) > available:
+                            visible = visible[:-1].rstrip()
+                            fitted = (
+                                prefix + visible + "…" if visible
+                                else nav_icon(key)
+                            )
+                    if font.measure(fitted) > available:
+                        fitted = nav_icon(key)
+                button.configure(text=fitted)
+            except Exception:
+                button.configure(text=full_text)
+
     def _make_nav_item(self, parent, key: str, label: str):
         row = tk.Frame(parent, bg=C["sidebar"])
         row.pack(fill="x")
@@ -725,7 +801,7 @@ class TrainingHubApp(tk.Tk):
             pass
         try:
             self._sidebar_frame.configure(
-                width=64 if self._sidebar_compact else 200)
+                width=64 if self._sidebar_compact else 216)
             self._compact_btn.configure(
                 text="»" if self._sidebar_compact else "«")
         except Exception:
@@ -735,6 +811,7 @@ class TrainingHubApp(tk.Tk):
             btn.configure(text=_nav_label(
                 key, label, compact=self._sidebar_compact,
                 badge=self._nav_badges.get(key, "")))
+        self._schedule_sidebar_label_refresh()
         return self._sidebar_compact
 
     def set_nav_badge(self, key: str, badge: str):
@@ -747,6 +824,7 @@ class TrainingHubApp(tk.Tk):
             btn.configure(text=_nav_label(
                 key, label, compact=self._sidebar_compact,
                 badge=self._nav_badges[key]))
+            self._schedule_sidebar_label_refresh()
 
     def refresh_status_badges(self):
         from .ui_status import refresh_status_badges as _impl

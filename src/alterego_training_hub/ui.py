@@ -625,6 +625,7 @@ class TrainingHubApp(tk.Tk):
             return
 
         from tkinter import font as tkfont
+
         from .ui_patterns import nav_icon, nav_label
 
         try:

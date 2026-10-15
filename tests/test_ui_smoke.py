@@ -1808,8 +1808,7 @@ def test_stage36_entry_points(fake_ui, tmp_path):
     root = Path(__file__).resolve().parent.parent
     parsed = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
     assert parsed["project"]["scripts"]["ego"] == "alterego_training_hub.ui:main"
-    assert parsed["project"]["scripts"]["alterego-llm-studio"] \
-        == "alterego_training_hub.ui:main"
+    assert "alterego-llm-studio" not in parsed["project"]["scripts"]
 
 
 def test_stage37_interface_polish(fake_ui, tmp_path):

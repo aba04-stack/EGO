@@ -21,7 +21,14 @@ def night_watch_maybe(app) -> None:
     if not getattr(app.settings, "night_watch_enabled", False):
         return
     now = time.time()
-    if now - float(getattr(app, "_night_tick_at", 0.0)) < 60.0:
+    # The shell normally stores a numeric timestamp. Be defensive toward
+    # lightweight UI wrappers/mocks whose dynamic __getattr__ may return a
+    # callable for an unset attribute.
+    try:
+        last_tick = float(getattr(app, "_night_tick_at", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        last_tick = 0.0
+    if now - last_tick < 60.0:
         return
     app._night_tick_at = now
     try:

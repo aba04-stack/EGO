@@ -148,7 +148,7 @@ def page_header(parent, title: str, subtitle: str = "", actions=None) -> tk.Fram
     frame = tk.Frame(parent, bg=C["bg"])
     left = tk.Frame(frame, bg=C["bg"])
     left.pack(side="left", fill="x", expand=True)
-    tk.Label(left, text="AlterEgo LLM Studio / " + title, bg=C["bg"],
+    tk.Label(left, text="EGO / " + title, bg=C["bg"],
              fg=C["muted"], font=F_SMALL).pack(anchor="w")
     tk.Label(left, text=title, bg=C["bg"], fg=C["text"], font=F_TITLE).pack(anchor="w")
     if subtitle:

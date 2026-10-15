@@ -119,34 +119,47 @@ class EditorPage(tk.Frame):
             left, columns=("path",), show="tree", height=22, selectmode="browse",
         )
         self.tree.column("#0", width=174, minwidth=110, stretch=True)
-        self.tree.pack(fill="both", expand=True)
         self.tree.bind("<Double-1>", lambda _e: self.open_selected())
+
+        # Reserve space for the fixed controls first. Packing the expanding
+        # Treeview before the bottom actions lets it consume their height.
         tree_btns = tk.Frame(left, bg=C["panel"])
-        tree_btns.pack(fill="x", pady=(6, 0))
-        ttk.Button(
+        tree_btns.pack(side="bottom", fill="x", pady=(6, 0))
+        self.refresh_tree_button = ttk.Button(
             tree_btns, text=t(t("Обновить")), command=self.refresh_tree,
-        ).pack(side="left", fill="x", expand=True, padx=(0, 4))
-        ttk.Button(
+        )
+        self.refresh_tree_button.pack(
+            side="left", fill="x", expand=True, padx=(0, 4))
+        self.open_selected_button = ttk.Button(
             tree_btns, text=t(t("Открыть")), command=self.open_selected,
-        ).pack(side="left", fill="x", expand=True)
+        )
+        self.open_selected_button.pack(side="left", fill="x", expand=True)
+
         file_ops = tk.Frame(left, bg=C["panel"])
-        file_ops.pack(fill="x", pady=(6, 0))
+        file_ops.pack(side="bottom", fill="x", pady=(6, 0))
         self.new_name_var = tk.StringVar()
-        tk.Entry(
+        self.new_name_entry = tk.Entry(
             file_ops, textvariable=self.new_name_var, width=12, bd=1,
             relief="solid", font=F_BASE,
-        ).grid(row=0, column=0, sticky="ew", padx=(0, 4))
-        ttk.Button(
+        )
+        self.new_name_entry.grid(row=0, column=0, sticky="ew", padx=(0, 4))
+        self.create_file_button = ttk.Button(
             file_ops, text=t(t("+ Файл")), command=self.create_file,
-        ).grid(row=0, column=1, sticky="ew")
-        ttk.Button(
+        )
+        self.create_file_button.grid(row=0, column=1, sticky="ew")
+        self.rename_file_button = ttk.Button(
             file_ops, text=t(t("Переименовать")), command=self.rename_selected,
-        ).grid(row=1, column=0, sticky="ew", padx=(0, 4), pady=(4, 0))
-        ttk.Button(
+        )
+        self.rename_file_button.grid(
+            row=1, column=0, sticky="ew", padx=(0, 4), pady=(4, 0))
+        self.delete_file_button = ttk.Button(
             file_ops, text=t(t("Удалить")), command=self.delete_selected,
-        ).grid(row=1, column=1, sticky="ew", pady=(4, 0))
+        )
+        self.delete_file_button.grid(
+            row=1, column=1, sticky="ew", pady=(4, 0))
         file_ops.columnconfigure(0, weight=1, minsize=0)
         file_ops.columnconfigure(1, weight=1, minsize=0)
+        self.tree.pack(fill="both", expand=True)
 
         # Editor card: tab bar + find bar + gutter + text
         right = card(body, t(t('Редактор')))

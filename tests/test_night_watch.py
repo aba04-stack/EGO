@@ -7,7 +7,6 @@ import time
 import pytest
 
 import alterego_training_hub.night_watch as night_watch
-
 from alterego_training_hub.night_watch import (
     NightWatchError,
     NightWatchLog,

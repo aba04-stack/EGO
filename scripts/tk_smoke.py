@@ -75,7 +75,42 @@ def main() -> int:
             "Editor file tree is hidden; card containers must be managed "
             "by their actual parent."
         )
-        assert editor.editor.winfo_ismapped(), "Main code editor is hidden"
+        if not editor.editor.winfo_ismapped():
+            print(f"Layout diagnostic at {geometry}:", file=sys.stderr)
+            for name, widget in (
+                ("editor page", editor),
+                ("editor card", editor.winfo_parent() and editor.master),
+                ("body", editor._project_form_row.master.master),
+                ("right card", editor.editor.master.master.master),
+                ("code wrap", editor.editor.master.master),
+                ("pane1", editor.editor.master),
+                ("gutter", editor.gutter),
+                ("editor text", editor.editor),
+                ("minimap", editor.minimap),
+            ):
+                try:
+                    print(
+                        f"  {name}: mapped={widget.winfo_ismapped()} "
+                        f"size={widget.winfo_width()}x{widget.winfo_height()} "
+                        f"manager={widget.winfo_manager()} "
+                        f"parent={widget.winfo_parent()}",
+                        file=sys.stderr,
+                    )
+                except Exception as exc:
+                    print(f"  {name}: diagnostic failed: {exc}", file=sys.stderr)
+            try:
+                print(
+                    "  pane1 children: "
+                    + repr([
+                        (w.winfo_class(), w.winfo_width(), w.winfo_height(),
+                         w.winfo_ismapped(), w.winfo_manager())
+                        for w in editor.editor.master.pack_slaves()
+                    ]),
+                    file=sys.stderr,
+                )
+            except Exception as exc:
+                print(f"  pane1 children unavailable: {exc}", file=sys.stderr)
+            raise AssertionError("Main code editor is hidden")
 
         for key, button in app._nav_buttons.items():
             font = tkfont.Font(root=app, font=button.cget("font"))

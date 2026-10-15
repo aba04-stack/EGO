@@ -4,11 +4,7 @@ A desktop development environment for LLM research with an IDE layout: code edit
 
 ## Interface
 
-| Editor + terminal + agent chat | Model dashboard | Servers (SSH) |
-| --- | --- | --- |
-| ![IDE with agent chat](docs/ui-chat.png) | ![Dashboard](docs/ui-dashboard.png) | ![Servers](docs/ui-servers.png) |
-
-Mockups are rendered from the app's real design tokens by `scripts/render_ui_mockup.py`. Settings panels at the top of pages collapse/expand (▼/▶) so the workspace stays clean.
+Real screenshots of the running application are not available yet. The previous images were generated mockups, not captures of the actual program, so they have been removed. Real screenshots will be added only after they are captured from a running build.
 
 ## Keyboard shortcuts
 
@@ -180,6 +176,7 @@ This is a desktop control-plane MVP, not yet an end-to-end training orchestratio
 The next milestone is a typed remote training worker with resumable checkpoint/data transfers, explicit elapsed-time and total-cost guards, live logs, and end-to-end tests on a short disposable job.
 
 ## Releases
+- 1.15.1: release-packaging fixes — correct UTF-8 Windows installer, version-matched wheel discovery, fonts included in manual Windows builds, and installation scripts attached to tagged GitHub Releases.
 - 1.8.1: stabilization from a no-mocks real check (scripts/real_check.py, also in CI) — fixed near-dup/decontamination on messages-format datasets and the update check's 404 message; real torch training of the generated script verified end to end.
 - 1.8.0: background budget daemon — the total cloud cap is enforced every two minutes without opening the GPU page; autostopped pods are logged to the activity feed.
 - 1.7.0: provider embeddings for semantic search when configured (cache invalidates per embedder/model), and Inter + JetBrains Mono fonts bundled and auto-registered on startup.

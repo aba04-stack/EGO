@@ -2,7 +2,7 @@
 """Релизный инструмент этапа G: ключи и подпись манифеста обновления.
 
   python scripts/sign_update.py make-keys --out-dir keys/
-  python scripts/sign_update.py sign --artifact app.zip --version 1.15.0 \
+  python scripts/sign_update.py sign --artifact app.zip --version 1.15.1 \
       --url https://example.com/app.zip --key keys/private.pem \
       --out manifest.json
 

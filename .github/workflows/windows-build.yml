@@ -7,6 +7,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -19,6 +23,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
       - name: Install app and build tools
         shell: pwsh
         run: |
@@ -45,6 +51,7 @@ jobs:
 
   release:
     # Публикация GitHub-релиза по тегу v*: exe + wheel + sdist одним пакетом.
+    timeout-minutes: 15
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
@@ -55,6 +62,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
       - name: Build wheel and sdist
         run: |
           python -m pip install build
@@ -69,6 +78,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp dist/*.whl dist/*.tar.gz release-assets/
+          cp release-download/install-windows.bat release-assets/
+          cp release-download/install-linux-mac.sh release-assets/
+          cp release-download/run-alterego.bat release-assets/
+          cp release-download/УСТАНОВКА.md release-assets/УСТАНОВКА.md
           gh release create "${GITHUB_REF_NAME}" release-assets/* \
             --title "AlterEgo LLM Studio ${GITHUB_REF_NAME}" \
             --generate-notes

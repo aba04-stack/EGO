@@ -3,8 +3,9 @@
 
 Real screenshots need a desktop session; this script draws the actual IDE
 layout (sidebar + center pages + bottom terminal + docked right chat panel),
-palette (``theme.C``) and sample content so the design can be reviewed and
-attached to documentation. Output: docs/ui-chat.png, docs/ui-dashboard.png.
+palette (``theme.C``) and sample content for design review only. These are
+not screenshots of the running application. Output is watermarked files under
+``build/mockups/``; generated images are never written into ``docs/``.
 """
 from __future__ import annotations
 
@@ -64,9 +65,23 @@ class Canvas:
                        width=int(width * S), joint="curve")
 
     def save(self, name: str) -> Path:
-        docs = ROOT / "docs"
-        docs.mkdir(exist_ok=True)
-        path = docs / name
+        # Mockups must never be emitted into docs/ where readers could mistake
+        # them for real application screenshots.
+        output_dir = ROOT / "build" / "mockups"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        path = output_dir / f"mockup-{name}"
+
+        # Permanent, high-contrast watermark: these images contain sample data
+        # and are not captures of the running program.
+        banner_height = int(26 * S)
+        self.draw.rectangle((0, 0, W, banner_height), fill="#7f1d1d")
+        self.draw.text(
+            (int(16 * S), banner_height // 2),
+            "DESIGN MOCKUP — NOT A REAL APP SCREENSHOT · SAMPLE DATA",
+            font=font(11, bold=True),
+            fill="#ffffff",
+            anchor="lm",
+        )
         self.image.save(path, "PNG", optimize=True)
         return path
 

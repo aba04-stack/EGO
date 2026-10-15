@@ -170,7 +170,8 @@ class NightWatchLog:
             if isinstance(raw_ok, bool):
                 ok = raw_ok
             else:
-                ok = True
+                # Unknown status must never be interpreted as a successful check.
+                ok = False
                 skipped += 1
             out.append(WatchEntry(
                 at=stamp,

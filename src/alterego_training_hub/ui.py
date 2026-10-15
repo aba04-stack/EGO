@@ -151,13 +151,16 @@ class TrainingHubApp(tk.Tk):
         self._compact_btn.bind("<Button-1>",
                                lambda _e: self.toggle_sidebar_compact())
 
-        _quick = tk.Label(sidebar, text=t('⌕ Поиск и команды…'),
-                          bg=C["sidebar"], fg=C["sidebar_fg"], font=F_NAV_SMALL,
-                          anchor="w", padx=16, pady=6, cursor="hand2")
+        quick_label = t(t('⌕ Поиск и команды…  Ctrl+Shift+P'))
+        _quick = tk.Label(
+            sidebar, text=quick_label.replace("  Ctrl+Shift+P", ""),
+            bg=C["sidebar"], fg=C["sidebar_fg"], font=F_NAV_SMALL,
+            anchor="w", padx=16, pady=6, cursor="hand2",
+        )
         _quick.pack(fill="x", pady=(2, 4))
         _quick.bind("<Button-1>",
                     lambda _e: self.open_command_palette("commands"))
-        attach_tooltip(_quick, t('Поиск и команды') + " · Ctrl+Shift+P")
+        attach_tooltip(_quick, quick_label)
 
         nav_groups = [
             (t("nav.development"), [
